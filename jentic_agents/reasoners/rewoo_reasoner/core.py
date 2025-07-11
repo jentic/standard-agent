@@ -9,7 +9,9 @@ from jentic_agents.reasoners.models import ReasonerState, Step
 from jentic_agents.tools.models import Tool
 from jentic_agents.reasoners.rewoo_reasoner.exceptions import (
     MissingInputError,
+    ParameterGenerationError,
     ReasoningStepError,
+    ToolSelectionError,
 )
 from jentic_agents.tools.exceptions import ToolExecutionError
 from jentic_agents.reasoners.rewoo_reasoner._parser import parse_bullet_plan
@@ -57,11 +59,26 @@ class ReWOOReasoner(BaseReWOOReasoner):
             self._store_step_output(step, state)
             return None
 
-        tool_id = self._select_tool(step)
-        params = self._generate_params(step, tool_id, inputs)
         try:
+            tool_id = self._select_tool(step)
+            if tool_id == "none":
+                raise ToolSelectionError(
+                    "LLM determined no single tool was suitable for the step. "
+                    "Best to rephrase and refine the step to make it clearer and concise"
+                )
+
+            params = self._generate_params(step, tool_id, inputs)
             result = self.tool.execute(tool_id, params)
             self._logger.info("phase=EXECUTE_OK run_id=%s tool_id=%s", getattr(self, "_run_id", "NA"), tool_id)
+            step.status = "done"
+            step.result = result["result"].output
+            # Persist in-memory for downstream steps
+            self._store_step_output(step, state)
+            return {"tool_id": tool_id, "params": params, "result": result}
+
+        except (ToolSelectionError, ParameterGenerationError) as e:
+            self._reflect_on_failure(e, step, state, tool_id)
+            return None
         except Exception as exc:  # noqa: BLE001
             self._logger.warning(
                 "phase=EXECUTE_FAIL run_id=%s tool_id=%s error=%s",
@@ -71,12 +88,6 @@ class ReWOOReasoner(BaseReWOOReasoner):
             )
             self._reflect_on_failure(ToolExecutionError(str(exc)), step, state, failed_tool_id=tool_id)
             return None
-
-        step.status = "done"
-        step.result = result["result"].output
-        # Persist in-memory for downstream steps
-        self._store_step_output(step, state)
-        return {"tool_id": tool_id, "params": params, "result": result}
 
     def _reflect_on_failure(
         self,
@@ -94,7 +105,7 @@ class ReWOOReasoner(BaseReWOOReasoner):
             return
 
         tool_schema = {}
-        failed_tool_name = failed_tool_id or "unknown"
+        failed_tool_id = failed_tool_id or "unknown"
 
         # If we know which tool failed, get its schema directly.
         if failed_tool_id and failed_tool_id != "none":
@@ -107,15 +118,22 @@ class ReWOOReasoner(BaseReWOOReasoner):
         prompt = prompts.BASE_REFLECTION_PROMPT.format(
             goal=state.goal,
             step=step.text,
-            failed_tool_name=failed_tool_name,
+            failed_tool_id=failed_tool_id,
             error_type=error_type,
             error_message=str(error),
             tool_schema=json.dumps(tool_schema),
         )
 
-        if isinstance(error, ToolExecutionError):
+        if isinstance(error, ToolExecutionError) or isinstance(error, ParameterGenerationError):
             try:
-                alternative_tools = self.tool.search(step.text, top_k=15)
+                alternative_tools = self.tool.search(step.text, top_k=25)
+
+                # Filter out the tool that just failed to prevent re-selection
+                if failed_tool_id:
+                    alternative_tools = [
+                        tool for tool in alternative_tools if tool.id != failed_tool_id
+                    ]
+
                 if alternative_tools:
                     # Create a minimal representation of the tools for the prompt
                     tools_for_prompt = [
@@ -132,7 +150,22 @@ class ReWOOReasoner(BaseReWOOReasoner):
                 )
 
         raw = self._call_llm(prompt).strip()
-        decision = self._parse_json_or_retry(raw, prompt)
+
+        # Best-effort attempt to strip markdown fences, if any
+        _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
+        m = _JSON_FENCE_RE.search(raw)
+        if m:
+            raw = m.group(1).strip()
+
+        try:
+            decision = self._parse_json_or_retry(raw, prompt)
+        except json.JSONDecodeError:
+            self._logger.warning(
+                "Reflection failed to produce a valid JSON decision, giving up on this path. Raw response: %s",
+                raw,
+            )
+            step.error = f"{step.error}\nReflection failed: could not parse LLM response."
+            return
 
         action = decision.get("action")
         state.history.append(f"Reflection decision: {decision}")
@@ -301,6 +334,8 @@ class ReWOOReasoner(BaseReWOOReasoner):
     ) -> Dict[str, Any]:
         """Use the LLM to propose parameters for *tool_id*."""
         tool_execution_info = self._get_tool(tool_id)
+        if not tool_execution_info:
+            raise ParameterGenerationError(f"Could not load definition for selected tool_id: {tool_id}")
 
         forced_key = f"forced_params:{step.text}"
         forced = self._memory.retrieve(forced_key) if hasattr(self, "_memory") else None

@@ -57,7 +57,7 @@ PLAN_GENERATION_PROMPT: str = (
 TOOL_SELECTION_PROMPT: str = (
     """You are an expert orchestrator. Given the *step* and the *tools* list below,\n"
     "return **only** the `id` of the single best tool to execute the step, or\n"
-    "the word `none` if no tool is required.\n\n"
+    "the word `none` if **none of the tools in the provided list are suitable** for the step.\n\n"
     "Step:\n{step}\n\n"
     "Tools (JSON):\n{tools_json}\n\n"
     "Respond with just the id (e.g. `tool_123`) or `none`. Do not include any other text."""
@@ -102,46 +102,44 @@ PARAMETER_GENERATION_PROMPT = ("""
 )
 
 BASE_REFLECTION_PROMPT: str = (
-    """You are a self-healing reasoning engine. A step in a plan failed. Your task is to analyze the error and propose a single, precise fix.
+    """You are a self-healing reasoning engine. A step in your plan failed. Your task is to analyze the error and propose a single, precise fix.
 
-**1. Analysis**
-First, provide a brief, one-sentence `reasoning` of the root cause. Analyze the goal, the failed step, the error, and the tool's schema.
+🛑 **OUTPUT FORMAT REQUIREMENT** 🛑
+Your reply MUST be a single, raw, valid JSON object. No explanation, no markdown, no backticks.
+Your reply MUST start with '{{' and end with '}}' - nothing else.
 
-**2. Action**
-Based on your reasoning, propose ONE action.
-
-**Output Format**
-Return a single JSON object with the following structure.
-
-```json
-{
+**JSON Schema (for reference only, do NOT include this block in your reply)**
+{{
   "reasoning": "A brief explanation of why the step failed.",
   "action": "one of 'retry_params', 'change_tool', 'rephrase_step', or 'give_up'",
   "tool_id": "(Required if action is 'change_tool') The ID of the new tool to use.",
   "params": "(Required if action is 'retry_params' or 'change_tool') A valid JSON object of parameters for the tool.",
   "step": "(Required if action is 'rephrase_step') The new, improved text for the step."
-}
-```
+}}
 
-**Example**
-*   **Context:**
-    *   Goal: "Send a welcome message to the #general channel"
-    *   Failed Step: "post message to channel"
-    *   Error: `Missing required parameter 'channel_id'`
-    *   Tool Schema: `{\"channel_id\": {\"type\": \"string\"}, \"content\": {\"type\": \"string\"}}`
-*   **Your Response:**
-```json
-{
+
+**Example of a valid response (for reference only):**
+{{
   "reasoning": "The error indicates a required parameter 'channel_id' was missing, which can be extracted from the goal.",
   "action": "retry_params",
-  "params": {
+  "params": {{
     "channel_id": "#general",
     "content": "Welcome!"
-  }
-}
-```
+  }}
+}}
+
 
 ---
+
+✅ BEFORE YOU RESPOND, SILENTLY SELF-CHECK:
+1. Does your reply start with '{{' and end with '}}'?
+2. Is your reply valid JSON parsable by `JSON.parse()`?
+3. Are all required keys present and correctly typed?
+4. Have you removed ALL markdown, code fences, and explanatory text?
+   - If any check fails, REGENERATE your answer.
+
+---
+
 **Your Turn: Real Context**
 
 **Goal:**
@@ -151,7 +149,7 @@ Return a single JSON object with the following structure.
 {step}
 
 **Failed Tool:**
-{failed_tool_name}
+{failed_tool_id}
 
 **Error:**
 {error_type}: {error_message}
@@ -163,10 +161,10 @@ Return a single JSON object with the following structure.
 
 ALTERNATIVE_TOOLS_SECTION: str = (
     """
-
-**Alternative Tools You Can Switch To (JSON):**
-{alternative_tools}
-"""
+    **Alternative Tools:**
+    The previous tool failed. Please select a more suitable tool from the following list to achieve the step's goal.
+    {alternative_tools}
+    """
 )
 
 FINAL_ANSWER_SYNTHESIS_PROMPT: str = (
