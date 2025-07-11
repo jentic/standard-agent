@@ -136,6 +136,7 @@ from jentic_agents.reasoners.rewoo_reasoner.core import ReWOOReasoner
 from jentic_agents.platform.jentic_client import JenticClient
 from jentic_agents.agents.interactive_cli_agent import InteractiveCLIAgent
 from jentic_agents.inbox.cli_inbox import CLIInbox
+from jentic_agents.outbox.cli_outbox import CLIOutbox
 # 1. Set up the components
 llm_wrapper = LiteLLMChatLLM(model='claude-sonnet-4-20250514')
 memory = ScratchPadMemory()
@@ -143,6 +144,7 @@ jentic_client = JenticClient(api_key='Jentic API KEY')
 jentic_tools = JenticToolInterface(client=jentic_client)
 
 inbox = CLIInbox()
+outbox = CLIOutbox()
 
 # 2. Instantiate the Reasoner
 reasoner = ReWOOReasoner(
@@ -155,6 +157,7 @@ agent = InteractiveCLIAgent(
     reasoner=reasoner,
     memory=memory,
     inbox=inbox,
+    outbox=outbox,
     jentic_client=jentic_client
 )
 agent.spin()  # Start the interactive loop
