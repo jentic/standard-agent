@@ -1,7 +1,7 @@
 import json
 import re
 from copy import deepcopy
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import jentic_agents.reasoners.rewoo_reasoner._prompts as prompts
 from jentic_agents.memory.base_memory import BaseMemory
@@ -43,8 +43,8 @@ class ReWOOReasoner(BaseReWOOReasoner):
         self._logger.info(f"phase=PLAN_GENERATED plan={plan_md}")
         state.plan = parse_bullet_plan(plan_md)
 
-    def _execute_step(self, step: Step, state: ReasonerState) -> Dict[str, Any]:  # noqa: D401
-        """Execute a single plan step with retry bookkeeping."""
+    def _execute_step(self, step: Step, state: ReasonerState) -> Optional[Dict[str, Any]]:
+        """Execute a single plan step, dispatching to the correct handler."""
         step.status = "running"
         try:
             inputs = self._fetch_inputs(step)
@@ -52,38 +52,50 @@ class ReWOOReasoner(BaseReWOOReasoner):
             self._reflect_on_failure(exc, step, state)
             return None
 
-        if step.step_type == Step.StepType.REASONING:
-            result = self._execute_reasoning_step(step, inputs)
-            step.status = "done"
-            step.result = result
-            self._store_step_output(step, state)
-            return None
+        step.step_type = self._classify_step(step, state)
 
+        if step.step_type == Step.StepType.REASONING:
+            return self._handle_reasoning_step(step, inputs, state)
+        else:
+            return self._execute_tool_step(step, inputs, state)
+
+    def _handle_reasoning_step(self, step: Step, inputs: Dict[str, Any], state: ReasonerState) -> None:
+        """Execute a reasoning step and store the output."""
+        result = self._execute_reasoning_step(step, inputs)
+        step.status = "done"
+        step.result = result
+        self._store_step_output(step, state)
+        return None
+
+    def _execute_tool_step(self, step: Step, inputs: Dict[str, Any], state: ReasonerState) -> Optional[Dict[str, Any]]:
+        """Select, parameterize, and execute a tool, with reflection on failure."""
+        tool_id = None
         try:
             tool_id = self._select_tool(step)
             if tool_id == "none":
                 raise ToolSelectionError(
                     "LLM determined no single tool was suitable for the step. "
-                    "Best to rephrase and refine the step to make it clearer and concise"
+                    "Best action is to rephrase and refine the step to make it clearer and concise"
                 )
 
             params = self._generate_params(step, tool_id, inputs)
             result = self.tool.execute(tool_id, params)
             self._logger.info("phase=EXECUTE_OK run_id=%s tool_id=%s", getattr(self, "_run_id", "NA"), tool_id)
+
+            # On success, update step and state
             step.status = "done"
             step.result = result["result"].output
-            # Persist in-memory for downstream steps
             self._store_step_output(step, state)
             return {"tool_id": tool_id, "params": params, "result": result}
 
         except (ToolSelectionError, ParameterGenerationError) as e:
-            self._reflect_on_failure(e, step, state, tool_id)
+            self._reflect_on_failure(e, step, state, failed_tool_id=tool_id)
             return None
         except Exception as exc:  # noqa: BLE001
             self._logger.warning(
                 "phase=EXECUTE_FAIL run_id=%s tool_id=%s error=%s",
                 getattr(self, "_run_id", "NA"),
-                tool_id,
+                tool_id or "unknown",
                 exc,
             )
             self._reflect_on_failure(ToolExecutionError(str(exc)), step, state, failed_tool_id=tool_id)
