@@ -5,6 +5,7 @@ import sys
 
 from dotenv import load_dotenv
 
+from jentic_agents.outbox import CLIOutbox
 from jentic_agents.reasoners import ReWOOReasoner
 
 # Add the package to the path
@@ -61,12 +62,14 @@ def main():
         print('Initializing JenticReasoner')
         # 3. Initialize Memory and Inbox
         inbox = CLIInbox(prompt="Enter your goal: ")
+        outbox = CLIOutbox()
 
         # 4. Create and run the Agent
         agent = InteractiveCLIAgent(
             reasoner=reasoner,
             memory=memory,
             inbox=inbox,
+            outbox=outbox,
             jentic_client=jentic_client,
         )
 

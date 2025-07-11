@@ -8,6 +8,7 @@ from ..reasoners.rewoo_reasoner_contract import BaseReWOOReasoner
 from ..reasoners.models import ReasoningResult
 from ..memory.base_memory import BaseMemory
 from ..inbox.base_inbox import BaseInbox
+from ..outbox.base_outbox import BaseOutbox
 from ..platform.jentic_client import JenticClient
 
 
@@ -29,6 +30,7 @@ class BaseAgent(ABC):
         reasoner: BaseReWOOReasoner,
         memory: BaseMemory,
         inbox: BaseInbox,
+        outbox: BaseOutbox,
         jentic_client: JenticClient
     ):
         """
@@ -43,6 +45,7 @@ class BaseAgent(ABC):
         self.reasoner = reasoner
         self.memory = memory
         self.inbox = inbox
+        self.outbox = outbox
         self.jentic_client = jentic_client
     
     @abstractmethod
@@ -89,15 +92,7 @@ class BaseAgent(ABC):
         """
         pass
     
-    @abstractmethod
-    def handle_output(self, result: ReasoningResult) -> None:
-        """
-        Handle output to the user/environment.
-        
-        Args:
-            result: Reasoning result to present
-        """
-        pass
+
     
     @abstractmethod
     def should_continue(self) -> bool:

@@ -38,6 +38,10 @@ jentic_agents/
 ├─ inbox/                              # Goal/task delivery systems
 │   ├─ base_inbox.py                   # Abstract inbox interface
 │   └─ cli_inbox.py                    # CLI input inbox
+│
+├─ outbox/                             # Result delivery systems
+│   ├─ base_outbox.py                  # Abstract outbox interface
+│   └─ cli_outbox.py                   # CLI output outbox
 
 ```
 
@@ -71,6 +75,13 @@ Pluggable memory backends for storing information across reasoning steps.
 Goal delivery systems that feed tasks to the agent.
 - **`BaseInbox`**: An abstract interface for receiving goals.
 - **`CLIInbox`**: An implementation that gets goals from interactive command-line input.
+
+### Outbox
+Result delivery systems that decouple the agent from the output mechanism.
+- **`BaseOutbox`**: An abstract interface for delivering the final result.
+- **`CLIOutbox`**: An implementation that formats and prints the result to the command line.
+
+This pattern makes it easy to integrate the agent's output with any downstream system. For example, to send results to Slack, you would simply create a `SlackOutbox` class that implements the `BaseOutbox` contract and uses the Slack API in its `send` method. The core agent logic would not need to change.
 
 ## 🚀 Quick Start
 

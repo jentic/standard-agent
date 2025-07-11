@@ -48,8 +48,8 @@ class InteractiveCLIAgent(BaseAgent):
                     # Process the goal
                     result = self.process_goal(goal)
                     
-                    # Handle output
-                    self.handle_output(result)
+                    # Handle output via the outbox
+                    self.outbox.send(result)
                     
                     # Acknowledge successful processing
                     self.inbox.acknowledge_goal(goal)
@@ -87,27 +87,7 @@ class InteractiveCLIAgent(BaseAgent):
         """
         return str(input_data).strip()
     
-    def handle_output(self, result: ReasoningResult) -> None:
-        """
-        Handle output to the user/environment.
-        
-        Formats and prints the reasoning result to stdout.
-        
-        Args:
-            result: Reasoning result to present
-        """
-        if result.success:
-            print(f"✅ **Answer:** {result.final_answer}")
-            
-            if result.tool_calls:
-                print(f"\n📋 **Used {len(result.tool_calls)} tool(s) in {result.iterations} iteration(s):**")
-                for i, call in enumerate(result.tool_calls, 1):
-                    tool_name = call.get('tool_name', call.get('tool_id', 'Unknown'))
-                    print(f"  {i}. {tool_name}")
-        else:
-            print(f"❌ **Failed:** {result.final_answer}")
-            if result.error_message:
-                print(f"   Error: {result.error_message}")
+
     
     def should_continue(self) -> bool:
         """
