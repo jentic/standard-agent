@@ -173,4 +173,3 @@ agent.spin()  # Start the interactive loop
 
 ---
 
-**Built for a new generation of resilient, modular, and truly autonomous AI agents.**
