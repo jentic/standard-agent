@@ -1,6 +1,7 @@
-# ActBots: A Framework for Self-Healing AI Agents
+# J Bots: A Framework for Self-Healing AI Agents
 
-A **clean, modular Python framework** for building robust, autonomous AI agents. ActBots provides a powerful reasoning engine that can dynamically plan, execute, and **reflect on failures** to heal itself, ensuring reliable task completion using the Jentic tool platform.
+A **clean, modular Python framework** for building robust, autonomous AI agents. J_Bots provides a reasoning engine that can dynamically plan, execute, and **reflect on failures** to heal itself, ensuring reliable task completion using the provided tool platform. 
+Jentic is prepackaged as the default tool platform.
 
 ## 🎯 Project Goals
 
@@ -90,7 +91,7 @@ This pattern makes it easy to integrate the agent's output with any downstream s
 ```bash
 # Clone and set up the project
 git clone <repository-url>
-cd actbots
+cd j_bot
 
 # Install dependencies using PDM
 pdm install
