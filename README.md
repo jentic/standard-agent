@@ -93,14 +93,11 @@ This pattern makes it easy to integrate the agent's output with any downstream s
 git clone <repository-url>
 cd actbots
 
-# Install dependencies using PDM
-pdm install
+# Install dependencies
+make install
 
-# Run tests
-pdm run test
-
-# Check code quality
-pdm run lint
+# Activate the virtual environment
+source .venv/bin/activate
 ```
 
 ### Configuration
