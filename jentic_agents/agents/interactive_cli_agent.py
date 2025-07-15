@@ -1,14 +1,13 @@
 """
 Interactive CLI agent that reads goals from stdin and outputs to stdout.
 """
-import logging
 import sys
 from typing import Any
 
 from .base_agent import BaseAgent
-from ..reasoners.models import ReasoningResult
+from ..utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InteractiveCLIAgent(BaseAgent):

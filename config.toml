@@ -1,0 +1,33 @@
+[tool.actbots.logging.console]
+enabled = true
+level = "INFO"
+colored = true
+format = "%(name)s:%(levelname)s: %(message)s"
+
+[tool.actbots.logging.file]
+enabled = true
+level = "DEBUG"
+path = "jentic_agents/logs/actbots.log"
+format = "%(asctime)s - %(levelname)-8s - %(name)s - %(message)s"
+
+[tool.actbots.logging.file.rotation]
+enabled = true
+max_bytes = 10485760
+backup_count = 5
+
+[tool.actbots.logging.loggers]
+jentic_agents = { level = "DEBUG" }
+chromadb = { level = "WARNING" }
+httpx = { level = "WARNING" }
+LiteLLM = { level = "WARNING" }
+openai = { level = "WARNING" }
+
+[tool.actbots.llm]
+provider = "gemini"
+model = "gemini-2.5-flash"
+
+[tool.actbots.memory]
+chroma_path = "jentic_agents/data/chroma_db"
+llm_provider = "gemini"
+llm_model = "gemini-2.5-flash"
+embed_model = "text-embedding-3-small"

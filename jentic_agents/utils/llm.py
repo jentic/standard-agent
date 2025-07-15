@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict
+from .config import get_config_value
 
 
 class BaseLLM(ABC):
@@ -22,11 +23,15 @@ class LiteLLMChatLLM(BaseLLM):
 
     def __init__(
         self,
-        model: str = "gpt-4",
+        model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int | None = None,
     ) -> None:
         import litellm
+        
+        if model is None:
+            model = get_config_value("llm", "model", default="gpt-4")
+        
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens

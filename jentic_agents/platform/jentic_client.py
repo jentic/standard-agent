@@ -1,14 +1,14 @@
 """
 Thin wrapper around jentic-sdk for centralized auth, retries, and logging.
 """
-import logging
 import os
 from typing import Any, Dict, List, Optional
 
 from jentic_agents.tools.exceptions import ToolExecutionError
+from ..utils.logger import get_logger
 
-# Standard module logger
-logger = logging.getLogger(__name__)
+
+logger = get_logger(__name__)
 
 
 class JenticClient:
