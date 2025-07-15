@@ -38,19 +38,18 @@ def main():
     print("-" * 50)
 
     # ------------------------------------------------------------------
-    # Decide which LLM provider/model to use based on one env var.
+    # Initialize LLM with flexible configuration
     # ------------------------------------------------------------------
-    model_name = os.getenv("LLM_MODEL", "gpt-4o")
-
     try:
         # 1. Initialize the JenticClient
         # This will use the live Jentic services.
         jentic_client = JenticClient()
         tool_interface = JenticToolInterface(client=jentic_client)
 
-        # 2. Initialize the LLM wrapper and Reasoner
-        # Build the LLM wrapper for the selected model
-        llm_wrapper = LiteLLMChatLLM(model=model_name)
+        # 2. Initialize the LLM wrapper
+        # The LLM will automatically configure itself from environment variables
+       
+        llm_wrapper = LiteLLMChatLLM()
         memory = ScratchPadMemory()
 
 
