@@ -15,34 +15,34 @@ Jentic is prepackaged as the default tool platform.
 ```
 jentic_agents/
 │
-├─ agents/                             # High-level agent orchestration
-│   ├─ base_agent.py                   # Abstract agent interface
-│   └─ interactive_cli_agent.py        # Concrete CLI-based agent
+├─ agents/                                  # High-level agent orchestration
+│   ├─ base_agent.py                        # Abstract agent interface
+│   └─ interactive_cli_agent.py             # Concrete CLI-based agent
 │
-├─ reasoners/                          # Core reasoning and self-healing logic
-│   ├─ rewoo_reasoner_contract.py      # Abstract ReWOO Reasoner contract
-│   └─ rewoo_reasoner/                 # ReWOO implementation
-│       └─ core.py                     # The ReWOOReasoner with reflection logic
+├─ reasoners/                               # Core reasoning and self-healing logic
+│   ├─ sequential_reasoner_contract.py      # Abstract Sequential Reasoner contract
+│   └─ rewoo_reasoner/                      # ReWOO implementation
+│       └─ core.py                          # The ReWOOReasoner with reflection logic
 │
-├─ tools/                              # The generic tool abstraction layer
-│   ├─ interface.py                    # Defines the abstract ToolInterface contract
-│   └─ models.py                       # Canonical Tool data model
+├─ tools/                                   # The generic tool abstraction layer
+│   ├─ interface.py                         # Defines the abstract ToolInterface contract
+│   └─ models.py                            # Canonical Tool data model
 │
-├─ platform/                           # Concrete implementations for external services
-│   ├─ jentic_client.py                # Low-level Jentic SDK wrapper
-│   └─ jentic_tool_iface.py            # Jentic implementation of the ToolInterface
+├─ platform/                                # Concrete implementations for external services
+│   ├─ jentic_client.py                     # Low-level Jentic SDK wrapper
+│   └─ jentic_tool_iface.py                 # Jentic implementation of the ToolInterface
 │
-├─ memory/                             # Pluggable memory backends
-│   ├─ base_memory.py                  # Abstract memory interface
-│   └─ scratch_pad.py                  # Simple in-memory key-value store
+├─ memory/                                  # Pluggable memory backends
+│   ├─ base_memory.py                       # Abstract memory interface
+│   └─ scratch_pad.py                       # Simple in-memory key-value store
 │
-├─ inbox/                              # Goal/task delivery systems
-│   ├─ base_inbox.py                   # Abstract inbox interface
-│   └─ cli_inbox.py                    # CLI input inbox
+├─ inbox/                                   # Goal/task delivery systems
+│   ├─ base_inbox.py                        # Abstract inbox interface
+│   └─ cli_inbox.py                         # CLI input inbox
 │
-├─ outbox/                             # Result delivery systems
-│   ├─ base_outbox.py                  # Abstract outbox interface
-│   └─ cli_outbox.py                   # CLI output outbox
+├─ outbox/                                  # Result delivery systems
+│   ├─ base_outbox.py                       # Abstract outbox interface
+│   └─ cli_outbox.py                        # CLI output outbox
 
 ```
 

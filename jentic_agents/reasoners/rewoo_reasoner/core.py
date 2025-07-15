@@ -15,12 +15,12 @@ from jentic_agents.reasoners.rewoo_reasoner.exceptions import (
 )
 from jentic_agents.tools.exceptions import ToolExecutionError
 from jentic_agents.reasoners.rewoo_reasoner._parser import parse_bullet_plan
-from jentic_agents.reasoners.rewoo_reasoner_contract import BaseReWOOReasoner
+from jentic_agents.reasoners.sequential_reasoner_contract import BaseSequentialReasoner
 from jentic_agents.tools.interface import ToolInterface
 from jentic_agents.utils.llm import BaseLLM
 
 
-class ReWOOReasoner(BaseReWOOReasoner):
+class ReWOOReasoner(BaseSequentialReasoner):
     """Reasoner implementing ReWOO + Reflection on top of Jentic tools."""
 
     def __init__(
