@@ -34,9 +34,9 @@ class LiteLLMChatLLM(BaseLLM):
     ) -> None:
         import litellm
         
-        # Load configuration from config.toml
+        # Load configuration from config.toml or env
         if model is None:
-            model = get_config_value("llm", "model", default="gpt-4o")
+            model = get_config_value("llm", "model", default=None)
         if temperature is None:
             temperature = get_config_value("llm", "temperature", default=0.2)
         if max_tokens is None:
@@ -45,9 +45,13 @@ class LiteLLMChatLLM(BaseLLM):
         
         # Configuration validation
         if not model or model.strip() == "":
-            logger.error("No LLM model configured! Please set [tool.actbots.llm.model] in config.toml")
-            logger.info("Example models: 'gpt-4o', 'claude-3-opus-20240229', 'gemini/gemini-2.0-flash'")
-            raise ValueError("No LLM model configured. Set model in config.toml")
+            logger.error(
+                "No LLM model configured! Please set 'LLM_MODEL' environment variable or [tool.actbots.llm] in config.toml."
+            )
+            logger.info(
+                "For example: export LLM_MODEL='gpt-4o'  # or any model supported by LiteLLM"
+            )
+            raise ValueError("LLM model not configured.")
         
         self.model = model
         self.temperature = temperature
