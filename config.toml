@@ -24,7 +24,11 @@ openai = { level = "WARNING" }
 
 [tool.actbots.llm]
 provider = "gemini"
-model = "gemini-2.5-flash"
+model = "gemini/gemini-2.0-flash"
+temperature = 0.2
+max_tokens = 4096
+timeout = 60
+fallback_models = ["gemini/gemini-1.5-pro-latest", "gpt-4o"]
 
 [tool.actbots.memory]
 chroma_path = "jentic_agents/data/chroma_db"
