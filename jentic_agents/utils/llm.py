@@ -42,18 +42,11 @@ class LiteLLMChatLLM(BaseLLM):
         if max_tokens is None:
             max_tokens = get_config_value("llm", "max_tokens", default=None)
         
-        # Get fallback models from config
-        fallback_models = get_config_value("llm", "fallback_models", default=None)
-        if isinstance(fallback_models, str):
-            self.fallback_models = [m.strip() for m in fallback_models.split(",") if m.strip()]
-        elif isinstance(fallback_models, list):
-            self.fallback_models = fallback_models
-        else:
-            self.fallback_models = []
         
         # Configuration validation
-        if not model:
+        if not model or model.strip() == "":
             logger.error("No LLM model configured! Please set [tool.actbots.llm.model] in config.toml")
+            logger.info("Example models: 'gpt-4o', 'claude-3-opus-20240229', 'gemini/gemini-2.0-flash'")
             raise ValueError("No LLM model configured. Set model in config.toml")
         
         self.model = model
@@ -75,11 +68,7 @@ class LiteLLMChatLLM(BaseLLM):
 
     def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """Send chat messages to the LLM and return the response."""
-        # Use fallback if configured
-        if self.fallback_models:
-            return self._chat_with_fallback(messages, **kwargs)
-        else:
-            return self._chat_single(self.model, messages, **kwargs)
+        return self._chat_single(self.model, messages, **kwargs)
 
     def _chat_single(self, model: str, messages: List[Dict[str, str]], **kwargs) -> str:
         """Execute a single chat call."""
@@ -106,22 +95,6 @@ class LiteLLMChatLLM(BaseLLM):
                 self._track_error(model, e, start_time)
             raise
 
-    def _chat_with_fallback(self, messages: List[Dict[str, str]], **kwargs) -> str:
-        """Try primary model first, then fallbacks if needed."""
-        models = [self.model] + self.fallback_models
-        
-        for i, model in enumerate(models):
-            try:
-                return self._chat_single(model, messages, **kwargs)
-            except Exception as e:
-                logger.warning(f"Model {model} failed: {str(e)}")
-                
-                if i == len(models) - 1:  # Last model
-                    logger.error("All models failed")
-                    raise
-                else:
-                    logger.info(f"Trying fallback model {models[i+1]}...")
-                    continue
 
     def _track_completion(self, model: str, response, start_time: float):
         """Track successful completion metrics."""
