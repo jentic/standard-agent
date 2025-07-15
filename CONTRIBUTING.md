@@ -32,7 +32,7 @@ We welcome contributions in the following areas:
 
 -   **Code Style**: We follow **[PEP 8](https://peps.python.org/pep-0008/)** for code standards and use **[ruff](https://astral.sh/ruff)** for formatting and linting.
 -   **Docstrings**: All public modules, classes, and functions should have docstrings following **[PEP 257](https://peps.python.org/pep-0257/)**.
--   **Testing**: All new code requires comprehensive unit and integration tests using **pytest**.
+-   **Testing**: All new code requires comprehensive unit and integration tests using **[pytest](https://docs.pytest.org/en/stable/getting-started.html)**.
 
 ## Contribution Process
 
