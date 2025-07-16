@@ -23,7 +23,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "rich>=14.0.0",
     "ruff>=0.12.2",
-    dacite>=1.6.0
+    "dacite>=1.6.0"
 ]
 
 [tool.setuptools.packages.find]
