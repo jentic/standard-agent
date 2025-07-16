@@ -36,11 +36,32 @@ class ReWOOReasoner(BaseSequentialReasoner):
     def run(self, goal: str, max_iterations: int = 20):  # noqa: D401
         return super().run(goal, max_iterations)
 
+    def _classify_task_complexity(self, goal: str) -> str:
+        """Classify task as SIMPLE or COMPLEX."""
+        prompt = prompts.TASK_COMPLEXITY_PROMPT.replace("{goal}", goal)
+        response = self._call_llm(prompt).strip().upper()
+        
+        if "SIMPLE" in response:
+            return "SIMPLE"
+        return "COMPLEX"
+
     def _generate_plan(self, state: ReasonerState) -> None:
         """Generate initial plan from goal using the LLM."""
-        prompt = prompts.PLAN_GENERATION_PROMPT.replace("{goal}", state.goal)
-        plan_md = self._call_llm(prompt)
-        self._logger.info(f"phase=PLAN_GENERATED plan={plan_md}")
+        self._task_complexity = self._classify_task_complexity(state.goal)
+        self._logger.info(f"phase=COMPLEXITY_CLASSIFIED result={self._task_complexity}")
+        
+        if self._task_complexity == "SIMPLE":
+            # Create single-step plan for simple tasks
+            plan_md = f"""```
+- {state.goal} (output: result)
+```"""
+            self._logger.info(f"phase=SIMPLE_PLAN_GENERATED plan={plan_md}")
+        else:
+            # Use full planning for complex tasks
+            prompt = prompts.PLAN_GENERATION_PROMPT.replace("{goal}", state.goal)
+            plan_md = self._call_llm(prompt)
+            self._logger.info(f"phase=COMPLEX_PLAN_GENERATED plan={plan_md}")
+        
         state.plan = parse_bullet_plan(plan_md)
 
     def _execute_step(self, step: Step, state: ReasonerState) -> Optional[Dict[str, Any]]:
@@ -52,7 +73,12 @@ class ReWOOReasoner(BaseSequentialReasoner):
             self._reflect_on_failure(exc, step, state)
             return None
 
-        step.step_type = self._classify_step(step, state)
+        # Skip classification for simple tasks - they're always tool calls
+        if hasattr(self, '_task_complexity') and self._task_complexity == "SIMPLE":
+            step.step_type = Step.StepType.TOOL
+            self._logger.info("phase=STEP_CLASSIFICATION_SKIPPED result=TOOL reason=SIMPLE_TASK")
+        else:
+            step.step_type = self._classify_step(step, state)
 
         if step.step_type == Step.StepType.REASONING:
             return self._handle_reasoning_step(step, inputs, state)
