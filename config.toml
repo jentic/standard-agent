@@ -1,5 +1,7 @@
-[logging]
+[llm]
+model = "gemini/gemini-2.5-flash" # Model names require a provider prefix (e.g., "<provider>/<model>")
 
+[logging]
 [logging.console]
 enabled = true
 colored = true
@@ -19,8 +21,4 @@ backup_count = 5
 LiteLLM = "WARNING"
 httpx = "WARNING"
 httpcore = "WARNING"
-
-[llm]
-model = "gemini/gemini-2.5-flash" # Model names require a provider prefix (e.g., "<provider>/<model>")
-
 

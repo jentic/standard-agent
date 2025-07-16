@@ -2,6 +2,10 @@ from __future__ import annotations
 import dataclasses
 
 @dataclasses.dataclass
+class LLM:
+    model: str
+
+@dataclasses.dataclass
 class LoggingConsole:
     enabled: bool
     colored: bool
@@ -31,11 +35,6 @@ class Logging:
     libraries: LoggingLibraries
 
 @dataclasses.dataclass
-class LLM:
-    provider: str
-    model: str
-
-@dataclasses.dataclass
 class Config:
-    logging: Logging
     llm: LLM
+    logging: Logging
