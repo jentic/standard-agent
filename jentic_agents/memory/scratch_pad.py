@@ -170,7 +170,7 @@ class ScratchPadMemory(BaseMemory):
 
     # ---------- Placeholder resolution ----------
 
-    _MEMORY_RE = re.compile(r"\$\{(?:\{)?memory\.([\w_\.]+)(?:\})?\}")
+    _MEMORY_RE = re.compile(r"\$\{(?:\{)?memory\.([\w_\.\[\]]+)(?:\})?\}")
 
     def resolve_placeholders(self, obj: Any) -> Any:
         """
@@ -194,17 +194,19 @@ class ScratchPadMemory(BaseMemory):
 
     def _lookup(self, dotted_path: str) -> str:
         """
-        Look up a value using dotted path notation.
+        Look up a value using dotted path notation with array support.
         
         Args:
-            dotted_path: Path like "key.subkey.index"
+            dotted_path: Path like "key.subkey[0].field" or "key.subkey.index"
             
         Returns:
             String representation of the looked up value
         """
-        key, *path = dotted_path.split(".")
+        # Convert array notation to dot notation: docs[0] -> docs.0
+        normalized_path = re.sub(r'\[(\d+)\]', r'.\1', dotted_path)
+        key, *path = normalized_path.split(".")
         
-        # Try enhanced storage first, then fall back to simple storage
+        # Get root item from memory
         if key in self._store:
             item = self._store[key].value
         elif key in self._storage:
@@ -212,7 +214,7 @@ class ScratchPadMemory(BaseMemory):
         else:
             raise KeyError(f"Memory key '{key}' not found")
             
-        # Navigate the dotted path
+        # Navigate the path
         for part in path:
             if isinstance(item, dict):
                 item = item[part]
@@ -221,13 +223,11 @@ class ScratchPadMemory(BaseMemory):
             else:
                 raise KeyError(f"Cannot navigate path '{dotted_path}' - {part} not accessible")
         
-        # Safely stringify the item
+        # Stringify the result
         if isinstance(item, str):
             return item
         
-        # Try JSON serialization first
         try:
             return json.dumps(item)
         except (TypeError, ValueError):
-            # If JSON serialization fails, fall back to string representation
             return str(item)

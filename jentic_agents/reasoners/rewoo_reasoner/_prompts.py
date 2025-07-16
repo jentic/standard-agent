@@ -4,15 +4,6 @@ These prompts are intentionally kept minimal at this stage. They will be
 iterated as we refine the reasoner's capabilities.
 """
 
-TASK_COMPLEXITY_PROMPT: str = (
-    """Classify this goal as SIMPLE or COMPLEX:
-    - SIMPLE: Single action (send message, get data, create item)
-    - COMPLEX: Multiple steps or analysis needed
-
-    Goal: {goal}
-    Reply: SIMPLE or COMPLEX
-    """
-)
 
 PLAN_GENERATION_PROMPT: str = (
     """
@@ -106,6 +97,7 @@ Goal: "Get board details from https://example.com/board/XYZ789"
 Memory: {{}}
 Schema: {{'board_id': 'string (required)'}}
 Output: {{"board_id": "XYZ789"}}
+
 
 🚨 CRITICAL: Your response must be ONLY a raw JSON object. No markdown, no backticks, no explanations. Start with {{ and end with }}.
 """

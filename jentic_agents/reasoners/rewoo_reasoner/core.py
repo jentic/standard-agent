@@ -36,31 +36,12 @@ class ReWOOReasoner(BaseSequentialReasoner):
     def run(self, goal: str, max_iterations: int = 20):  # noqa: D401
         return super().run(goal, max_iterations)
 
-    def _classify_task_complexity(self, goal: str) -> str:
-        """Classify task as SIMPLE or COMPLEX."""
-        prompt = prompts.TASK_COMPLEXITY_PROMPT.replace("{goal}", goal)
-        response = self._call_llm(prompt).strip().upper()
-        
-        if "SIMPLE" in response:
-            return "SIMPLE"
-        return "COMPLEX"
 
     def _generate_plan(self, state: ReasonerState) -> None:
         """Generate initial plan from goal using the LLM."""
-        self._task_complexity = self._classify_task_complexity(state.goal)
-        self._logger.info(f"phase=COMPLEXITY_CLASSIFIED result={self._task_complexity}")
-        
-        if self._task_complexity == "SIMPLE":
-            # Create single-step plan for simple tasks
-            plan_md = f"""```
-- {state.goal} (output: result)
-```"""
-            self._logger.info(f"phase=SIMPLE_PLAN_GENERATED plan={plan_md}")
-        else:
-            # Use full planning for complex tasks
-            prompt = prompts.PLAN_GENERATION_PROMPT.replace("{goal}", state.goal)
-            plan_md = self._call_llm(prompt)
-            self._logger.info(f"phase=COMPLEX_PLAN_GENERATED plan={plan_md}")
+        prompt = prompts.PLAN_GENERATION_PROMPT.replace("{goal}", state.goal)
+        plan_md = self._call_llm(prompt)
+        self._logger.info(f"phase=PLAN_GENERATED plan={plan_md}")
         
         state.plan = parse_bullet_plan(plan_md)
 
@@ -73,12 +54,7 @@ class ReWOOReasoner(BaseSequentialReasoner):
             self._reflect_on_failure(exc, step, state)
             return None
 
-        # Skip classification for simple tasks - they're always tool calls
-        if hasattr(self, '_task_complexity') and self._task_complexity == "SIMPLE":
-            step.step_type = Step.StepType.TOOL
-            self._logger.info("phase=STEP_CLASSIFICATION_SKIPPED result=TOOL reason=SIMPLE_TASK")
-        else:
-            step.step_type = self._classify_step(step, state)
+        step.step_type = self._classify_step(step, state)
 
         if step.step_type == Step.StepType.REASONING:
             return self._handle_reasoning_step(step, inputs, state)
@@ -105,6 +81,19 @@ class ReWOOReasoner(BaseSequentialReasoner):
                 )
 
             params = self._generate_params(step, tool_id, inputs)
+            
+            # Resolve memory placeholders in parameters only if they exist
+            if hasattr(self._memory, 'resolve_placeholders'):
+                # Check if any parameter values contain memory references
+                params_str = str(params)
+                if '${memory.' in params_str:
+                    try:
+                        params = self._memory.resolve_placeholders(params)
+                    except KeyError as e:
+                        # Memory key not found - this indicates a dependency issue
+                        missing_key = str(e).strip("'\"")
+                        raise MissingInputError(f"Memory placeholder resolution failed: {missing_key}") from e
+            
             result = self.tool.execute(tool_id, params)
             
             # Check if execution actually succeeded
@@ -270,7 +259,11 @@ class ReWOOReasoner(BaseSequentialReasoner):
         inputs: Dict[str, Any] = {}
         for key in step.input_keys:
             try:
-                inputs[key] = self._memory.retrieve(key)  # type: ignore[attr-defined]
+                value = self._memory.retrieve(key)  # type: ignore[attr-defined]
+                if value is None:
+                    self._logger.warning("Missing required input key: %s", key)
+                    raise MissingInputError(key)
+                inputs[key] = value
             except Exception:  # noqa: BLE001
                 self._logger.warning("Missing required input key: %s", key)
                 raise MissingInputError(key)
