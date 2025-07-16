@@ -106,6 +106,12 @@ class ReWOOReasoner(BaseSequentialReasoner):
 
             params = self._generate_params(step, tool_id, inputs)
             result = self.tool.execute(tool_id, params)
+            
+            # Check if execution actually succeeded
+            if result.get("error") or not result.get("result"):
+                error_msg = result.get("error", "Tool execution returned no result")
+                raise ToolExecutionError(f"Tool execution failed: {error_msg}")
+            
             self._logger.info("phase=EXECUTE_OK run_id=%s tool_id=%s", getattr(self, "_run_id", "NA"), tool_id)
 
             # On success, update step and state
@@ -396,15 +402,26 @@ class ReWOOReasoner(BaseSequentialReasoner):
         return params
 
     def _parse_json_or_retry(self, raw: str, original_prompt: str) -> Dict[str, Any]:
-        """Best-effort JSON parse with a single retry on failure."""
+        """Parse JSON with fallback for markdown-wrapped responses."""
+        # First try raw parsing
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
-            self._logger.warning("phase=JSON_PARSE_FAIL raw='%s'", raw)
-            # Ask the LLM to fix the JSON, this is a single-shot correction
-            prompt = prompts.JSON_CORRECTION_PROMPT.format(bad_json=raw, original_prompt=original_prompt)
-            raw = self._call_llm(prompt).strip()
-            return json.loads(raw)
+            pass
+        
+        # Try extracting from markdown code blocks
+        _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([^`]+)\s*```")
+        match = _JSON_FENCE_RE.search(raw)
+        if match:
+            extracted = match.group(1).strip()
+            try:
+                return json.loads(extracted)
+            except json.JSONDecodeError:
+                pass
+        
+        # Log failure and raise error
+        self._logger.warning("phase=JSON_PARSE_FAIL raw='%s'", raw)
+        raise ParameterGenerationError(f"LLM returned invalid JSON: {raw}")
 
     @staticmethod
     def _is_valid_tool_reply(reply: str, tools: List[Tool]) -> bool:
