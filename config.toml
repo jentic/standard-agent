@@ -15,11 +15,12 @@ file_rotation = true
 max_bytes = 10485760
 backup_count = 5
 
-[llm]
-provider = "gemini"
-model = "gemini-2.5-flash"
-
 [logging.libraries]
 LiteLLM = "WARNING"
 httpx = "WARNING"
 httpcore = "WARNING"
+
+[llm]
+provider = "gemini"
+model = "gemini-2.5-flash"
+
