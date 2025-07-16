@@ -74,7 +74,7 @@ ALLOWED_KEYS: {allowed_keys}
 
 RULES:
 - Output ONLY a valid JSON object with parameter names and values
-- Use the schema to determine which parameters are required and their types
+- Use the schema to determine which parameters are required and their types, but NEVER use schema metadata (like "type", "maxLength") as actual values
 - Extract parameter values from the goal, memory, or context when possible
 - MEMORY REFERENCES: Use ${{memory.key}} for simple values or ${{memory.key.field}} for nested data from previous steps
 - URL PARSING: Extract IDs from URLs using patterns like /channel/ID - take the alphanumeric identifier after the resource type
@@ -97,6 +97,14 @@ Goal: "Get board details from https://example.com/board/XYZ789"
 Memory: {{}}
 Schema: {{'board_id': 'string (required)'}}
 Output: {{"board_id": "XYZ789"}}
+
+Goal: "Send articles to Discord"
+Memory: {{'articles': {{'docs': [{{'headline': {{'main': 'Breaking News'}}, 'web_url': 'https://example.com/news1'}}]}}}}
+Schema: {{'channel_id': 'string', 'embeds': {{'type': 'array', 'items': {{'type': 'object', 'properties': {{'title': 'string', 'url': 'string'}}}}}}}}
+Output: {{"channel_id": "123", "embeds": [{{"title": "Breaking News", "url": "https://example.com/news1"}}]}}
+
+WRONG: {{"embeds": [{{"type": "object", "properties": {{"title": "string"}}}}]}} ← This uses schema metadata as values
+CORRECT: {{"embeds": [{{"title": "Breaking News", "url": "https://example.com/news1"}}]}} ← This uses actual data
 
 
 🚨 CRITICAL: Your response must be ONLY a raw JSON object. No markdown, no backticks, no explanations. Start with {{ and end with }}.
