@@ -25,7 +25,7 @@ def main():
     load_dotenv()
     logger = get_logger(__name__)
 
-    print("🚀 Starting ActBots Live Demo")
+    print("🚀 Starting Standard Agent Live Demo")
     print("=" * 50)
     print("This agent uses live Jentic and OpenAI services.")
     print("Type your goal below, or 'quit' to exit.")

@@ -4,15 +4,14 @@ RAII-style timer for performance measurement and logging.
 import time
 from typing import Optional, Callable, Any, Dict
 from contextlib import contextmanager
-from .logger import get_logger, get_config
+from .logger import get_logger
 
 
 class Timer:
     """
     RAII-style timer that can be used as a context manager.
     
-    Automatically logs timing information when the context exits,
-    if performance logging is enabled in the config.
+    Automatically logs timing information when the context exits.
     """
     
     def __init__(self, name: str, logger_name: Optional[str] = None):
@@ -25,7 +24,6 @@ class Timer:
         """
         self.name = name
         self.logger = get_logger(logger_name or __name__)
-        self.config = get_config().get('performance', {})
         
         self.start_time: Optional[float] = None
         self.duration_ms: Optional[float] = None
@@ -41,17 +39,15 @@ class Timer:
             return
             
         self.duration_ms = (time.perf_counter() - self.start_time) * 1000
-        
-        if self.config.get('enabled', True):
-            slow_threshold = self.config.get('slow_threshold_ms', 1000)
-            
-            if self.duration_ms >= slow_threshold:
-                self.logger.warning(
-                    f"SLOW OPERATION: {self.name} took {self.duration_ms:.2f}ms "
-                    f"(threshold: {slow_threshold}ms)"
-                )
-            else:
-                self.logger.info(f"{self.name} completed in {self.duration_ms:.2f}ms")
+
+        SLOW_THRESHOLD = 1000 #ms
+        if self.duration_ms >= SLOW_THRESHOLD:
+            self.logger.warning(
+                f"SLOW OPERATION: {self.name} took {self.duration_ms:.2f}ms "
+                f"(threshold: {SLOW_THRESHOLD}ms)"
+            )
+        else:
+            self.logger.info(f"{self.name} completed in {self.duration_ms:.2f}ms")
     
     def get_duration_ms(self) -> Optional[float]:
         """Get the duration in milliseconds after the timer has stopped."""
