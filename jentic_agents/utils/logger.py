@@ -1,11 +1,12 @@
 """
 Singleton logger implementation with configuration from config.toml.
 """
+import dataclasses
 import logging
 import logging.handlers
 from pathlib import Path
 from typing import Dict, Any
-from jentic_agents.utils.config import load_config
+from jentic_agents.utils.load_config import load_config
 
 class LoggerSingleton:
     
@@ -27,9 +28,8 @@ class LoggerSingleton:
     
     def _setup_logging(self) -> None:
         """Set up logging based on the loaded configuration."""
-        logging_config = self.config.get('logging', {})
-        console_config = logging_config.get('console', {})
-        console_enabled = console_config.get('enabled', True)
+        console_config = self.config.logging.console
+        console_enabled = console_config.enabled
         
         # Set up root logger
         root_logger = logging.getLogger()
@@ -43,45 +43,47 @@ class LoggerSingleton:
         # Console Handler
         if console_enabled:
             console_handler = logging.StreamHandler()
-            console_level = console_config.get('level', 'INFO').upper()
+            console_level = console_config.level.upper()
             console_handler.setLevel(console_level)
             
             # Use colored formatter if specified in config
-            if console_config.get('colored', True):
-                formatter = ColoredFormatter(console_config.get('format', '%(name)s:%(levelname)s: %(message)s'))
+            if console_config.colored:
+                formatter = ColoredFormatter(console_config.format)
             else:
-                formatter = logging.Formatter(console_config.get('format', '%(name)s:%(levelname)s: %(message)s'))
-            
+                formatter = logging.Formatter(console_config.format)
+
             console_handler.setFormatter(formatter)
             root_logger.addHandler(console_handler)
         
-        file_config = logging_config.get('file', {})
-        file_enabled = file_config.get('enabled', True)
+        file_config = self.config.logging.file
+        file_enabled = file_config.enabled
         
         # File Handler  
         if file_enabled:
-            log_path = Path(file_config.get('path', 'jentic_agents/logs/standard_agent.log'))
+            log_path = Path(file_config.path)
             log_path.parent.mkdir(parents=True, exist_ok=True)
             
-            if file_config.get('file_rotation', False):
+            if file_config.file_rotation:
                 file_handler = logging.handlers.RotatingFileHandler(
                     log_path,
-                    maxBytes=file_config.get('max_bytes', 10485760),
-                    backupCount=file_config.get('backup_count', 5)
+                    maxBytes=file_config.max_bytes,
+                    backupCount=file_config.backup_count
                 )
             else:
                 file_handler = logging.FileHandler(log_path)
             
-            file_level = file_config.get('level', 'DEBUG').upper()
+            file_level = file_config.level.upper()
             file_handler.setLevel(file_level)
             
-            file_format = file_config.get('format', '%(asctime)s - %(levelname)-8s - %(name)s - %(message)s')
+            file_format = file_config.format
             file_handler.setFormatter(logging.Formatter(file_format))
             
             root_logger.addHandler(file_handler)
         
-        libraries_config = logging_config.get('libraries', {})
-        for lib_name, level in libraries_config.items():
+        libraries_config = self.config.logging.libraries
+        for field in dataclasses.fields(libraries_config):
+            lib_name = field.name
+            level = getattr(libraries_config, field.name)
             logging.getLogger(lib_name).setLevel(level.upper())
     
     def get_logger(self, name: str) -> logging.Logger:

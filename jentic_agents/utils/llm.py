@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import List, Dict
-from .config import get_config_value
+from .load_config import load_config
 
 
 class BaseLLM(ABC):
@@ -30,7 +30,8 @@ class LiteLLMChatLLM(BaseLLM):
         import litellm
         
         if model is None:
-            model = get_config_value("llm", "model", default="gpt-4")
+            config = load_config()
+            model = config.llm.model
         
         self.model = model
         self.temperature = temperature
