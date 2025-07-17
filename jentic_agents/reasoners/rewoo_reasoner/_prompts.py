@@ -151,8 +151,8 @@ PARAMETER_GENERATION_PROMPT = (
     </input>
 
     <data_extraction_rules>
-    • **NYT Articles**: Extract from response.docs[].headline.main + response.docs[].web_url
-    • **Article Arrays**: Process each item, format as "Title: URL\n" 
+    • **Articles/News**: Extract title/headline and URL fields, format as "Title: URL\n"
+    • **Arrays**: Process each item, combine into formatted string
     • **Nested Objects**: Access properties using dot notation
     • **Quantities**: "a/an/one" = 1, "few" = 3, "several" = 5, numbers = exact
     • **Never use placeholder text** - always extract real data from memory
