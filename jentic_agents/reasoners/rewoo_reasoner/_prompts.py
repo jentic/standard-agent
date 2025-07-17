@@ -85,7 +85,7 @@ TOOL_SELECTION_PROMPT: str = (
     """
     <role>
     You are an expert orchestrator working within the Jentic API ecosystem.
-    Your job is to select the best tool to execute a specific plan step, using a list of available tools. Each tool may vary in API domain, supported actions, and required parameters. You must evaluate each tool's suitability and return the **single best matching tool** — or `0` if none qualify.
+    Your job is to select the best tool to execute a specific plan step, using a list of available tools. Each tool may vary in API domain, supported actions, and required parameters. You must evaluate each tool's suitability and return the **single best matching tool** — or the wordnone if none qualify.
 
     Your selection will be executed by an agent, so precision and compatibility are critical.
     </role>
