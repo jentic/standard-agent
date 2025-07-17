@@ -64,51 +64,43 @@ TOOL_SELECTION_PROMPT: str = (
     "Respond with just the id (e.g. `tool_123`) or `none`. Do not include any other text."""
 )
 
-PARAMETER_GENERATION_PROMPT = ("""
-Generate appropriate input parameters for the selected API operation based on the user goal, agent memory, and available operation schema.
+PARAMETER_GENERATION_PROMPT = (
+    """
+    You are Parameter‑Builder AI.\n\n"
+    
+    "🛑 OUTPUT FORMAT REQUIREMENT 🛑\n"
+    "You must respond with a **single, valid JSON object** only.\n"
+    "→ No markdown, no prose, no backticks, no ```json blocks.\n"
+    "→ Do not escape newlines (no '\\n' inside strings unless part of real content).\n"
+    "→ All values must be properly quoted and valid JSON types.\n\n"
 
-STEP: {step}
-MEMORY CONTEXT: {step_inputs}
-TOOL SCHEMA: {tool_schema}
-ALLOWED_KEYS: {allowed_keys}
+    "ALLOWED_KEYS in the response parameters:\n{allowed_keys}\n\n"
 
-RULES:
-- Output ONLY a valid JSON object with parameter names and values
-- Use the schema to determine which parameters are required and their types, but NEVER use schema metadata (like "type", "maxLength") as actual values
-- Extract parameter values from the goal, memory, or context when possible
-- MEMORY REFERENCES: Use ${{memory.key}} for simple values or ${{memory.key.field}} for nested data from previous steps
-- URL PARSING: Extract IDs from URLs using patterns like /channel/ID - take the alphanumeric identifier after the resource type
-- NEVER generate placeholder values like 'your_api_key', 'user_token', 'example_id', or similar fake data
-- For missing parameters that can't be extracted, leave them out entirely rather than using placeholders
-- Include authentication parameters if they appear in the schema as required - they will be automatically populated by Jentic during execution
-- Use appropriate data types: strings for text/IDs, numbers for counts/limits, booleans for flags
-- Keep parameter values concise and relevant to the goal
-- PRIORITY ORDER: 1) Extract from goal text, 2) Parse from URLs, 3) Use memory references, 4) Omit if unavailable
-- You MUST only use memory keys from the allowed_memory_keys list when filling parameters
-- If a required value is not available in memory - Do NOT invent or guess memory keys, try use the available memory keys without modifying them - if not possible use "" (empty string)
+    "STEP:\n{step}\n\n"
+    "MEMORY CONTEXT:\n{step_inputs}\n\n"
+    "TOOL SCHEMA (JSON):\n{tool_schema}\n\n"
 
-EXAMPLES:
-Goal: "Send message 'Hello team' to channel general"
-Memory: {{'channels': [{{'id': 'C123', 'name': 'general'}}, {{'id': 'C456', 'name': 'random'}}]}}
-Schema: {{'channel': 'string (required)', 'text': 'string (required)'}}
-Output: {{"channel": "C123", "text": "Hello team"}}
+    "RULES:\n"
+    "1. Only include keys from ALLOWED_KEYS — do NOT invent new ones.\n"
+    "2. Extract values from Step and MEMORY CONTEXT; do not include MEMORY CONTEXT keys themselves.\n"
+    "3. If a key's value would be null or undefined, omit it entirely.\n"
+    "4. If IDs must be parsed from URLs, extract only the required portion.\n\n"
+    
+"EXAMPLES:\n"
+    "✅ Good:\n"
+    "  {{\"channel_id\": \"123\", \"content\": \"[Example](https://example.com)\"}}\n"
+    "❌ Bad:\n"
+    "  ```json\n  {{\"channel_id\": \"123\"}}\n  ```  ← No code blocks!\n"
+    "  {{\"channel_id\": \"123\", \"step_inputs\": {{...}}}} ← step_inputs is not allowed\n\n"
 
-Goal: "Get board details from https://example.com/board/XYZ789"
-Memory: {{}}
-Schema: {{'board_id': 'string (required)'}}
-Output: {{"board_id": "XYZ789"}}
+    "BEFORE YOU RESPOND:\n"
+    "✅ Confirm that all keys are in ALLOWED_KEYS\n"
+    "✅ Confirm the output starts with '{{' and ends with '}}'\n"
+    "✅ Confirm the output is parsable with `JSON.parse()`\n\n"
 
-Goal: "Send articles to Discord"
-Memory: {{'articles': {{'docs': [{{'headline': {{'main': 'Breaking News'}}, 'web_url': 'https://example.com/news1'}}]}}}}
-Schema: {{'channel_id': 'string', 'embeds': {{'type': 'array', 'items': {{'type': 'object', 'properties': {{'title': 'string', 'url': 'string'}}}}}}}}
-Output: {{"channel_id": "123", "embeds": [{{"title": "Breaking News", "url": "https://example.com/news1"}}]}}
-
-WRONG: {{"embeds": [{{"type": "object", "properties": {{"title": "string"}}}}]}} ← This uses schema metadata as values
-CORRECT: {{"embeds": [{{"title": "Breaking News", "url": "https://example.com/news1"}}]}} ← This uses actual data
-
-
-🚨 CRITICAL: Your response must be ONLY a raw JSON object. No markdown, no backticks, no explanations. Start with {{ and end with }}.
-"""
+    "🚨 FINAL RULE: Your reply MUST contain only a single raw JSON object. No explanation. No markdown. No escaping. No backticks."
+    "Note: Authentication credentials will be automatically injected by the platform."
+    """
 )
 
 BASE_REFLECTION_PROMPT: str = (
