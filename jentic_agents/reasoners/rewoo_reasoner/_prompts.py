@@ -85,7 +85,8 @@ PARAMETER_GENERATION_PROMPT = (
     "2. Extract values from Step and MEMORY CONTEXT; do not include MEMORY CONTEXT keys themselves.\n"
     "3. If a key's value would be null or undefined, omit it entirely.\n"
     "4. If IDs must be parsed from URLs, extract only the required portion.\n\n"
-    
+    "5. QUANTITY DETECTION: Parse quantity words in the step ('a', 'an', 'one' = 1; '5 items' = 5) and set corresponding limit/count/size parameters.\n\n"
+
 "EXAMPLES:\n"
     "✅ Good:\n"
     "  {{\"channel_id\": \"123\", \"content\": \"[Example](https://example.com)\"}}\n"
