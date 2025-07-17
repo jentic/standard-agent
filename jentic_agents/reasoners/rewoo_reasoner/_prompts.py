@@ -41,8 +41,8 @@ PLAN_GENERATION_PROMPT: str = (
     - Create a search query of 5-7 capability-focused keywords describing the required functionality for that step.
     - Include EXACTLY ONE provider/platform keyword (e.g., 'github', 'discord', 'trello') if the platform is clear from the step context; otherwise omit.
     - Do NOT combine multiple providers or API platforms in the same query.
-    - Do NOT include tool names or irrelevant terms.
-    - Focus on clear, action-oriented keywords strictly based on the current step.
+    - Do NOT include irrelevant terms.
+    - Focus on clear, action-oriented keywords and CRUD specific verbs based on the current step, yet taking the overall goal into consideration.
     - Output the keyword search query as a sibling bullet under the step, prefixed by: `→ keyword search query: "<query>"`.
     - If the step is a reasoning, data transformation, summarization, or any AI-only operation that does not require an API/tool call, do **not** output a keyword search query line.
     </keyword_instructions>
@@ -53,14 +53,12 @@ PLAN_GENERATION_PROMPT: str = (
     - All input keys reference a valid prior `output:` key.
     - Indentation is strictly correct: 0 for top-level, 2 spaces for sub-items.
     - No extraneous text or formatting appears outside the code block.
-    - No specific tool or service names are mentioned.
     </self_check>
 
     <examples>
-
     Example 1 — Goal: “Search NYT articles about artificial intelligence and send them to Discord channel 12345”
     ```
-    - Get recent New York Times (NYT)articles mentioning “artificial intelligence” (output: nyt_articles)
+    - Get recent New York Times (NYT) articles mentioning “artificial intelligence” (output: nyt_articles)
       → keyword search query: "get article nytimes new york times search query filter"
     - send articles as a Discord message to Discord channel 12345 (input: nyt_articles) (output: post_confirmation)
       → keyword search query: "send message discord channel post content"
@@ -74,7 +72,6 @@ PLAN_GENERATION_PROMPT: str = (
     - email summary_text to alice@example.com (input: summary_text) (output: email_confirmation)
       → keyword search query: "post send email gmail to user"
     ```
-
     </examples>
 
     <goal>
