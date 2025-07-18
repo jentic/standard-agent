@@ -1,105 +1,80 @@
-"""
-Abstract base class for AI agents that compose reasoner, memory, inbox, and Jentic client.
-"""
-from abc import ABC, abstractmethod
-from typing import Any
+"""BaseAgent
+================
 
-from ..reasoners.sequential_reasoner_contract import BaseSequentialReasoner
-from ..reasoners.models import ReasoningResult
-from ..memory.base_memory import BaseMemory
+Lightweight façade that wires together the core runtime services (LLM, memory,
+external tools) with a pluggable *reasoner* implementation.  The
+agent owns the services; the reasoner simply uses what the agent provides.
+"""
+from __future__ import annotations
+
+# Local imports use the new, refactored reasoner package
+from .models import Goal
 from ..inbox.base_inbox import BaseInbox
+from ..memory.base_memory import BaseMemory
 from ..outbox.base_outbox import BaseOutbox
-from ..platform.jentic_client import JenticClient
+from ..reasoners.base_reasoner import BaseReasoner  # type: ignore
+from ..reasoners.models import ReasoningResult
+from ..tools.interface import ToolInterface
+from ..utils.llm import BaseLLM
 
 
-class BaseAgent(ABC):
-    """
-    Base class for AI agents that wire together core components.
-    
-    Composes:
-    - Reasoner: Implements the reasoning loop logic
-    - Memory: Stores and retrieves information across sessions
-    - Inbox: Receives goals/tasks from various sources
-    - JenticClient: Interface to Jentic workflows and tools
-    
-    Concrete agents override I/O methods while inheriting core behavior.
-    """
-    
+class BaseAgent:
+    """Wires together a reasoner with shared services (LLM, memory, tools)."""
+
     def __init__(
         self,
-        reasoner: BaseSequentialReasoner,
+        *,
+        llm: BaseLLM,
         memory: BaseMemory,
-        inbox: BaseInbox,
-        outbox: BaseOutbox,
-        jentic_client: JenticClient
+        tool_interface: ToolInterface,
+        reasoner: BaseReasoner,
     ):
-        """
-        Initialize agent with core components.
-        
-        Args:
-            reasoner: Reasoning loop implementation
-            memory: Memory backend for storing information
-            inbox: Source of goals/tasks
-            jentic_client: Interface to Jentic platform
-        """
-        self.reasoner = reasoner
-        self.memory = memory
-        self.inbox = inbox
-        self.outbox = outbox
-        self.jentic_client = jentic_client
-    
-    @abstractmethod
-    def spin(self) -> None:
-        """
-        Main agent loop that processes goals from inbox.
-        
-        This is the primary entry point for running the agent.
-        Concrete implementations define how the agent interacts with users.
-        """
-        pass
-    
-    def process_goal(self, goal: str) -> ReasoningResult:
-        """
-        Process a single goal using the reasoning loop.
-        
-        Args:
-            goal: The objective or question to process
-            
-        Returns:
-            ReasoningResult with the agent's response
-        """
-        # Store the goal in memory
-        self.memory.store("current_goal", goal)
-        
-        # Execute reasoning loop
-        result = self.reasoner.run(goal)
-        
-        # Store the result in memory
-        self.memory.store("last_result", result.model_dump())
-        
-        return result
-    
-    @abstractmethod
-    def handle_input(self, input_data: Any) -> str:
-        """
-        Handle input from the user/environment.
-        
-        Args:
-            input_data: Raw input data from the interface
-            
-        Returns:
-            Processed goal string
-        """
-        pass
-    
+        """Initializes the agent and injects services into the reasoner.
 
-    
-    @abstractmethod
-    def should_continue(self) -> bool:
+        Args:
+            llm: The language model instance.
+            memory: The memory backend.
+            tool_interface: The interface for accessing external tools.
+            reasoner: The reasoning engine that will use the services.
         """
-        Determine if the agent should continue processing.
-        
+        self.llm = llm
+        self.memory = memory
+        self.tool_interface = tool_interface
+        self.reasoner = reasoner
+
+        # Inject shared services into the reasoner if it expects them
+        for attr, value in (
+            ("llm", llm),
+            ("memory", memory),
+            ("tool_interface", tool_interface),
+        ):
+            if hasattr(self.reasoner, attr):
+                setattr(self.reasoner, attr, value)
+
+    def solve(self, goal: Goal) -> ReasoningResult:
+        """Solves a goal synchronously (library-style API)."""
+        # Persist goal for traceability if memory supports it
+        if hasattr(self.memory, "store"):
+            self.memory.store("current_goal", goal)
+
+        result = self.reasoner.run(goal.text, **goal.metadata)
+
+        if hasattr(self.memory, "store"):
+            self.memory.store("last_result", result.model_dump())
+
+        return result
+
+    def tick(self, inbox: BaseInbox, outbox: BaseOutbox) -> bool:
+        """Processes one item from an inbox (service-style API).
+
         Returns:
-            True if agent should keep running, False to stop
+            True if a goal was processed, False otherwise.
         """
-        pass
+        if not (goal_text := inbox.get_next_goal()):
+            return False
+
+        goal = Goal(text=goal_text)
+        result = self.solve(goal)
+        outbox.send(result)
+        inbox.acknowledge_goal(goal_text)
+        return True
