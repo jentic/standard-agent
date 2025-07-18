@@ -16,7 +16,7 @@ from ..reasoners.base_reasoner import BaseReasoner  # type: ignore
 from ..reasoners.models import ReasoningResult
 from ..tools.interface import ToolInterface
 from ..utils.llm import BaseLLM
-
+from uuid import uuid4
 
 class BaseAgent:
     """Wires together a reasoner with shared services (LLM, memory, tools)."""
@@ -25,42 +25,37 @@ class BaseAgent:
         self,
         *,
         llm: BaseLLM,
+        tools: ToolInterface,
         memory: BaseMemory,
-        tool_interface: ToolInterface,
         reasoner: BaseReasoner,
     ):
         """Initializes the agent and injects services into the reasoner.
 
         Args:
             llm: The language model instance.
+            tools: The interface for accessing external tools.
             memory: The memory backend.
-            tool_interface: The interface for accessing external tools.
             reasoner: The reasoning engine that will use the services.
         """
         self.llm = llm
+        self.tools = tools
         self.memory = memory
-        self.tool_interface = tool_interface
         self.reasoner = reasoner
 
-        # Inject shared services into the reasoner if it expects them
-        for attr, value in (
-            ("llm", llm),
-            ("memory", memory),
-            ("tool_interface", tool_interface),
-        ):
-            if hasattr(self.reasoner, attr):
-                setattr(self.reasoner, attr, value)
+        # Explicit handshake to wire services into the reasoner
+        self.reasoner.attach_services(llm=llm, tools=tools, memory=memory)
 
     def solve(self, goal: Goal) -> ReasoningResult:
         """Solves a goal synchronously (library-style API)."""
-        # Persist goal for traceability if memory supports it
-        if hasattr(self.memory, "store"):
-            self.memory.store("current_goal", goal)
-
-        result = self.reasoner.run(goal.text, **goal.metadata)
+        run_id = uuid4().hex
 
         if hasattr(self.memory, "store"):
-            self.memory.store("last_result", result.model_dump())
+            self.memory.store(f"goal:{run_id}", goal)
+
+        result = self.reasoner.run(goal.text, meta=goal.metadata)
+
+        if hasattr(self.memory, "store"):
+            self.memory.store(f"result:{run_id}", result.model_dump())
 
         return result
 
