@@ -5,9 +5,8 @@ import re
 from typing import Deque, List
 
 from jentic_agents.utils.llm import BaseLLM
-
-from ...models import Step
-from ..interface import Planner
+from jentic_agents.reasoners.models import Step
+from jentic_agents.reasoners.components import Planner
 
 _BULLET_PATTERN = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)(.*)$")
 _IO_DIRECTIVE_PATTERN = re.compile(r"\((input|output):\s*([^)]*)\)")
@@ -36,7 +35,6 @@ PLAN_GENERATION_PROMPT: str = (
 
     REAL GOAL
     Goal: {goal}
-    ```
     """
 )
 
@@ -94,14 +92,15 @@ def _validate_plan(steps: Deque[Step]) -> None:
             seen_outputs.add(step.output_key)
 
 class BulletListPlanner(Planner):
-    """A planner that generates a bullet-point plan using an LLM."""
+    """An LLM-based planner that generates a markdown bullet list."""
 
-    def __init__(self, llm: BaseLLM, *, max_retries: int = 1):
-        self.llm = llm
+    def __init__(self, max_retries: int = 1):
         self.max_retries = max_retries
 
     def plan(self, goal: str) -> Deque[Step]:
         """Generate and validate a plan, with retries on failure."""
+        if not self.llm:
+            raise RuntimeError("BulletListPlanner: LLM not attached. Call attach_services first.")
         prompt = PLAN_GENERATION_PROMPT.format(goal=goal)
         messages = [{"role": "user", "content": prompt}]
 
