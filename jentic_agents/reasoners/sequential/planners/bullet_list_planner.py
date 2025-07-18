@@ -9,7 +9,6 @@ from jentic_agents.utils.llm import BaseLLM
 from ...models import Step
 from ..interface import Planner
 
-_INDENT_SIZE = 2
 _BULLET_PATTERN = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)(.*)$")
 _IO_DIRECTIVE_PATTERN = re.compile(r"\((input|output):\s*([^)]*)\)")
 
@@ -41,8 +40,6 @@ PLAN_GENERATION_PROMPT: str = (
     """
 )
 
-
-
 def _strip_bullet(text: str) -> str:
     """Remove leading bullet/number and extra whitespace."""
     match = _BULLET_PATTERN.match(text)
@@ -72,7 +69,6 @@ def _parse_bullet_plan(markdown: str) -> Deque[Step]:
             )
         )
     return steps
-
 
 def _validate_plan(steps: Deque[Step]) -> None:
     """Checks for logical consistency in a plan.
@@ -125,4 +121,4 @@ class BulletListPlanner(Planner):
                 continue
 
         # Fallback to a single, do-everything step if all retries fail
-        return deque([Step(text=goal, indent=0)])
+        return deque([Step(text=goal)])
