@@ -22,7 +22,7 @@ PLAN_GENERATION_PROMPT: str = (
 
     OUTPUT FORMAT
     1. Return **only** the fenced list (triple back-ticks) — no prose before or after.
-    2. Each top-level bullet starts at indent 0 with "- "; sub-steps indent by exactly two spaces.
+    2. Each bullet should be on its own line, starting with "- ".
     3. Each bullet = <verb> <object> … followed, in this order, by (input: key_a, key_b) (output: key_c)
        where the parentheses are literal.
     4. `output:` key is mandatory when the step’s result is needed later; exactly one **snake_case** identifier.
@@ -33,7 +33,6 @@ PLAN_GENERATION_PROMPT: str = (
     After drafting, silently verify — regenerate the list if any check fails:
     • All output keys unique & snake_case.  
     • All input keys reference existing outputs.  
-    • Indentation correct (2 spaces per level).  
     • No tool names or extra prose outside the fenced block.
 
     REAL GOAL
@@ -42,10 +41,7 @@ PLAN_GENERATION_PROMPT: str = (
     """
 )
 
-def _line_indent(text: str) -> int:
-    """Return indent level (0-based) from leading spaces."""
-    spaces = len(text) - len(text.lstrip(" "))
-    return spaces // _INDENT_SIZE
+
 
 def _strip_bullet(text: str) -> str:
     """Remove leading bullet/number and extra whitespace."""
@@ -53,12 +49,11 @@ def _strip_bullet(text: str) -> str:
     return match.group(1).rstrip() if match else text.strip()
 
 def _parse_bullet_plan(markdown: str) -> Deque[Step]:
-    """Parse an indented markdown bullet list into a queue of ``Step`` objects."""
+    """Parse a flat markdown bullet list into a queue of ``Step`` objects."""
     steps: Deque[Step] = deque()
     for raw_line in markdown.splitlines():
         if not raw_line.strip() or not _BULLET_PATTERN.match(raw_line):
             continue
-        indent = _line_indent(raw_line)
         stripped = _strip_bullet(raw_line)
         input_keys: List[str] = []
         output_key = None
@@ -72,7 +67,6 @@ def _parse_bullet_plan(markdown: str) -> Deque[Step]:
         steps.append(
             Step(
                 text=cleaned_text,
-                indent=indent,
                 output_key=output_key,
                 input_keys=input_keys,
             )
