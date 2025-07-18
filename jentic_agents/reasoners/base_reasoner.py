@@ -1,18 +1,22 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Dict
 
-from jentic_agents.reasoners.models import ReasoningResult
+from ..memory.base_memory import BaseMemory
+from ..tools.interface import ToolInterface
+from ..utils.llm import BaseLLM
+from .models import ReasoningResult
+from typing import Any
 
 
 class BaseReasoner(ABC):
     """Abstract contract for a reasoning loop implementation."""
 
-    llm: Any
-    tools: Any
-    memory: Any
+    llm: BaseLLM
+    tools: ToolInterface
+    memory: BaseMemory
 
-    def attach_services(self, *, llm: Any, tools: Any, memory: Any) -> None:
+    def attach_services(self, *, llm: BaseLLM, tools: ToolInterface, memory: BaseMemory) -> None:
         """Explicitly attaches shared services to the reasoner instance."""
         self.llm = llm
         self.tools = tools
