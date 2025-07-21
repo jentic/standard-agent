@@ -12,7 +12,7 @@ from agents.base_agent import BaseAgent
 
 POLL_DELAY = 2.0   # seconds when inbox empty
 
-from utils.logger import get_logger
+from utils.logger import get_logger, init_logger
 logger = get_logger(__name__)
 
 def build_agent() -> any:
@@ -34,8 +34,8 @@ def build_agent() -> any:
 
 
 def main() -> None:
+    init_logger("config.json")
     load_dotenv()
-    logging.basicConfig(level=logging.INFO)
 
     agent, inbox, outbox = build_agent()
     logger.info("Agent service started. Polling for goals…")

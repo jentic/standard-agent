@@ -118,6 +118,3 @@ def reload_logger(config_path: str | Path) -> None:
 def get_logger(name: str) -> logging.Logger:
     """Shortcut to `logging.getLogger(name)`."""
     return logging.getLogger(name)
-
-
-init_logger()
