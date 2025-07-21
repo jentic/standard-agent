@@ -1,9 +1,3 @@
-"""Canonical data models shared by all reasoners.
-
-This module consolidates the core data structures (`Step`, `Tool`, `ReasonerState`)
-previously duplicated in individual reasoner packages.  All future reasoners
-MUST import these models instead of defining local copies.
-"""
 from __future__ import annotations
 
 from collections import deque
@@ -20,24 +14,9 @@ __all__ = [
 
 
 class Step(BaseModel):
-    """A single bullet-plan step produced by an LLM planner.
-
-    Attributes
-    ----------
-    text
-        Raw step text with no leading bullet symbols.
-    indent
-        Indentation level (0-based). Determines nested sub-steps.
-    status
-        Execution status lifecycle: ``pending`` → ``running`` → ``done`` / ``failed``.
-    result
-        Data returned from executing the step (tool output or reasoning result).
-    output_key / input_keys
-        Explicit data-flow annotations to pass values between steps via memory.
-    """
+    """A single bullet-plan step produced by an LLM planner."""
 
     text: str
-    indent: int = 0
     status: str = "pending"  # pending | running | done | failed
     result: Optional[Any] = None
 
@@ -45,9 +24,6 @@ class Step(BaseModel):
     output_key: Optional[str] = None  # snake_case key produced by this step
     input_keys: List[str] = Field(default_factory=list)  # keys this step consumes
 
-    # ------------------------------------------------------------------
-    # Execution modality (tool vs. pure reasoning)
-    # ------------------------------------------------------------------
     class StepType(Enum):
         TOOL = auto()
         REASONING = auto()
@@ -76,4 +52,3 @@ class ReasoningResult(BaseModel):
     tool_calls: List[dict[str, Any]]
     success: bool
     error_message: str | None = None
-
