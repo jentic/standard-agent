@@ -127,14 +127,15 @@ The following example demonstrates how to set up and run the `JenticReWOOReasone
 
 ```python
 import os
-from jentic_agents.utils.llm import LiteLLMChatLLM
-from jentic_agents.memory.scratch_pad import ScratchPadMemory
-from jentic_agents.platform.jentic_tool_iface import JenticToolInterface
-from jentic_agents.reasoners.rewoo_reasoner.core import ReWOOReasoner
-from jentic_agents.platform.jentic_client import JenticClient
-from jentic_agents.agents.interactive_cli_agent import InteractiveCLIAgent
-from jentic_agents.inbox.cli_inbox import CLIInbox
-from jentic_agents.outbox.cli_outbox import CLIOutbox
+from utils.llm import LiteLLMChatLLM
+from memory.scratch_pad import ScratchPadMemory
+from jentic_toolkit.jentic_tool_iface import JenticToolInterface
+from jentic_agents.reasoners_old.rewoo_reasoner.core import ReWOOReasoner
+from jentic_toolkit.jentic_client import JenticClient
+from agents import InteractiveCLIAgent
+from inbox.cli_inbox import CLIInbox
+from outbox.cli_outbox import CLIOutbox
+
 # 1. Set up the components
 llm_wrapper = LiteLLMChatLLM(model='claude-sonnet-4-20250514')
 memory = ScratchPadMemory()

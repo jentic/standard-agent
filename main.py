@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 import logging, os, time
 from dotenv import load_dotenv
-from jentic_agents.inbox.cli_inbox                      import CLIInbox
-from jentic_agents.outbox.cli_outbox                    import CLIOutbox
-from jentic_agents.memory.scratch_pad                   import ScratchPadMemory
-from jentic_agents.platform.jentic_client               import JenticClient
-from jentic_agents.platform.jentic_tool_iface           import JenticToolInterface
-from jentic_agents.utils.llm                            import LiteLLMChatLLM
-from jentic_agents.reasoners.pre_built_reasoners        import ReWOOReasoner
-from jentic_agents.agents.base_agent                    import BaseAgent
+from inbox.cli_inbox import CLIInbox
+from outbox.cli_outbox import CLIOutbox
+from memory.scratch_pad import ScratchPadMemory
+from jentic_toolkit.jentic_client import JenticClient
+from jentic_toolkit.jentic_tool_iface import JenticToolInterface
+from utils.llm import LiteLLMChatLLM
+from reasoners.pre_built_reasoners import ReWOOReasoner
+from agents.base_agent import BaseAgent
 
 POLL_DELAY = 2.0   # seconds when inbox empty
 
