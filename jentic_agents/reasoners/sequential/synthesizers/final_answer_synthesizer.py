@@ -44,20 +44,16 @@ class FinalAnswerSynthesizer(Synthesizer):
             logger.warning("phase=SYNTHESIZE_FALLBACK reason='No LLM attached'")
             return self._heuristic(state)
 
-        print("Synthesizing Final Answer Debugging")
-        print(f"Goal: {state.goal}")
-        print(f"History: {"\n".join(state.history)}")
-
         prompt = FINAL_ANSWER_SYNTHESIS_PROMPT.format(
             goal=state.goal,
             history="\n".join(state.history),
         )
-        logger.debug("phase=SYNTHESIZE_PROMPT prompt='%.100s...'", prompt)
+        logger.debug(f"phase=SYNTHESIZE_PROMPT prompt={prompt}")
 
         try:
             reply = (self.llm.chat([{"role": "user", "content": prompt}],).strip())
             logger.info(f"FINAL ANSWER: {reply}")
-            logger.debug("phase=SYNTHESIZE_LLM_REPLY reply='%.100s...'", reply)
+            logger.debug(f"phase=SYNTHESIZE_LLM_REPLY reply={reply}")
 
             if not reply:
                 logger.error("phase=SYNTHESIZE_FAILED reason='LLM returned empty content'")

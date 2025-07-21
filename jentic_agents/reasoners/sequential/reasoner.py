@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 from jentic_agents.reasoners.base_reasoner import BaseReasoner
 from jentic_agents.reasoners.models import ReasoningResult, ReasonerState, Step
 from jentic_agents.reasoners.sequential.interface import Planner, Reflector, StepExecutor, Synthesizer
+from collections import deque
 
 
 class SequentialReasoner(BaseReasoner):
@@ -45,7 +46,6 @@ class SequentialReasoner(BaseReasoner):
         if self.planner:
             state.plan = self.planner.plan(goal)
         else:
-            from collections import deque
 
             state.plan = deque([Step(text=goal)])
 

@@ -7,7 +7,6 @@ agent owns the services; the reasoner simply uses what the agent provides.
 """
 from __future__ import annotations
 
-# Local imports use the new, refactored reasoner package
 from .models import Goal
 from ..inbox.base_inbox import BaseInbox
 from ..memory.base_memory import BaseMemory

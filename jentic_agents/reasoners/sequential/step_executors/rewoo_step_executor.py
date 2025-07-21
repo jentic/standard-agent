@@ -8,25 +8,15 @@ from typing import Any, Dict, List
 from jentic_agents.reasoners.models import ReasonerState, Step
 from jentic_agents.reasoners.sequential.interface import StepExecutor
 from jentic_agents.tools.interface import Tool, ToolInterface
+from jentic_agents.reasoners.sequential.exceptions import (
+    ParameterGenerationError,
+    ToolSelectionError,
+    ReasoningStepError,
+    MissingInputError
+)
 
 logger = logging.getLogger(__name__)
 
-
-### Exceptions
-class MissingInputError(Exception):
-    """Raised when a required input key is not found in memory."""
-
-
-class ToolSelectionError(Exception):
-    """Raised when a suitable tool cannot be selected."""
-
-
-class ParameterGenerationError(Exception):
-    """Raised when parameters for a tool cannot be generated."""
-
-
-class ReasoningStepError(Exception):
-    """Raised when a reasoning-only step fails."""
 
 ### Prompts
 STEP_CLASSIFICATION_PROMPT: str = (
@@ -134,7 +124,6 @@ JSON_CORRECTION_PROMPT: str = (
 )
 
 _JSON_FENCE_RE   = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
-logger = logging.getLogger(__name__)
 
 
 class ReWOOStepExecutor(StepExecutor):
@@ -192,7 +181,7 @@ class ReWOOStepExecutor(StepExecutor):
         logger.info(f"phase=TOOL_SELECTED tool_id='{tool_id}'")
 
         params = self._generate_params(step, tool_id, inputs)
-        logger.info(f"phase=PARAMS_GENERATED params='{params}'")
+        logger.debug(f"phase=PARAMS_GENERATED params='{params}'")
 
         result = self.tools.execute(tool_id, params)
         payload = result["result"].output if isinstance(result, dict) else result
@@ -229,7 +218,7 @@ class ReWOOStepExecutor(StepExecutor):
                 f"phase=STORE_OUTPUT key='{step.output_key}' value='{step.result}'"
             )
             self.memory.store(step.output_key, step.result)
-            state.history.append(f"stored {step.output_key}")
+            state.history.append(f"stored {step.output_key} : {step.result}")
 
     # ---------- LLM wrapper --------------------------------------------
     def _call_llm(self, prompt: str, **kw) -> str:

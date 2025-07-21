@@ -1,5 +1,5 @@
 """
-Simple dictionary-based memory implementation for development and testing.
+Simple dictionary-based memory implementation.
 """
 from __future__ import annotations
 
