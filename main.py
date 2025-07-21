@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 from inbox.cli_inbox import CLIInbox
 from outbox.cli_outbox import CLIOutbox
 from memory.scratch_pad import ScratchPadMemory
-from jentic_toolkit.jentic_client import JenticClient
-from jentic_toolkit.jentic_tool_iface import JenticToolInterface
+from tools.jentic_toolkit.jentic_client import JenticClient
+from tools.jentic_toolkit.jentic_tool_iface import JenticToolInterface
 from utils.llm import LiteLLMChatLLM
 from reasoners.pre_built_reasoners import ReWOOReasoner
 from agents.base_agent import BaseAgent

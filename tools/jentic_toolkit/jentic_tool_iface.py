@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 from tools.interface import ToolInterface
 from tools.models import Tool
-from jentic_toolkit.jentic_client import JenticClient
+from tools.jentic_toolkit.jentic_client import JenticClient
 
 
 class JenticToolInterface(ToolInterface):
