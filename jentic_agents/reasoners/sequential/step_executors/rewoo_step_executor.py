@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-import json, re, logging
+import json
+import logging
+import re
 from typing import Any, Dict, List
 
 from jentic_agents.reasoners.models import ReasonerState, Step
 from jentic_agents.reasoners.sequential.interface import StepExecutor
 from jentic_agents.tools.interface import Tool, ToolInterface
+
+logger = logging.getLogger(__name__)
+
 
 ### Exceptions
 class MissingInputError(Exception):
@@ -129,7 +134,7 @@ JSON_CORRECTION_PROMPT: str = (
 )
 
 _JSON_FENCE_RE   = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
-log = logging.getLogger("ReWOOStepExecutor")
+logger = logging.getLogger(__name__)
 
 
 class ReWOOStepExecutor(StepExecutor):
@@ -137,47 +142,61 @@ class ReWOOStepExecutor(StepExecutor):
 
     def __init__(self) -> None:
         self._tool_cache: Dict[str, Tool] = {}
+        logger.info("phase=REWOO_STEP_EXECUTOR_INITIALIZED")
 
     # ---------- public --------------------------------------------------
     def execute(self, step: Step, state: ReasonerState) -> Dict[str, Any] | None:
         if not (self.llm and self.tools and self.memory):
             raise RuntimeError("Services not attached; call attach_services()")
-
+        logger.info(f"phase=EXECUTE_STEP step_text='{step.text}'")
         step.status = "running"
-        inputs = self._fetch_inputs(step)   # may raise MissingInputError
+        inputs = self._fetch_inputs(step)
 
-        step.step_type = self._classify_step(step)
-        if step.step_type is Step.StepType.REASONING:
-            return self._do_reasoning(step, inputs, state)
+        step_type = self._classify_step(step)
+        logger.info(f"phase=STEP_CLASSIFIED step_type={step_type}")
+
+        if step_type == Step.StepType.REASONING:
+            self._do_reasoning(step, inputs, state)
         else:
-            return self._do_tool(step, inputs, state)
+            self._do_tool(step, inputs, state)
+        logger.info(f"phase=EXECUTE_STEP_COMPLETE result='{step.result}'")
 
     # ---------- step kinds ---------------------------------------------
     def _do_reasoning(
         self, step: Step, inputs: Dict[str, Any], state: ReasonerState
-    ) -> None:
+    ):
+        logger.debug("phase=REASONING_STEP_START")
         try:
-            payload  = json.dumps(inputs, ensure_ascii=False)
-            prompt   = REASONING_STEP_PROMPT.format(step_text=step.text, mem_snippet=payload)
-            reply    = self._call_llm(prompt).strip()
-            if m := _JSON_FENCE_RE.search(reply):
-                reply = m.group(1).strip()
+            mem_snippet = json.dumps(inputs, ensure_ascii=False)
+            prompt = REASONING_STEP_PROMPT.format(
+                step_text=step.text, mem_snippet=mem_snippet
+            )
+            reply = self._call_llm(prompt)
+
             step.result = reply
             step.status = "done"
             self._store_output(step, state)
+            logger.info("phase=REASONING_STEP_SUCCESS")
         except Exception as exc:
+            logger.error(f"phase=REASONING_STEP_FAILED error='{exc}'")
             raise ReasoningStepError(str(exc)) from exc
 
     def _do_tool(
         self, step: Step, inputs: Dict[str, Any], state: ReasonerState
     ) -> Dict[str, Any]:
+        logger.debug("phase=TOOL_STEP_START")
         tool_id = self._select_tool(step)
         if tool_id == "none":
+            logger.error("phase=TOOL_SELECTION_FAILED reason='No suitable tool found'")
             raise ToolSelectionError("No suitable tool found")
+        logger.info(f"phase=TOOL_SELECTED tool_id='{tool_id}'")
 
-        params   = self._generate_params(step, tool_id, inputs)
-        result   = self.tools.execute(tool_id, params)
-        payload  = result["result"].output if isinstance(result, dict) else result
+        params = self._generate_params(step, tool_id, inputs)
+        logger.info(f"phase=PARAMS_GENERATED params='{params}'")
+
+        result = self.tools.execute(tool_id, params)
+        payload = result["result"].output if isinstance(result, dict) else result
+        logger.info(f"phase=TOOL_EXECUTED result='{payload}'")
 
         step.result = payload
         step.status = "done"
@@ -193,23 +212,31 @@ class ReWOOStepExecutor(StepExecutor):
         return Step.StepType.TOOL if reply.startswith("tool") else Step.StepType.REASONING
 
     def _fetch_inputs(self, step: Step) -> Dict[str, Any]:
+        logger.debug(f"phase=FETCH_INPUTS keys='{step.input_keys}'")
         inputs = {}
         for key in step.input_keys:
             try:
                 inputs[key] = self.memory.retrieve(key)
             except Exception as _:
+                logger.error(f"phase=FETCH_INPUTS_FAILED reason='Missing key' key='{key}'")
                 raise MissingInputError(key)
+        logger.debug(f"phase=FETCH_INPUTS_SUCCESS inputs='{inputs}'")
         return inputs
 
     def _store_output(self, step: Step, state: ReasonerState) -> None:
         if step.output_key and step.result is not None:
+            logger.debug(
+                f"phase=STORE_OUTPUT key='{step.output_key}' value='{step.result}'"
+            )
             self.memory.store(step.output_key, step.result)
             state.history.append(f"stored {step.output_key}")
 
     # ---------- LLM wrapper --------------------------------------------
     def _call_llm(self, prompt: str, **kw) -> str:
-        log.debug("LLM prompt %.80s…", prompt.replace("\n", " ")[:80])
-        return self.llm.chat([{"role": "user", "content": prompt}], **kw)
+        logger.debug(f"phase=LLM_CALL prompt='{prompt[:100]}...'")
+        response = self.llm.chat([{"role": "user", "content": prompt}], **kw)
+        logger.debug(f"phase=LLM_RESPONSE response='{response[:100]}...'")
+        return response
 
     # ---------- tool selection -----------------------------------------
     def _select_tool(self, step: Step) -> str:
@@ -221,6 +248,9 @@ class ReWOOStepExecutor(StepExecutor):
         reply = self._call_llm(prompt).strip()
         if reply == "none" or _is_valid_tool(reply, tools):
             return reply
+        logger.error(
+            f"phase=TOOL_SELECTION_FAILED reason='Invalid tool id' tool_id='{reply}'"
+        )
         raise ToolSelectionError(f"Invalid tool id '{reply}'")
 
     # ---------- param generation ---------------------------------------
@@ -236,8 +266,16 @@ class ReWOOStepExecutor(StepExecutor):
             allowed_keys=allowed,
         )
         raw = self._call_llm(prompt).strip()
-        params = _json_or_retry(raw, prompt, self._call_llm)
-        return {k: v for k, v in params.items() if k in schema}
+        try:
+            params = _json_or_retry(raw, prompt, self._call_llm)
+            return {k: v for k, v in params.items() if k in schema}
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.error(
+                f"phase=PARAM_GENERATION_FAILED error='{e}' raw_response='{raw}'"
+            )
+            raise ParameterGenerationError(
+                f"Failed to generate valid JSON parameters: {e}"
+            ) from e
 
     # ---------- caching -------------------------------------------------
     def _get_tool(self, tool_id: str) -> Tool:
@@ -254,6 +292,10 @@ def _json_or_retry(raw: str, prompt: str, llm_call) -> Dict[str, Any]:
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        fixed = llm_call(JSON_CORRECTION_PROMPT.format(bad_json=raw, original_prompt=prompt)).strip()
+        logger.warning(f"phase=JSON_DECODE_FAILED, attempting retry raw='{raw}'")
+        fixed = llm_call(
+            JSON_CORRECTION_PROMPT.format(bad_json=raw, original_prompt=prompt)
+        ).strip()
+        logger.info(f"phase=JSON_DECODE_RETRY_SUCCESS fixed='{fixed}'")
         return json.loads(fixed)
 
