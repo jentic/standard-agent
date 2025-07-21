@@ -4,9 +4,10 @@ from collections import deque
 import re
 from typing import Deque, List
 
-from jentic_agents.utils.llm import BaseLLM
 from jentic_agents.reasoners.models import Step
-from jentic_agents.reasoners.components import Planner
+from jentic_agents.reasoners.sequential.interface import Planner
+import logging
+logger = logging.getLogger(__name__)
 
 _BULLET_PATTERN = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)(.*)$")
 _IO_DIRECTIVE_PATTERN = re.compile(r"\((input|output):\s*([^)]*)\)")
@@ -45,6 +46,7 @@ def _strip_bullet(text: str) -> str:
 
 def _parse_bullet_plan(markdown: str) -> Deque[Step]:
     """Parse a flat markdown bullet list into a queue of ``Step`` objects."""
+
     steps: Deque[Step] = deque()
     for raw_line in markdown.splitlines():
         if not raw_line.strip() or not _BULLET_PATTERN.match(raw_line):
@@ -66,6 +68,7 @@ def _parse_bullet_plan(markdown: str) -> Deque[Step]:
                 input_keys=input_keys,
             )
         )
+        logger.debug(f"phase=PLAN PARSED SUCCESSFULLY")
     return steps
 
 def _validate_plan(steps: Deque[Step]) -> None:
@@ -76,6 +79,7 @@ def _validate_plan(steps: Deque[Step]) -> None:
                     or uses an input key before it is defined.
     """
     if not steps:
+        logger.error("Planner produced an empty plan")
         raise ValueError("Planner produced an empty plan")
 
     seen_outputs: set[str] = set()
@@ -83,11 +87,13 @@ def _validate_plan(steps: Deque[Step]) -> None:
         # Check for undefined input keys against outputs from *previous* steps
         for key in step.input_keys:
             if key not in seen_outputs:
+                logger.error(f"Input key '{key}' used before being defined.")
                 raise ValueError(f"Input key '{key}' used before being defined.")
 
         # Check for duplicate output keys and then add the current one
         if step.output_key:
             if step.output_key in seen_outputs:
+                logger.error(f"phase=PLAN VALIDATION FAILED: Duplicate output key found: '{step.output_key}'")
                 raise ValueError(f"Duplicate output key found: '{step.output_key}'")
             seen_outputs.add(step.output_key)
 
@@ -100,12 +106,15 @@ class BulletListPlanner(Planner):
     def plan(self, goal: str) -> Deque[Step]:
         """Generate and validate a plan, with retries on failure."""
         if not self.llm:
-            raise RuntimeError("BulletListPlanner: LLM not attached. Call attach_services first.")
+            logger.error(f"{__name__}: LLM not attached. Call attach_services first.")
+            raise RuntimeError(f"{__name__}: LLM not attached. Call attach_services first.")
         prompt = PLAN_GENERATION_PROMPT.format(goal=goal)
         messages = [{"role": "user", "content": prompt}]
 
         for _ in range(self.max_retries + 1):
             response = self.llm.chat(messages).strip()
+
+            logger.info(f"phase=PLAN_GENERATED plan={response}")
 
             # Strip optional markdown code fence
             if response.startswith("```"):
@@ -116,6 +125,7 @@ class BulletListPlanner(Planner):
                 _validate_plan(steps)  # Raises ValueError on failure
                 return steps  # Success
             except ValueError:
+                logger.error(f"phase=PLAN_GENERATION FAILED : Invalid plan")
                 # Plan was invalid, loop will retry if possible
                 continue
 
