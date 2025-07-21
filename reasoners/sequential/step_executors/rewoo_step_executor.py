@@ -15,7 +15,8 @@ from reasoners.sequential.exceptions import (
     MissingInputError
 )
 
-logger = logging.getLogger(__name__)
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 
 ### Prompts

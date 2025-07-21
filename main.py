@@ -12,6 +12,9 @@ from agents.base_agent import BaseAgent
 
 POLL_DELAY = 2.0   # seconds when inbox empty
 
+from utils.logger import get_logger
+logger = get_logger(__name__)
+
 def build_agent() -> any:
     llm     = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "gpt-4o"))
     tools   = JenticToolInterface(client=JenticClient())
@@ -35,7 +38,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     agent, inbox, outbox = build_agent()
-    logging.info("Agent service started. Polling for goals…")
+    logger.info("Agent service started. Polling for goals…")
 
     while True:
         try:

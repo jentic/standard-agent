@@ -4,7 +4,8 @@ from reasoners.models import ReasonerState
 from reasoners.sequential.interface import AnswerBuilder
 import logging
 
-logger = logging.getLogger(__name__)
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 FINAL_ANSWER_SYNTHESIS_PROMPT: str = (
     """

@@ -6,8 +6,8 @@ from typing import Deque, List
 
 from reasoners.models import Step
 from reasoners.sequential.interface import Planner
-import logging
-logger = logging.getLogger(__name__)
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 _BULLET_PATTERN = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)(.*)$")
 _IO_DIRECTIVE_PATTERN = re.compile(r"\((input|output):\s*([^)]*)\)")
