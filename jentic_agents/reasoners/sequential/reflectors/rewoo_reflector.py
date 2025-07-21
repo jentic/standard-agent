@@ -6,9 +6,12 @@ from typing import Dict, Any, List
 from jentic_agents.reasoners.models import ReasonerState, Step
 from jentic_agents.reasoners.sequential.interface import Reflector
 from jentic_agents.tools.exceptions import ToolExecutionError
-from jentic_agents.reasoners.sequential.exceptions import ToolSelectionError, ParameterGenerationError
+from jentic_agents.reasoners.sequential.exceptions import (
+    ParameterGenerationError,
+    ToolSelectionError,
+)
 
-log = logging.getLogger("ReWOOReflector")
+logger = logging.getLogger(__name__)
 _FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
 
 ### Prompts ###
@@ -105,6 +108,7 @@ class ReWOOReflector(Reflector):
 
     def __init__(self, *, max_retries: int = 2):
         self.max_retries = max_retries
+        logger.info("phase=REWOO_REFLECTOR_INITIALIZED max_retries=%d", self.max_retries)
 
     # ------------------------------- public ------------------------------
     def handle(
@@ -115,13 +119,23 @@ class ReWOOReflector(Reflector):
         *,
         failed_tool_id: str | None = None,
     ) -> None:
+        logger.info(
+            "phase=HANDLE_ERROR error='%s' step_text='%s'",
+            error.__class__.__name__,
+            step.text,
+        )
         if not (self.llm and self.tools and self.memory):
             raise RuntimeError("attach_services() not called on Reflector")
 
         step.status, step.error = "failed", str(error)
 
         if step.retry_count >= self.max_retries:
-            state.history.append(f"Give-up after {self.max_retries} retries: {step.text}")
+            logger.warning(
+                "phase=GIVE_UP reason='max_retries_exceeded' step_text='%s'", step.text
+            )
+            state.history.append(
+                f"Give-up after {self.max_retries} retries: {step.text}"
+            )
             return
 
         failed_tool_id = failed_tool_id or getattr(error, "tool_id", "unknown")
@@ -139,46 +153,64 @@ class ReWOOReflector(Reflector):
         if isinstance(error, (ToolExecutionError, ToolSelectionError, ParameterGenerationError)):
             prompt = self._add_alternatives(prompt, step, failed_tool_id)
 
-        raw      = self._call_llm(prompt)
-        raw      = _FENCE_RE.sub(lambda m: m.group(1).strip(), raw)
+        raw = self._call_llm(prompt)
+        raw = _FENCE_RE.sub(lambda m: m.group(1).strip(), raw)
         decision = self._json_or_retry(raw, prompt)
+        logger.info("phase=REFLECTION_DECISION decision=%s", decision)
 
         self._apply_decision(decision, step, state)
 
     # ------------------------------ helpers ------------------------------
     def _tool_schema(self, tool_id: str) -> Dict[str, Any]:
+        logger.debug("phase=LOAD_TOOL_SCHEMA tool_id='%s'", tool_id)
         if tool_id and tool_id not in ("unknown", "none"):
             try:
-                return self.tools.load(tool_id).parameters or {}
-            except Exception:            # schema lookup failed – ignore
-                pass
+                schema = self.tools.load(tool_id).parameters or {}
+                logger.debug("phase=LOAD_TOOL_SCHEMA_SUCCESS")
+                return schema
+            except Exception:
+                logger.warning("phase=LOAD_TOOL_SCHEMA_FAILED tool_id='%s'", tool_id)
         return {}
 
     def _add_alternatives(self, prompt: str, step: Step, failed_tool_id: str) -> str:
+        logger.debug("phase=SEARCH_ALTERNATIVE_TOOLS step_text='%s'", step.text)
         try:
             alt = [
-                t for t in self.tools.search(step.text, top_k=25)
+                t
+                for t in self.tools.search(step.text, top_k=25)
                 if t.id != failed_tool_id
             ]
             if alt:
-                lite = [{"id": t.id, "name": t.name, "description": t.description, "api_name": t.api_name} for t in alt]
+                logger.debug("phase=ALTERNATIVE_TOOLS_FOUND count=%d", len(alt))
+                lite = [
+                    {
+                        "id": t.id,
+                        "name": t.name,
+                        "description": t.description,
+                        "api_name": t.api_name,
+                    }
+                    for t in alt
+                ]
                 return prompt + ALTERNATIVE_TOOLS_SECTION.format(
                     alternative_tools=json.dumps(lite, indent=2)
                 )
+            else:
+                logger.debug("phase=NO_ALTERNATIVE_TOOLS_FOUND")
         except Exception as exc:
-            log.info("Alt-tool search failed: %s", exc)
+            logger.warning("phase=ALTERNATIVE_TOOL_SEARCH_FAILED error='%s'", exc)
         return prompt
 
     def _apply_decision(self, d: Dict[str, Any], step: Step, state: ReasonerState):
         action = d.get("action")
+        logger.info("phase=APPLY_DECISION action='%s'", action)
         state.history.append(f"Reflection decision: {d}")
 
         if action == "give_up":
             return
 
-        new_step             = deepcopy(step)
+        new_step = deepcopy(step)
         new_step.retry_count += 1
-        new_step.status      = "pending"
+        new_step.status = "pending"
 
         if action == "rephrase_step":
             new_step.text = str(d.get("step", new_step.text))
@@ -190,16 +222,22 @@ class ReWOOReflector(Reflector):
             self.memory.store(f"forced_params:{new_step.text}", d.get("params"))
 
         state.plan.appendleft(new_step)
+        logger.debug("phase=APPLY_DECISION_SUCCESS new_step='%s'", new_step.text)
 
     # ----------------------------- llm/json ------------------------------
     def _call_llm(self, prompt: str) -> str:
-        return self.llm.chat([{"role": "user", "content": prompt}]).strip()
+        logger.debug("phase=LLM_CALL prompt='%.100s...'", prompt)
+        response = self.llm.chat([{"role": "user", "content": prompt}]).strip()
+        logger.debug("phase=LLM_RESPONSE response='%.100s...'", response)
+        return response
 
     def _json_or_retry(self, raw: str, prompt: str) -> Dict[str, Any]:
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
-            fixed = self._call_llm(JSON_CORRECTION_PROMPT.format(
-                bad_json=raw, original_prompt=prompt
-            ))
+            logger.warning("phase=JSON_DECODE_FAILED, attempting retry raw='%.100s...'", raw)
+            fixed = self._call_llm(
+                JSON_CORRECTION_PROMPT.format(bad_json=raw, original_prompt=prompt)
+            )
+            logger.info("phase=JSON_DECODE_RETRY_SUCCESS fixed='%.100s...'", fixed)
             return json.loads(fixed)
