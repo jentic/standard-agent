@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from jentic_agents.reasoners.base_reasoner import BaseReasoner
 from jentic_agents.reasoners.models import ReasoningResult, ReasonerState, Step
-from jentic_agents.reasoners.components import Planner, Reflector, StepExecutor, Synthesizer
+from jentic_agents.reasoners.sequential.interface import Planner, Reflector, StepExecutor, Synthesizer
 
 
 class SequentialReasoner(BaseReasoner):
