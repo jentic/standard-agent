@@ -127,11 +127,11 @@ The following example demonstrates how to set up and run the `JenticReWOOReasone
 
 ```python
 import os
-from utils.llm import LiteLLMChatLLM
+from llm.llm import LiteLLMChatLLM
 from memory.scratch_pad import ScratchPadMemory
-from jentic_toolkit.jentic_tool_iface import JenticToolInterface
+from tools.jentic_toolkit.jentic_tool_iface import JenticToolInterface
 from jentic_agents.reasoners_old.rewoo_reasoner.core import ReWOOReasoner
-from jentic_toolkit.jentic_client import JenticClient
+from tools.jentic_toolkit.jentic_client import JenticClient
 from agents import InteractiveCLIAgent
 from inbox.cli_inbox import CLIInbox
 from outbox.cli_outbox import CLIOutbox
