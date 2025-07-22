@@ -6,7 +6,7 @@ from outbox.cli_outbox import CLIOutbox
 from memory.scratch_pad import ScratchPadMemory
 from tools.jentic_toolkit.jentic_client import JenticClient
 from tools.jentic_toolkit.jentic_tool_iface import JenticToolInterface
-from utils.llm import LiteLLMChatLLM
+from llm.lite_llm import LiteLLMChatLLM
 from reasoners.pre_built_reasoners import ReWOOReasoner
 from agents.standard_agent import StandardAgent
 

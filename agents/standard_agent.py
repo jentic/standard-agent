@@ -11,10 +11,10 @@ from  agents.models import Goal
 from  inbox.base_inbox import BaseInbox
 from  memory.base_memory import BaseMemory
 from  outbox.base_outbox import BaseOutbox
-from  reasoners.base_reasoner import BaseReasoner  # type: ignore
+from  reasoners.base_reasoner import BaseReasoner
+from  llm.base_llm import BaseLLM
 from  reasoners.models import ReasoningResult
 from  tools.interface import ToolInterface
-from  utils.llm import BaseLLM
 from  uuid import uuid4
 from  enum import Enum
 

@@ -4,7 +4,7 @@ from typing import Dict
 
 from memory.base_memory import BaseMemory
 from tools.interface import ToolInterface
-from utils.llm import BaseLLM
+from llm.base_llm import BaseLLM
 from reasoners.models import ReasoningResult
 from typing import Any
 

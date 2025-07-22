@@ -1,21 +1,5 @@
-"""Lightweight LLM wrapper interfaces used by reasoners."""
-from __future__ import annotations
-
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
-
-
-class BaseLLM(ABC):
-    """Minimal synchronous chat‑LLM interface.
-
-    • Accepts a list[dict] *messages* like the OpenAI Chat format.
-    • Returns *content* (str) of the assistant reply.
-    • Implementations SHOULD be stateless; auth + model name given at init.
-    """
-
-    @abstractmethod
-    def chat(self, messages: List[Dict[str, str]], **kwargs) -> str: ...
-
+from llm.base_llm import BaseLLM
+from typing import List, Dict
 
 class LiteLLMChatLLM(BaseLLM):
     """Wrapper around litellm.completion."""
@@ -40,4 +24,4 @@ class LiteLLMChatLLM(BaseLLM):
             max_tokens=kwargs.get("max_tokens", self.max_tokens),
         )
         content = resp.choices[0].message.content
-        return content or ""  # Avoid None propagating 
+        return content or ""  # Avoid None propagati
