@@ -1,24 +1,19 @@
 # Standard Agent 🛠️ — Composable Agents
 
-Standard Agent is a **modular framework** for building production-grade AI
-agents that can plan, act, and **autonomously recover from failures**.  
-It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool
-platform out of the box, but every layer is swappable.
+A **modular framework** for building AI agents that can plan, act, and **autonomously recover from failures**.  
+It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool platform out of the box, but every layer is swappable.
 
----
 
-## ✨  Key Principles
-| Principle | What it means in ActBots |
-|-----------|-------------------------|
-| **Composition** | Small, focused components are wired together at runtime. |
-| **Explicit DI** | LLM, Memory and Tools are injected once by the `StandardAgent` and broadcast to all sub-components. |
-| **Swappable everything** | Swap reasoning strategies, memory back-ends or tool providers without touching agent logic. |
-| **Zero-boilerplate CLI** | A fully working CLI agent is  ~40 lines of glue code. |
-| **Self-healing** | Reflector components analyse errors, edit the plan and retry automatically. |
 
----
 
-## 🚀 Quick Start
+- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
+- [Project Layout](#project-layout)
+- [Core Runtime Objects](#core-runtime-objects)
+- [Extending the Framework](#extending-the-framework)
+- [Roadmap](#roadmap)
+
+### Quick Start
 
 ### Installation
 
@@ -50,7 +45,7 @@ JENTIC_API_KEY="your-jentic-api-key-here"
 # LLM Provider API Keys (use the one for your chosen model)
 OPENAI_API_KEY="your-openai-api-key-here"
 ANTHROPIC_API_KEY="your-anthropic-api-key-here"
-GEMINI_API_KEY="your-google-gemini-api-key-here"````
+GEMINI_API_KEY="your-google-gemini-api-key-here"
 
 # Tool-Specific Secrets (add as needed)
 DISCORD_BOT_TOKEN="your-discord-bot-token-here"
@@ -135,7 +130,7 @@ while True:
     time.sleep(1.0)
 ```
 
-## 🏗️ Project Layout
+### Project Layout
 
 ```
 .
@@ -180,8 +175,20 @@ while True:
 └── main.py                         # Example entry point to run a CLI-based agent
 ```
 
+---
 
-## ⚙️ Core Runtime Objects
+## ✨  Key Principles
+| Principle | What it means in ActBots |
+|-----------|-------------------------|
+| **Composition** | Small, focused components are wired together at runtime. |
+| **Explicit DI** | LLM, Memory and Tools are injected once by the `StandardAgent` and broadcast to all sub-components. |
+| **Swappable everything** | Swap reasoning strategies, memory back-ends or tool providers without touching agent logic. |
+| **Zero-boilerplate CLI** | A fully working CLI agent is  ~40 lines of glue code. |
+| **Self-healing** | Reflector components analyse errors, edit the plan and retry automatically. |
+
+---
+
+### Core Runtime Objects
 
 | Layer            | Class / Protocol                                                | Notes                                                                    |
 |------------------|-----------------------------------------------------------------|--------------------------------------------------------------------------|
@@ -207,7 +214,7 @@ The `SequentialReasoner` is the default reasoning engine. It follows a classic *
 
 This design allows you to customize the reasoning process by mixing and matching different implementations for each stage.
 
-## 🛠️ Extending the Framework
+### Extending the Framework
 
 The framework is designed to be modular. Here are some common extension points:
 
