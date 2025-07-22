@@ -16,7 +16,7 @@ from  reasoners.models import ReasoningResult
 from  tools.interface import ToolInterface
 from  utils.llm import BaseLLM
 from  uuid import uuid4
-from enum import Enum
+from  enum import Enum
 
 class AgentState(str, Enum):
     READY  = "READY"
