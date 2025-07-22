@@ -226,7 +226,7 @@ The framework is designed to be modular. Here are some common extension points:
 | **Redis / VectorDB memory**        | Implement a `RedisMemory` by sub-classing `BaseMemory` and inject it into the `StandardAgent`.                 |
 | **Local shell tools**              | Create a `ShellToolInterface` that implements the `ToolInterface` contract and inject it into the `StandardAgent`. |
 
-## 🔮 Roadmap
+## 🔮 Roadmap 
 
 - Async agent loop & concurrency-safe inboxes
 - Additional pre-built reasoners (ReAct, ToT, Graph-of-Thought)
