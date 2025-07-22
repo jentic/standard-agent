@@ -210,11 +210,11 @@ class JenticClient:
                 logger.warning(
                     "Tool execution reported failure for tool '%s': %s", tool_id, error_payload
                 )
-                raise ToolExecutionError(f"Tool {tool_id} failed: {error_payload}")
+                raise ToolExecutionError(message=str(error_payload), tool_id=tool_id)
 
             return {"status": "success", "result": result}
 
         except Exception as exc:
             logger.error("Jentic execution failed for tool '%s': %s", tool_id, exc)
             # Re-raise as a ToolExecutionError so the reasoner can reflect.
-            raise ToolExecutionError(str(exc)) from exc
+            raise ToolExecutionError(message=str(exc), tool_id=tool_id) from exc

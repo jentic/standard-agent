@@ -242,25 +242,27 @@ class ReWOOStepExecutor(StepExecutor):
         logger.error(
             f"phase=TOOL_SELECTION_FAILED reason='Invalid tool id' tool_id='{reply}'"
         )
-        raise ToolSelectionError(f"Invalid tool id '{reply}'")
+        raise ToolSelectionError(f"Invalid tool id '{reply}'", tool_id=reply)
 
     # ---------- param generation ---------------------------------------
     def _generate_params(
         self, step: Step, tool_id: str, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
-        schema = self._get_tool(tool_id).parameters or {}
-        allowed = ",".join(schema.keys())
-        prompt  = PARAMETER_GENERATION_PROMPT.format(
-            step=step.text,
-            tool_schema=json.dumps(schema, ensure_ascii=False),
-            step_inputs=json.dumps(inputs, ensure_ascii=False),
-            allowed_keys=allowed,
-        )
-        raw = self._call_llm(prompt).strip()
+        raw = ""
         try:
+            schema = self._get_tool(tool_id).parameters or {}
+            allowed = ",".join(schema.keys())
+            prompt  = PARAMETER_GENERATION_PROMPT.format(
+                step=step.text,
+                tool_schema=json.dumps(schema, ensure_ascii=False),
+                step_inputs=json.dumps(inputs, ensure_ascii=False),
+                allowed_keys=allowed,
+            )
+            raw = self._call_llm(prompt).strip()
+
             params = _json_or_retry(raw, prompt, self._call_llm)
             return {k: v for k, v in params.items() if k in schema}
-        except (json.JSONDecodeError, TypeError) as e:
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
             logger.error(
                 f"phase=PARAM_GENERATION_FAILED error='{e}' raw_response='{raw}'"
             )
