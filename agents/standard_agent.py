@@ -23,7 +23,7 @@ class AgentState(str, Enum):
     BUSY   = "BUSY"
     NEEDS_ATTENTION  = "NEEDS_ATTENTION"
 
-class BaseAgent:
+class StandardAgent:
     """Wires together a reasoner with shared services (LLM, memory, tools)."""
 
     def __init__(

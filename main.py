@@ -8,36 +8,38 @@ from tools.jentic_toolkit.jentic_client import JenticClient
 from tools.jentic_toolkit.jentic_tool_iface import JenticToolInterface
 from utils.llm import LiteLLMChatLLM
 from reasoners.pre_built_reasoners import ReWOOReasoner
-from agents.base_agent import BaseAgent
+from agents.standard_agent import StandardAgent
 
-POLL_DELAY = 2.0   # seconds when inbox empty
+POLL_DELAY = 2.0
 
 from utils.logger import get_logger, init_logger
 logger = get_logger(__name__)
 
-def build_agent() -> any:
+def build_agent() -> StandardAgent:
     llm     = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "gpt-4o"))
     tools   = JenticToolInterface(client=JenticClient())
     memory  = ScratchPadMemory()
 
     reasoner = ReWOOReasoner()
 
-    inbox = CLIInbox(prompt="Enter your goal: ")
-    outbox = CLIOutbox()
-
-    return BaseAgent(
+    return StandardAgent(
         llm=llm,
         tools=tools,
         memory=memory,
         reasoner=reasoner,
-    ), inbox, outbox
+    )
 
 
 def main() -> None:
     init_logger("config.json")
+
     load_dotenv()
 
-    agent, inbox, outbox = build_agent()
+    agent = build_agent()
+
+    inbox = CLIInbox(prompt="Enter your goal: ")
+    outbox = CLIOutbox()
+
     logger.info("Agent service started. Polling for goals…")
 
     while True:
@@ -54,7 +56,7 @@ def main() -> None:
             break
         except Exception as exc:
             logging.exception("Unhandled error in agent loop: %s", exc)
-            time.sleep(5)                       # avoid tight crash loop
+            time.sleep(5)
 
 
 if __name__ == "__main__":
