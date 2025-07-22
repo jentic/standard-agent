@@ -109,7 +109,7 @@ from reasoners.sequential.reflectors.rewoo_reflector import ReWOOReflector
 from reasoners.sequential.synthesizers.final_answer_synthesizer import FinalAnswerBuilder
 
 # 1. Manually assemble the agent's high-level components.
-llm = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "gpt-4o"))
+llm = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
 tools = JenticToolInterface() # Will use JENTIC_API_KEY from .env
 memory = ScratchPadMemory()
 

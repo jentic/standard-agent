@@ -23,7 +23,7 @@ from utils.logger import get_logger, init_logger
 logger = get_logger(__name__)
 
 def build_agent() -> StandardAgent:
-    llm     = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "gpt-4o"))
+    llm     = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
     tools   = JenticToolInterface(client=JenticClient())
     memory  = ScratchPadMemory()
 
