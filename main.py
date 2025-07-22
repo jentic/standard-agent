@@ -52,7 +52,7 @@ def main() -> None:
             print("Please make sure you have run 'make install'.")
             break
         except KeyboardInterrupt:
-            logging.info("Graceful shutdown")
+            logging.info("Bye!")
             break
         except Exception as exc:
             logging.exception("Unhandled error in agent loop: %s", exc)

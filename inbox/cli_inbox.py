@@ -50,15 +50,14 @@ class CLIInbox(BaseInbox):
                 return None
 
             goal = line.strip()
-            if goal.lower() in {"", "quit", "exit", "q"}:
-                self._closed = True
-                return None
+            if goal.lower() in {"bye", "quit", "exit", "q"}:
+                raise KeyboardInterrupt
 
             return goal
 
         except (EOFError, KeyboardInterrupt):
             self._closed = True
-            return None
+            raise
 
     # ---------------------------------------------------------------- cleanup
     def close(self) -> None:                   # override default pass‐through
