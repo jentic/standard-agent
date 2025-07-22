@@ -3,31 +3,12 @@ import logging, os, time
 from dotenv import load_dotenv
 from inbox.cli_inbox import CLIInbox
 from outbox.cli_outbox import CLIOutbox
-from memory.scratch_pad import ScratchPadMemory
-from tools.jentic_toolkit.jentic_client import JenticClient
-from tools.jentic_toolkit.jentic_tool_iface import JenticToolInterface
-from llm.lite_llm import LiteLLMChatLLM
-from reasoners.pre_built_reasoners import ReWOOReasoner
-from agents.standard_agent import StandardAgent
+from agents.prebuilt_agents import get_rewoo_agent
 
 POLL_DELAY = 2.0
 
 from utils.logger import get_logger, init_logger
 logger = get_logger(__name__)
-
-def build_agent() -> StandardAgent:
-    llm     = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "gpt-4o"))
-    tools   = JenticToolInterface(client=JenticClient())
-    memory  = ScratchPadMemory()
-
-    reasoner = ReWOOReasoner()
-
-    return StandardAgent(
-        llm=llm,
-        tools=tools,
-        memory=memory,
-        reasoner=reasoner,
-    )
 
 
 def main() -> None:
@@ -35,12 +16,12 @@ def main() -> None:
 
     load_dotenv()
 
-    agent = build_agent()
+    agent = get_rewoo_agent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
 
-    inbox = CLIInbox(prompt="Enter your goal: ")
+    inbox = CLIInbox(prompt="🤖 Enter your goal: ")
     outbox = CLIOutbox()
 
-    logger.info("Agent service started. Polling for goals…")
+    logger.info("Agent started. Polling for goals…")
 
     while True:
         try:
@@ -52,7 +33,7 @@ def main() -> None:
             print("Please make sure you have run 'make install'.")
             break
         except KeyboardInterrupt:
-            logging.info("Bye!")
+            logging.info("🤖Bye!")
             break
         except Exception as exc:
             logging.exception("Unhandled error in agent loop: %s", exc)
