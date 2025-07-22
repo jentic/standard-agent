@@ -22,8 +22,8 @@ class BaseInbox(ABC):
             Next goal string, or None if no goals available
         """
         pass
-    
-    @abstractmethod
+
+    # Optional – default no-op
     def acknowledge_goal(self, goal: str) -> None:
         """
         Acknowledge that a goal has been processed.
@@ -33,7 +33,7 @@ class BaseInbox(ABC):
         """
         pass
     
-    @abstractmethod
+    # Optional – default no-op
     def reject_goal(self, goal: str, reason: str) -> None:
         """
         Reject a goal that couldn't be processed.
@@ -43,11 +43,18 @@ class BaseInbox(ABC):
             reason: Reason for rejection
         """
         pass
-    
+
+    # Optional – default no-op
+    def close(self) -> None:
+        """
+        Clean up inbox resources.
+        """
+        pass
+
     def goal_stream(self) -> Iterator[str]:
         """
         Generator that yields goals as they become available.
-        
+
         Yields:
             Goal strings as they arrive
         """
@@ -57,20 +64,3 @@ class BaseInbox(ABC):
                 yield goal
             else:
                 break
-    
-    @abstractmethod
-    def has_goals(self) -> bool:
-        """
-        Check if there are pending goals.
-        
-        Returns:
-            True if goals are available, False otherwise
-        """
-        pass
-    
-    @abstractmethod
-    def close(self) -> None:
-        """
-        Clean up inbox resources.
-        """
-        pass
