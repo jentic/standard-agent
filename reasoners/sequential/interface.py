@@ -36,7 +36,7 @@ class StepExecutor(BaseComponent):
 
 class Reflector(BaseComponent):
     @abstractmethod
-    def handle(self, error: Exception, step: Step, state: ReasonerState, failed_tool_id: str) -> None:
+    def handle(self, error: Exception, step: Step, state: ReasonerState) -> None:
         ...
 
 

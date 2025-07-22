@@ -88,9 +88,10 @@ PARAMETER_GENERATION_PROMPT = ("""
 
     "RULES:\n"
     "1. Only include keys from ALLOWED_KEYS — do NOT invent new ones.\n"
-    "2. Extract values from Step and MEMORY CONTEXT; do not include MEMORY CONTEXT keys themselves.\n"
-    "3. If a key's value would be null or undefined, omit it entirely.\n"
-    "4. If IDs must be parsed from URLs, extract only the required portion.\n\n"
+    "2. You **may use** any key from ALLOWED_KEYS, **but only when needed**  – omit keys that the current STEP does not require\n"
+    "3. Extract values from Step and MEMORY CONTEXT; do not include MEMORY CONTEXT keys themselves.\n"
+    "4. If a key's value would be null or undefined, omit it entirely.\n"
+    "5. If IDs must be parsed from URLs, extract only the required portion.\n\n"
 
     "BEFORE YOU RESPOND:\n"
     "✅ Confirm that all keys are in ALLOWED_KEYS\n"
@@ -264,7 +265,7 @@ class ReWOOStepExecutor(StepExecutor):
                 f"phase=PARAM_GENERATION_FAILED error='{e}' raw_response='{raw}'"
             )
             raise ParameterGenerationError(
-                f"Failed to generate valid JSON parameters: {e}"
+                tool_id=tool_id, message=f"Failed to generate valid JSON parameters: {e}"
             ) from e
 
     # ---------- caching -------------------------------------------------

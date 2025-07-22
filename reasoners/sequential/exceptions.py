@@ -13,3 +13,8 @@ class ToolSelectionError(RuntimeError):
 class ParameterGenerationError(RuntimeError):
     """Raised when parameters for a tool cannot be generated."""
 
+    def __init__(self, tool_id: str, message: str):
+        self.tool_id = tool_id
+        self.message = message
+        super().__init__(f"Tool '{tool_id}': {message}")
+
