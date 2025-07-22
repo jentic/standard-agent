@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
 from typing import Any, Dict, List
 
-from reasoners.models import ReasonerState, Step
+from reasoners.models import ReasonerState, Step, StepStatus
 from reasoners.sequential.interface import StepExecutor
 from tools.interface import Tool
 from reasoners.sequential.exceptions import (
@@ -140,7 +139,7 @@ class ReWOOStepExecutor(StepExecutor):
         if not (self.llm and self.tools and self.memory):
             raise RuntimeError("Services not attached; call attach_services()")
         logger.info(f"phase=EXECUTE_STEP step_text='{step.text}'")
-        step.status = "running"
+        step.status = StepStatus.RUNNING
         inputs = self._fetch_inputs(step)
 
         step_type = self._classify_step(step)
@@ -165,7 +164,7 @@ class ReWOOStepExecutor(StepExecutor):
             reply = self._call_llm(prompt)
 
             step.result = reply
-            step.status = "done"
+            step.status = StepStatus.DONE
             self._store_output(step, state)
             logger.info("phase=REASONING_STEP_SUCCESS")
         except Exception as exc:
@@ -190,7 +189,7 @@ class ReWOOStepExecutor(StepExecutor):
         logger.info(f"phase=TOOL_EXECUTED result='{payload}'")
 
         step.result = payload
-        step.status = "done"
+        step.status = StepStatus.DONE
         self._store_output(step, state)
 
         return {"tool_id": tool_id, "params": params, "result": payload}

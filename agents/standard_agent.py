@@ -1,5 +1,5 @@
-"""BaseAgent
-================
+"""
+BaseAgent
 
 Lightweight façade that wires together the core runtime services (LLM, memory,
 external tools) with a pluggable *reasoner* implementation.  The

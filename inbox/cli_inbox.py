@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from typing import Optional, TextIO
 
-from .base_inbox import BaseInbox   # new slim ABC
+from .base_inbox import BaseInbox
 
 
 class CLIInbox(BaseInbox):
@@ -18,7 +18,7 @@ class CLIInbox(BaseInbox):
 
     Examples
     --------
-    >>> inbox = CLIInbox(prompt="Goal > ")
+    >>> inbox = CLIInbox(prompt="Enter a Goal please: ")
     >>> while (goal := inbox.get_next_goal()) is not None:
     ...     print("received:", goal)
     """
@@ -33,7 +33,6 @@ class CLIInbox(BaseInbox):
         self.prompt = prompt
         self._closed = False
 
-    # ---------------------------------------------------------------- public
     def get_next_goal(self) -> str | None:
         """Read the next line from the input stream; return None on EOF/quit."""
         if self._closed:
@@ -59,7 +58,6 @@ class CLIInbox(BaseInbox):
             self._closed = True
             raise
 
-    # ---------------------------------------------------------------- cleanup
     def close(self) -> None:                   # override default pass‐through
         if self._closed:
             return

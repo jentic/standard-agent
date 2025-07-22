@@ -8,15 +8,24 @@ from pydantic import BaseModel, Field
 
 __all__ = [
     "Step",
+    "StepStatus",
     "ReasonerState",
     "ReasoningResult",
 ]
+
+class StepStatus(str, Enum):
+    """The lifecycle status of a single reasoning step."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
 
 class Step(BaseModel):
     """A single bullet-plan step produced by an LLM planner."""
 
     text: str
-    status: str = "pending"  # pending | running | done | failed
+    status: StepStatus = StepStatus.PENDING
     result: Optional[Any] = None
 
     # Explicit data-flow metadata (optional)

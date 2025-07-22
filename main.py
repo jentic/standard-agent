@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+##############################################
+#                                            #
+#         HELLO WORLD REASONER               #
+#                                            #
+##############################################
+
 import logging, os, time
 from dotenv import load_dotenv
 from inbox.cli_inbox import CLIInbox

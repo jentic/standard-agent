@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from reasoners.models import ReasonerState
 from reasoners.sequential.interface import AnswerBuilder
-import logging
 
 from utils.logger import get_logger
 logger = get_logger(__name__)

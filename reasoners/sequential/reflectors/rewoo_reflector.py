@@ -1,9 +1,9 @@
 from __future__ import annotations
-import json, logging, re
+import json, re
 from copy import deepcopy
 from typing import Dict, Any
 
-from reasoners.models import ReasonerState, Step
+from reasoners.models import ReasonerState, Step, StepStatus
 from reasoners.sequential.interface import Reflector
 from tools.exceptions import ToolExecutionError
 from reasoners.sequential.exceptions import (
@@ -129,7 +129,7 @@ class ReWOOReflector(Reflector):
         if not (self.llm and self.tools and self.memory):
             raise RuntimeError("attach_services() not called on Reflector")
 
-        step.status, step.error = "failed", str(error)
+        step.status, step.error = StepStatus.FAILED, str(error)
 
         if step.retry_count >= self.max_retries:
             logger.warning(
@@ -212,7 +212,7 @@ class ReWOOReflector(Reflector):
 
         new_step = deepcopy(step)
         new_step.retry_count += 1
-        new_step.status = "pending"
+        new_step.status = StepStatus.PENDING
 
         if action == "rephrase_step":
             new_step.text = str(d.get("step", new_step.text))

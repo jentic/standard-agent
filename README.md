@@ -1,88 +1,22 @@
-# ActBots: A Framework for Self-Healing AI Agents
+# Standard Agent 🛠️ — Composable Agents
 
-A **clean, modular Python framework** for building robust, autonomous AI agents. ActBots provides a reasoning engine that can dynamically plan, execute, and **reflect on failures** to heal itself, ensuring reliable task completion using the provided tool platform. 
-Jentic is prepackaged as the default tool platform.
+Standard Agent is a **modular framework** for building production-grade AI
+agents that can plan, act, and **autonomously recover from failures**.  
+It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool
+platform out of the box, but every layer is swappable.
 
-## 🎯 Project Goals
+---
 
-- **Autonomous & Self-Healing**: Build agents that can recover from tool errors and unexpected issues without human intervention.
-- **Modular Architecture**: Enforce a clean separation between the agent's reasoning, memory, and the tools it uses.
-- **Extensible by Design**: Easily swap reasoning strategies or add new tool providers without rewriting the core logic.
-- **Production Ready**: Emphasize comprehensive testing, strict type hints, and clear dependency management.
+## ✨  Key Principles
+| Principle | What it means in ActBots |
+|-----------|-------------------------|
+| **Composition** | Small, focused components are wired together at runtime. |
+| **Explicit DI** | LLM, Memory and Tools are injected once by the `StandardAgent` and broadcast to all sub-components. |
+| **Swappable everything** | Swap reasoning strategies, memory back-ends or tool providers without touching agent logic. |
+| **Zero-boilerplate CLI** | A fully working CLI agent is  ~40 lines of glue code. |
+| **Self-healing** | Reflector components analyse errors, edit the plan and retry automatically. |
 
-## 🏗️ Architecture
-
-```
-jentic_agents/
-│
-├─ agents/                                  # High-level agent orchestration
-│   ├─ base_agent.py                        # Abstract agent interface
-│   └─ interactive_cli_agent.py             # Concrete CLI-based agent
-│
-├─ reasoners/                               # Core reasoning and self-healing logic
-│   ├─ sequential_reasoner_contract.py      # Abstract Sequential Reasoner contract
-│   └─ rewoo_reasoner/                      # ReWOO implementation
-│       └─ core.py                          # The ReWOOReasoner with reflection logic
-│
-├─ tools/                                   # The generic tool abstraction layer
-│   ├─ interface.py                         # Defines the abstract ToolInterface contract
-│   └─ models.py                            # Canonical Tool data model
-│
-├─ platform/                                # Concrete implementations for external services
-│   ├─ jentic_client.py                     # Low-level Jentic SDK wrapper
-│   └─ jentic_tool_iface.py                 # Jentic implementation of the ToolInterface
-│
-├─ memory/                                  # Pluggable memory backends
-│   ├─ base_memory.py                       # Abstract memory interface
-│   └─ scratch_pad.py                       # Simple in-memory key-value store
-│
-├─ inbox/                                   # Goal/task delivery systems
-│   ├─ base_inbox.py                        # Abstract inbox interface
-│   └─ cli_inbox.py                         # CLI input inbox
-│
-├─ outbox/                                  # Result delivery systems
-│   ├─ base_outbox.py                       # Abstract outbox interface
-│   └─ cli_outbox.py                        # CLI output outbox
-
-```
-
-## 🧠 Core Components
-
-### Agents
-Agents are the top-level orchestrators that wire together all other components.
-- **`BaseAgent`**: The abstract interface defining the agent's main `spin()` loop.
-- **`InteractiveCLIAgent`**: A concrete agent for interactive use via the command line.
-
-### Reasoners
-The reasoning layer implements the core logic for planning, acting, and self-healing.
-- **`BaseReWOOReasoner`**: The abstract contract for a ReWOO (Reason-without-Observation) reasoner, defined in `rewoo_reasoner_contract.py`.
-- **`ReWOOReasoner`**: The concrete implementation that generates plans and uses a **reflection loop** to recover from tool failures.
-
-### Tools
-The tool layer provides a generic abstraction for any action an agent can take.
-- **`ToolInterface`**: An abstract class defining the contract for any tool provider (e.g., `search`, `execute`).
-
-### Platform
-The platform layer contains concrete implementations of the `ToolInterface`.
-- **`JenticToolInterface`**: The adapter that allows the reasoner to use the Jentic platform for its tools.
-- **`JenticClient`**: A low-level wrapper around the Jentic SDK.
-
-### Memory
-Pluggable memory backends for storing information across reasoning steps.
-- **`BaseMemory`**: A simple key-value storage interface.
-- **`ScratchPadMemory`**: An in-memory dictionary-based implementation.
-
-### Inbox
-Goal delivery systems that feed tasks to the agent.
-- **`BaseInbox`**: An abstract interface for receiving goals.
-- **`CLIInbox`**: An implementation that gets goals from interactive command-line input.
-
-### Outbox
-Result delivery systems that decouple the agent from the output mechanism.
-- **`BaseOutbox`**: An abstract interface for delivering the final result.
-- **`CLIOutbox`**: An implementation that formats and prints the result to the command line.
-
-This pattern makes it easy to integrate the agent's output with any downstream system. For example, to send results to Slack, you would simply create a `SlackOutbox` class that implements the `BaseOutbox` contract and uses the Slack API in its `send` method. The core agent logic would not need to change.
+---
 
 ## 🚀 Quick Start
 
@@ -91,13 +25,16 @@ This pattern makes it easy to integrate the agent's output with any downstream s
 ```bash
 # Clone and set up the project
 git clone <repository-url>
-cd actbots
+cd standard_agent
 
 # Install dependencies
 make install
 
 # Activate the virtual environment
 source .venv/bin/activate
+
+# Run the agent
+python main.py
 ```
 
 ### Configuration
@@ -113,7 +50,7 @@ JENTIC_API_KEY="your-jentic-api-key-here"
 # LLM Provider API Keys (use the one for your chosen model)
 OPENAI_API_KEY="your-openai-api-key-here"
 ANTHROPIC_API_KEY="your-anthropic-api-key-here"
-GEMINI_API_KEY="your-google-gemini-api-key-here"
+GEMINI_API_KEY="your-google-gemini-api-key-here"````
 
 # Tool-Specific Secrets (add as needed)
 DISCORD_BOT_TOKEN="your-discord-bot-token-here"
@@ -121,54 +58,176 @@ DISCORD_BOT_TOKEN="your-discord-bot-token-here"
 
 **Note:** The `JENTIC_API_KEY` and at least one LLM provider key are essential for the agent to function.
 
-### Basic Usage
+### Usage Examples
 
-The following example demonstrates how to set up and run the `JenticReWOOReasoner`.
+We provide two ways to use the agent framework: a quick-start method using a pre-built agent, and a more advanced method that shows how to build an agent from scratch.
+
+#### 1. Quick Start: Running a Pre-built Agent
+
+This is the fastest way to get started. The `get_rewoo_agent` factory provides a `StandardAgent` instance that is already configured with a powerful reasoner, LLM, tools, and memory.
 
 ```python
-import os
-from llm.llm import LiteLLMChatLLM
-from memory.scratch_pad import ScratchPadMemory
-from tools.jentic_toolkit.jentic_tool_iface import JenticToolInterface
-from jentic_agents.reasoners_old.rewoo_reasoner.core import ReWOOReasoner
-from tools.jentic_toolkit.jentic_client import JenticClient
-from agents import InteractiveCLIAgent
+# main.py
+import os, time
+from agents.prebuilt_agents import get_rewoo_agent
 from inbox.cli_inbox import CLIInbox
 from outbox.cli_outbox import CLIOutbox
 
-# 1. Set up the components
-llm_wrapper = LiteLLMChatLLM(model='claude-sonnet-4-20250514')
-memory = ScratchPadMemory()
-jentic_client = JenticClient(api_key='Jentic API KEY')
-jentic_tools = JenticToolInterface(client=jentic_client)
+# 1. Get the pre-built agent. API keys are loaded from your .env file.
+agent = get_rewoo_agent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
 
-inbox = CLIInbox()
+# 2. Set up the inbox and outbox for command-line interaction.
+inbox = CLIInbox(prompt="🤖 Enter your goal: ")
 outbox = CLIOutbox()
 
-# 2. Instantiate the Reasoner
-reasoner = ReWOOReasoner(
-    llm=llm_wrapper,
-    tool=jentic_tools,
-    memory=memory,
-)
-
-agent = InteractiveCLIAgent(
-    reasoner=reasoner,
-    memory=memory,
-    inbox=inbox,
-    outbox=outbox,
-    jentic_client=jentic_client
-)
-agent.spin()  # Start the interactive loop
-
+# 3. Run the agent's main loop.
+print("Agent is ready. Press Ctrl+C to exit.")
+while True:
+    agent.tick(inbox, outbox)
+    time.sleep(1.0)
 ```
 
-## 🔮 Future Enhancements
+#### 2. Build Your Own Agent & Reasoner
 
-- **Advanced Planning**: Enhance the plan parser to understand conditional logic (`if fails...`).
-- **Smarter Reflection**: Improve the reflection prompts with more sophisticated failure analysis.
-- **More Tool Interfaces**: Implement interfaces for other tool providers (e.g., local shell commands, other APIs).
-- **Vector Memory**: Add a vector database for more complex memory retrieval.
+This example demonstrates the framework's true flexibility. It shows how to construct a `SequentialReasoner` from its individual components and then wire it into a `StandardAgent`.
 
----
+```python
+# main_build_your_own_agent.py
+import os, time
+from agents.standard_agent import StandardAgent
+from llm.lite_llm import LiteLLMChatLLM
+from tools.jentic_toolkit.jentic_tool_iface import JenticToolInterface
+from memory.scratch_pad import ScratchPadMemory
+from inbox.cli_inbox import CLIInbox
+from outbox.cli_outbox import CLIOutbox
+
+# Import the reasoner and its components
+from reasoners.sequential.reasoner import SequentialReasoner
+from reasoners.sequential.planners.bullet_list_planner import BulletListPlanner
+from reasoners.sequential.step_executors.rewoo_step_executor import ReWOOStepExecutor
+from reasoners.sequential.reflectors.rewoo_reflector import ReWOOReflector
+from reasoners.sequential.synthesizers.final_answer_synthesizer import FinalAnswerBuilder
+
+# 1. Manually assemble the agent's high-level components.
+llm = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "gpt-4o"))
+tools = JenticToolInterface() # Will use JENTIC_API_KEY from .env
+memory = ScratchPadMemory()
+
+# 2. Compose the SequentialReasoner from its parts.
+reasoner = SequentialReasoner(
+    planner=BulletListPlanner(),
+    step_executor=ReWOOStepExecutor(),
+    reflector=ReWOOReflector(max_retries=2),
+    answer_builder=FinalAnswerBuilder(),
+)
+
+# 3. Instantiate the StandardAgent with your custom-built reasoner.
+agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=reasoner)
+
+# 4. Set up the inbox and outbox.
+inbox = CLIInbox(prompt="🤖 Enter your goal: ")
+outbox = CLIOutbox()
+
+# 5. Run the agent's main loop.
+print("Custom agent is ready. Press Ctrl+C to exit.")
+while True:
+    agent.tick(inbox, outbox)
+    time.sleep(1.0)
+```
+
+## 🏗️ Project Layout
+
+```
+.
+├── agents/                         # High-level agent orchestration
+│   ├── models.py                   # Defines Goal, AgentState
+│   └── standard_agent.py           # The StandardAgent
+│   └── prebuilt_agents.py          # Prebuilt agents like ReWOO etc
+│
+├── reasoners/                      # Core reasoning logic
+│   └── prebuilt_reasoners.py       # Precomposed ready to use reasoners
+│   ├── models.py                   # Defines Step, ReasonerState, etc.
+│   └── sequential/                 # Implementation of a sequential reasoner
+│       ├── reasoner.py             # Orchestrates the plan -> execute -> reflect loop
+│       ├── interface.py            # Defines Planner, StepExecutor, Reflector contracts
+│       ├── planners/               # Concrete Planner implementations (e.g., BulletListPlanner)
+│       ├── step_executors/         # Concrete StepExecutor implementations (e.g., ReWOOStepExecutor)
+│       └── reflectors/             # Concrete Reflector implementations (e.g., ReWOOReflector)
+│
+├── tools/                          # Abstractions for actions the agent can take
+│   ├── interface.py                # Defines the core ToolInterface contract
+│   ├── exceptions.py               # Defines ToolExecutionError
+│   └── jentic_toolkit/             # Concrete implementation for the Jentic platform
+│       ├── jentic_client.py        # Low-level wrapper for the Jentic SDK
+│       └── jentic_tool_iface.py    # Maps Jentic tools to the ToolInterface
+│
+├── llm/                            # Wrappers for different Language Model providers
+│   ├── base_llm.py                 # Defines the abstract BaseLLM interface
+│   └── lite_llm.py                 # Concrete implementation using the LiteLLM library
+│
+├── memory/                         # Pluggable memory backends for the agent
+│   ├── base_memory.py              # Defines the abstract BaseMemory interface
+│   └── scratch_pad.py              # A simple, in-memory dictionary implementation
+│
+├── inbox/                          # How the agent receives goals 
+│   ├── base_inbox.py
+│   └── cli_inbox.py
+│
+├── outbox/                         # How the agent delivers results 
+│   ├── base_outbox.py
+│   └── cli_outbox.py
+│
+└── main.py                         # Example entry point to run a CLI-based agent
+```
+
+
+## ⚙️ Core Runtime Objects
+
+| Layer            | Class / Protocol                                                | Notes                                                                    |
+|------------------|-----------------------------------------------------------------|--------------------------------------------------------------------------|
+| **Agent**        | `StandardAgent`                                                 | Owns LLM, Memory, and Tools; injects them into a Reasoner.               |
+| **Reasoners**    | `SequentialReasoner`, `TreeSearchReasoner`, etc.                | Each orchestrates a different reasoning algorithm.                       |
+| **Memory**       | `BaseMemory`                               | A key-value store accessible to all components.                          |
+| **Tools**        | `ToolInterface`                          | Abstracts external actions (APIs, shell commands, etc.).                 |
+| **Inbox / Outbox** | `BaseInbox` / `BaseOutbox`                                      | Decouples I/O, allowing the agent to run in any environment.             |
+| **LLM Wrapper**  | `BaseLLM`                                     | Provides a uniform interface for interacting with different LLMs.        |
+
+### The Sequential Reasoner
+
+The `SequentialReasoner` is the default reasoning engine. It follows a classic **Plan -> Execute -> Reflect** loop, and its logic is broken down into four distinct, swappable components:
+
+- **Planner**: Takes the user's goal and generates a step-by-step plan.
+  - *Example*: `BulletListPlanner`
+- **Step Executor**: Executes a single step from the plan, often by calling a tool.
+  - *Example*: `ReWOOStepExecutor`
+- **Reflector**: If a step fails, this component analyzes the error and decides how to recover (e.g., retry, change the plan).
+  - *Example*: `ReWOOReflector`
+- **Answer Builder**: Once the plan is complete, this component synthesizes the final answer for the user.
+  - *Example*: `FinalAnswerBuilder`
+
+This design allows you to customize the reasoning process by mixing and matching different implementations for each stage.
+
+## 🛠️ Extending the Framework
+
+The framework is designed to be modular. Here are some common extension points:
+
+| Need                               | How to Implement                                                                                             |
+|------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| **Different reasoning strategy**   | Create a new `BaseReasoner` implementation (e.g., `TreeSearchReasoner`) and inject it into `StandardAgent`.      |
+| **Custom planner**                 | Sub-class `BasePlanner`, place it in `reasoners/sequential/planners/`, and wire it into your `SequentialReasoner`. |
+| **Slack / Discord integration**    | Implement a `SlackOutbox` by sub-classing `BaseOutbox` and pass it to the `agent.tick()` method.             |
+| **Redis / VectorDB memory**        | Implement a `RedisMemory` by sub-classing `BaseMemory` and inject it into the `StandardAgent`.                 |
+| **Local shell tools**              | Create a `ShellToolInterface` that implements the `ToolInterface` contract and inject it into the `StandardAgent`. |
+
+## 🔮 Roadmap
+
+- Async agent loop & concurrency-safe inboxes
+- Additional pre-built reasoners (ReAct, ToT, Graph-of-Thought)
+- More out of the box composable parts to enable custom agents or reasoners
+- Web dashboard (live agent state + logs)
+- Vector-store memory with RAG planning
+- Slack / Discord integration
+- Redis / VectorDB memory
+- Ideas are welcome! [Open an issue](https://github.com/jentic/standard-agent/issues) or [submit a pull request](https://github.com/jentic/standard-agent/pulls).
+
 
