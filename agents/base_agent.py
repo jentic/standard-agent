@@ -16,6 +16,12 @@ from  reasoners.models import ReasoningResult
 from  tools.interface import ToolInterface
 from  utils.llm import BaseLLM
 from  uuid import uuid4
+from enum import Enum
+
+class AgentState(str, Enum):
+    READY  = "READY"
+    BUSY   = "BUSY"
+    NEEDS_ATTENTION  = "NEEDS_ATTENTION"
 
 class BaseAgent:
     """Wires together a reasoner with shared services (LLM, memory, tools)."""
@@ -44,6 +50,12 @@ class BaseAgent:
         # Explicit handshake to wire services into the reasoner
         self.reasoner.attach_services(llm=llm, tools=tools, memory=memory)
 
+        self._state: AgentState = AgentState.READY
+
+    @property
+    def state(self) -> AgentState:
+        return self._state
+
     def solve(self, goal: Goal) -> ReasoningResult:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
@@ -51,12 +63,18 @@ class BaseAgent:
         if hasattr(self.memory, "store"):
             self.memory.store(f"goal:{run_id}", goal)
 
-        result = self.reasoner.run(goal.text, meta=goal.metadata)
+        self._state = AgentState.BUSY
 
-        if hasattr(self.memory, "store"):
-            self.memory.store(f"result:{run_id}", result.model_dump())
+        try:
+            result = self.reasoner.run(goal.text, meta=goal.metadata)
+            if hasattr(self.memory, "store"):
+                self.memory.store(f"result:{run_id}", result.model_dump())
+            self._state = AgentState.READY
+            return result
 
-        return result
+        except Exception:
+            self._state = AgentState.NEEDS_ATTENTION
+            raise
 
     def tick(self, inbox: BaseInbox, outbox: BaseOutbox) -> bool:
         """Processes one item from an inbox (service-style API).
