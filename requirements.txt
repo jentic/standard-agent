@@ -1,6 +1,5 @@
 # core
-# jentic-sdk>=0.1.0  # TODO: add when available
-jentic
+jentic>=0.8.3
 openai>=1.0
 pydantic>=2.0
 python-dotenv>=1.0.0
