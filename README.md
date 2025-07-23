@@ -178,13 +178,13 @@ while True:
 ---
 
 ## ✨  Key Principles
-| Principle | What it means in ActBots |
-|-----------|-------------------------|
-| **Composition** | Small, focused components are wired together at runtime. |
+| Principle | What it means in StandardAgent |                                                                                  |
+|-----------|-----------------------------------------------------------------------------------------------------|
+| **Composition** | Small, focused components are wired together at runtime.                                            |
 | **Explicit DI** | LLM, Memory and Tools are injected once by the `StandardAgent` and broadcast to all sub-components. |
-| **Swappable everything** | Swap reasoning strategies, memory back-ends or tool providers without touching agent logic. |
-| **Zero-boilerplate CLI** | A fully working CLI agent is  ~40 lines of glue code. |
-| **Self-healing** | Reflector components analyse errors, edit the plan and retry automatically. |
+| **Swappable everything** | Swap reasoning strategies, memory back-ends or tool providers without touching agent logic.         |
+| **Zero-boilerplate CLI** | A fully working CLI agent is  ~40 lines of glue code.                                               |
+| **Self-healing** | Reflector components analyse errors, edit the plan and retry automatically.                         |
 
 ---
 
