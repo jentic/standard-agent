@@ -149,7 +149,7 @@ class ReWOOStepExecutor(StepExecutor):
             self._do_reasoning(step, inputs, state)
         else:
             self._do_tool(step, inputs, state)
-        logger.info(f"phase=EXECUTE_STEP_COMPLETE result='{step.result}'")
+        logger.info(f"phase=EXECUTE_STEP_COMPLETE")
 
     # ---------- step kinds ---------------------------------------------
     def _do_reasoning(
@@ -166,7 +166,7 @@ class ReWOOStepExecutor(StepExecutor):
             step.result = reply
             step.status = StepStatus.DONE
             self._store_output(step, state)
-            logger.info("phase=REASONING_STEP_SUCCESS")
+            logger.info(f"phase=REASONING_STEP_SUCCESS result='{reply}'")
         except Exception as exc:
             logger.error(f"phase=REASONING_STEP_FAILED error='{exc}'")
             raise ReasoningStepError(str(exc)) from exc

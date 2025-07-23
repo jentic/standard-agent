@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from reasoners.base_reasoner import BaseReasoner
-from reasoners.models import ReasoningResult, ReasonerState, Step
+from reasoners.models import ReasoningResult, ReasonerState, Step, RuntimeContext
 from reasoners.sequential.interface import Planner, Reflector, StepExecutor, AnswerBuilder
 from collections import deque
 
@@ -24,13 +24,11 @@ class SequentialReasoner(BaseReasoner):
         self.reflector = reflector
         self.answer_builder = answer_builder
 
-    # ---------- DI broadcast ------------------------------------
-    def attach_services(self, *, llm, tools, memory):
-        super().attach_services(llm=llm, tools=tools, memory=memory)
-
+    # ---------- Broadcasting context to components --------------
+    def _pass_context_to_components(self, ctx: RuntimeContext) -> None:
         for comp in (self.planner, self.step_executor, self.reflector, self.answer_builder):
             if comp is not None:
-                comp.attach_services(llm=llm, tools=tools, memory=memory)
+                comp.set_context(ctx)
 
     # ---------- main loop ---------------------------------------
     def run(self, goal: str, *, meta: Dict[str, Any] | None = None) -> ReasoningResult:

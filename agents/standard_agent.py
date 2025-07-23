@@ -10,6 +10,7 @@ from __future__ import annotations
 from  agents.models import Goal
 from  memory.base_memory import BaseMemory
 from  reasoners.base_reasoner import BaseReasoner
+from  reasoners.models import RuntimeContext
 from  llm.base_llm import BaseLLM
 from  reasoners.models import ReasoningResult
 from  tools.interface import ToolInterface
@@ -44,10 +45,11 @@ class StandardAgent:
         self.llm = llm
         self.tools = tools
         self.memory = memory
-        self.reasoner = reasoner
 
-        # Explicit handshake to wire services into the reasoner
-        self.reasoner.attach_services(llm=llm, tools=tools, memory=memory)
+        # Wire the services context into the reasoner
+        ctx = RuntimeContext(llm=llm, tools=tools, memory=memory)
+        self.reasoner = reasoner
+        self.reasoner.set_context(ctx)
 
         self._state: AgentState = AgentState.READY
 
