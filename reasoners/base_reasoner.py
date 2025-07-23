@@ -55,7 +55,6 @@ class BaseReasoner(ABC):
         tools: ToolInterface | None = None,
         memory: BaseMemory | None = None,
     ) -> None:
-        """Inject (or overwrite) any combination of services."""
         if llm is not None:
             self._llm = llm
         if tools is not None:
