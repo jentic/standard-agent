@@ -1,5 +1,5 @@
 """
-BaseAgent
+StandardAgent
 
 Lightweight façade that wires together the core runtime services (LLM, memory,
 external tools) with a pluggable *reasoner* implementation.  The
@@ -13,13 +13,14 @@ from  reasoners.base_reasoner import BaseReasoner
 from  llm.base_llm import BaseLLM
 from  reasoners.models import ReasoningResult
 from  tools.interface import ToolInterface
+
 from  uuid import uuid4
 from  enum import Enum
 
 class AgentState(str, Enum):
-    READY  = "READY"
-    BUSY   = "BUSY"
-    NEEDS_ATTENTION  = "NEEDS_ATTENTION"
+    READY               = "READY"
+    BUSY                = "BUSY"
+    NEEDS_ATTENTION     = "NEEDS_ATTENTION"
 
 class StandardAgent:
     """Wires together a reasoner with shared services (LLM, memory, tools)."""
