@@ -6,6 +6,12 @@ from typing import Any, Dict, List
 
 from reasoners.models import ReasonerState, Step, StepStatus
 from reasoners.sequential.interface import StepExecutor
+from reasoners.prompts import (
+    STEP_CLASSIFICATION_PROMPT,
+    REASONING_STEP_PROMPT,
+    TOOL_SELECTION_PROMPT,
+    PARAMETER_GENERATION_PROMPT
+)
 from tools.interface import Tool
 from reasoners.sequential.exceptions import (
     ParameterGenerationError,
@@ -16,113 +22,6 @@ from reasoners.sequential.exceptions import (
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
-
-
-### Prompts
-STEP_CLASSIFICATION_PROMPT: str = (
-    """
-    Your task is to classify a step as either 'tool' or 'reasoning'.
-    - 'tool': The step requires calling an external API or tool to fetch new information or perform an action in the outside world (e.g., search, send email, post a message).
-    - 'reasoning': The step involves processing, filtering, summarizing, or transforming data that is ALREADY AVAILABLE in memory.
-
-    Carefully examine the task and the available data in 'Existing memory keys'.
-
-    STRICT RULES:
-    1. If the task can be accomplished using ONLY the data from 'Existing memory keys', you MUST classify it as 'reasoning'.
-    2. If the task requires fetching NEW data or interacting with an external system, classify it as 'tool'.
-    3. Your reply must be a single word: either "tool" or "reasoning". No other text.
-
-    Task: {step_text}
-    Existing memory keys: {keys_list}
-    """
-)
-
-REASONING_STEP_PROMPT: str = (
-    """
-    You are an expert data processor. Your task is to perform an internal reasoning step based on the provided data.
-
-    **Current Sub-Task:** {step_text}
-    **Available Data (JSON):**
-    ```json
-    {mem_snippet}
-    ```
-
-    **Instructions:**
-    1.  Carefully analyze the `Current Sub-Task` and the `Available Data`.
-    2.  Execute the task based *only* on the provided data.
-    3.  Produce a single, final output.
-
-    **Output Format Rules:**
-    -   If the result is structured (e.g., a list or object), you MUST return a single, valid JSON object. Do NOT use markdown code fences or add explanations.
-    -   If the result is a simple text answer (e.g., a summary or a single value), return only the raw text.
-    -   Do NOT add any commentary, introductory phrases, or conversational text.
-
-    **Final Answer:**
-    """
-)
-
-TOOL_SELECTION_PROMPT: str = (
-    """You are an expert orchestrator. Given the *step* and the *tools* list below,\n"
-    "return **only** the `id` of the single best tool to execute the step, or\n"
-    "the word `none` if **none of the tools in the provided list are suitable** for the step.\n\n"
-    "Step:\n{step}\n\n"
-    "Tools (JSON):\n{tools_json}\n\n"
-    "Respond with just the id (e.g. `tool_123`) or `none`. Do not include any other text."""
-)
-
-PARAMETER_GENERATION_PROMPT = ("""
-    "You are Parameter‑Builder AI.\n\n"
-
-    "🛑 OUTPUT FORMAT REQUIREMENT 🛑\n"
-    "You must respond with a **single, valid JSON object** only.\n"
-    "→ No markdown, no prose, no backticks, no ```json blocks.\n"
-    "→ Do not escape newlines (no '\\n' inside strings unless part of real content).\n"
-    "→ All values must be properly quoted and valid JSON types.\n\n"
-
-    "ALLOWED_KEYS in the response parameters:\n{allowed_keys}\n\n"
-
-    "STEP:\n{step}\n\n"
-    "MEMORY CONTEXT:\n{step_inputs}\n\n"
-    "TOOL SCHEMA (JSON):\n{tool_schema}\n\n"
-
-    "RULES:\n"
-    "1. Only include keys from ALLOWED_KEYS — do NOT invent new ones.\n"
-    "2. You **may use** any key from ALLOWED_KEYS, **but only when needed**  – omit keys that the current STEP does not require\n"
-    "3. Extract values from Step and MEMORY CONTEXT; do not include MEMORY CONTEXT keys themselves.\n"
-    "4. If a key's value would be null or undefined, omit it entirely.\n"
-    "5. If IDs must be parsed from URLs, extract only the required portion.\n\n"
-
-    "BEFORE YOU RESPOND:\n"
-    "✅ Confirm that all keys are in ALLOWED_KEYS\n"
-    "✅ Confirm the output starts with '{{' and ends with '}}'\n"
-    "✅ Confirm the output is parsable with `JSON.parse()`\n\n"
-
-    "🚨 FINAL RULE: Your reply MUST contain only a single raw JSON object. No explanation. No markdown. No escaping. No backticks."
-    "Note: Authentication credentials will be automatically injected by the platform."
-    """
-)
-
-JSON_CORRECTION_PROMPT: str = (
-    """Your previous response was not valid JSON. Please correct it.
-
-    STRICT RULES:
-    1.  Your reply MUST be a single, raw, valid JSON object.
-    2.  Do NOT include any explanation, markdown, or code fences.
-    3.  Do NOT change the data, only fix the syntax.
-
-    Original Prompt:
-    ---
-    {original_prompt}
-    ---
-
-    Faulty JSON Response:
-    ---
-    {bad_json}
-    ---
-
-    Corrected JSON Response:
-    """
-)
 
 _JSON_FENCE_RE   = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
 
@@ -259,7 +158,7 @@ class ReWOOStepExecutor(StepExecutor):
             )
             raw = self._call_llm(prompt).strip()
 
-            params = _json_or_retry(raw, prompt, self._call_llm)
+            params = _json_or_retry(raw, prompt)
             return {k: v for k, v in params.items() if k in schema}
         except (json.JSONDecodeError, TypeError, ValueError) as e:
             logger.error(
@@ -280,14 +179,25 @@ class ReWOOStepExecutor(StepExecutor):
 def _is_valid_tool(reply: str, tools: List[Tool]) -> bool:
     return any(t.id == reply for t in tools)
 
-def _json_or_retry(raw: str, prompt: str, llm_call) -> Dict[str, Any]:
+def _json_or_retry(raw: str, prompt: str) -> Dict[str, Any]:
+    """Parse JSON with fallback for markdown-wrapped responses."""
+    # First try raw parsing
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        logger.warning(f"phase=JSON_DECODE_FAILED, attempting retry raw='{raw}'")
-        fixed = llm_call(
-            JSON_CORRECTION_PROMPT.format(bad_json=raw, original_prompt=prompt)
-        ).strip()
-        logger.info(f"phase=JSON_DECODE_RETRY_SUCCESS fixed='{fixed}'")
-        return json.loads(fixed)
+        pass
+    
+    # Try extracting from markdown code blocks
+    _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([^`]+)\s*```")
+    match = _JSON_FENCE_RE.search(raw)
+    if match:
+        extracted = match.group(1).strip()
+        try:
+            return json.loads(extracted)
+        except json.JSONDecodeError:
+            pass
+    
+    # Log failure and raise error
+    logger.warning(f"phase=JSON_PARSE_FAIL raw='{raw}'")
+    raise ParameterGenerationError(f"LLM returned invalid JSON: {raw}")
 

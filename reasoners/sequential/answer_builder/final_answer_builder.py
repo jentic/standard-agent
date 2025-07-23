@@ -2,35 +2,10 @@ from __future__ import annotations
 
 from reasoners.models import ReasonerState
 from reasoners.sequential.interface import AnswerBuilder
+from reasoners.prompts import FINAL_ANSWER_SYNTHESIS_PROMPT
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
-
-FINAL_ANSWER_BUILDER_PROMPT: str = (
-    """
-    You are the Final Answer Synthesizer for an autonomous agent. Your sole responsibility is to generate a clear, concise, and user-friendly final answer based on the provided information.
-
-    **User's Goal:**
-    {goal}
-
-    **Chronological Log of Actions and Available Data:**
-    ```
-    {history}
-    ```
-
-    **Your Task:**
-    1.  **Analyze the Log:** Carefully review the log to understand what actions were taken and what data was collected.
-    2.  **Assess Sufficiency:** Determine if the data in the log is sufficient to fully and accurately achieve the User's Goal.
-        -   If NOT sufficient, you MUST reply with the single line: `ERROR: insufficient data for a reliable answer.`
-    3.  **Synthesize the Final Answer:** If the data is sufficient, synthesize a comprehensive answer.
-        -   Directly address the User's Goal.
-        -   Use only the information from the log. Do NOT use outside knowledge.
-        -   Present the answer clearly using Markdown for formatting (e.g., headings, lists, bold text).
-        -   Do NOT reveal the internal monologue, failed steps, or raw data snippets. Your tone should be that of a helpful, expert assistant.
-
-    **Final Answer:**
-    """
-)
 
 class FinalAnswerBuilder(AnswerBuilder):
     """
@@ -44,7 +19,7 @@ class FinalAnswerBuilder(AnswerBuilder):
             logger.warning("phase=SYNTHESIZE_FALLBACK reason='No LLM attached'")
             return self._heuristic(state)
 
-        prompt = FINAL_ANSWER_BUILDER_PROMPT.format(
+        prompt = FINAL_ANSWER_SYNTHESIS_PROMPT.format(
             goal=state.goal,
             history="\n".join(state.history),
         )

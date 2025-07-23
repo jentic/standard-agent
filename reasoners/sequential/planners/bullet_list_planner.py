@@ -6,38 +6,12 @@ from typing import Deque, List
 
 from reasoners.models import Step
 from reasoners.sequential.interface import Planner
+from reasoners.prompts import PLAN_GENERATION_PROMPT
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
 _BULLET_PATTERN = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)(.*)$")
 _IO_DIRECTIVE_PATTERN = re.compile(r"\((input|output):\s*([^)]*)\)")
-
-PLAN_GENERATION_PROMPT: str = (
-    """
-    You are an expert planning assistant.
-
-    TASK
-    • Decompose the *user goal* below into a **markdown bullet-list** plan.
-
-    OUTPUT FORMAT
-    1. Return **only** the fenced list (triple back-ticks) — no prose before or after.
-    2. Each bullet should be on its own line, starting with "- ".
-    3. Each bullet = <verb> <object> … followed, in this order, by (input: key_a, key_b) (output: key_c)
-       where the parentheses are literal.
-    4. `output:` key is mandatory when the step’s result is needed later; exactly one **snake_case** identifier.
-    5. `input:` is optional; if present, list comma-separated **snake_case** keys produced by earlier steps.
-    6. Do **not** mention specific external tool names.
-
-    SELF-CHECK  
-    After drafting, silently verify — regenerate the list if any check fails:
-    • All output keys unique & snake_case.  
-    • All input keys reference existing outputs.  
-    • No tool names or extra prose outside the fenced block.
-
-    REAL GOAL
-    Goal: {goal}
-    """
-)
 
 def _strip_bullet(text: str) -> str:
     """Remove leading bullet/number and extra whitespace."""
