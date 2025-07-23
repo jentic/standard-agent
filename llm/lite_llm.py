@@ -7,12 +7,13 @@ class LiteLLMChatLLM(BaseLLM):
 
     def __init__(
         self,
+        model: str = None,
         temperature: float = 0.2,
         max_tokens: int | None = None,
     ) -> None:
         import litellm
         config = load_config()
-        self.model = config.llm.model
+        self.model = model if model is not None else config.llm.model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._client = litellm

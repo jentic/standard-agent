@@ -16,14 +16,15 @@ from tools.jentic_toolkit.jentic_tool_iface import JenticToolInterface
 from llm.lite_llm import LiteLLMChatLLM
 from reasoners.pre_built_reasoners import ReWOOReasoner
 from agents.standard_agent import StandardAgent
-
+from utils.load_config import load_config
 POLL_DELAY = 2.0
 
 from utils.logger import get_logger, init_logger
 logger = get_logger(__name__)
+config = load_config()
 
 def build_agent() -> StandardAgent:
-    llm     = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
+    llm     = LiteLLMChatLLM(model=config.llm.model)
     tools   = JenticToolInterface(client=JenticClient())
     memory  = ScratchPadMemory()
 
