@@ -12,6 +12,7 @@ from inbox.cli_inbox import CLIInbox
 from outbox.cli_outbox import CLIOutbox
 from agents.prebuilt_agents import get_rewoo_agent
 from agents.models import Goal
+from utils.load_config import load_config
 
 POLL_DELAY = 2.0
 
@@ -20,11 +21,11 @@ logger = get_logger(__name__)
 
 
 def main() -> None:
-    init_logger("config.json")
-
+    init_logger()
     load_dotenv()
 
-    agent = get_rewoo_agent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
+    config = load_config()
+    agent = get_rewoo_agent(model=config.llm.model)
     inbox = CLIInbox(prompt="🤖 Enter your goal: ")
     outbox = CLIOutbox()
 

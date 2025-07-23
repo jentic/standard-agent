@@ -13,6 +13,8 @@ import json, logging, os, sys
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, List
+from .load_config import load_config
+import dataclasses
 
 # ------------------------------------------------------------------- colour
 _ANSI = {
@@ -36,7 +38,9 @@ def _supports_colour() -> bool:
 
 class _ColourFilter(logging.Filter):
     """Adds levelname_coloured to each record."""
-    _enable = _supports_colour()
+    def __init__(self, enable: bool):
+        super().__init__()
+        self._enable = enable
 
     def filter(self, record: logging.LogRecord) -> bool:
         colour = _ANSI.get(record.levelname, "")
@@ -51,20 +55,7 @@ _DEFAULT_FMT = "%(asctime)s | %(levelname_coloured)s | %(name)s: %(message)s"
 _DEFAULT_FILE_FMT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 
 
-def _read_cfg(path: str | Path | None) -> Dict[str, Any]:
-    if not path:
-        return {}
-    p = Path(path)
-    if not p.is_file():
-        raise FileNotFoundError(f"Logging config file not found: {p}")
-    try:
-        return json.loads(p.read_text()).get("logging", {})
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in logging config: {e}") from e
-
-
-# ------------------------------------------------------------------- public API
-def init_logger(config_path: str | Path | None = None) -> None:
+def init_logger() -> None:
     """
     Configure the *root* logger.
 
@@ -74,45 +65,54 @@ def init_logger(config_path: str | Path | None = None) -> None:
     if root.handlers:
         return  # app/framework configured logging already – do nothing
 
-    cfg = _read_cfg(config_path)
+    config = load_config()
+    logging_cfg = config.logging
 
-    level = getattr(logging, cfg.get("level", "INFO").upper(), logging.INFO)
+    # Set root level
+    level = getattr(logging, logging_cfg.console.level.upper(), logging.INFO)
     root.setLevel(level)
 
     # ---------------- console ----------------
-    if cfg.get("console", {}).get("enabled", True):
+    if logging_cfg.console.enabled:
         h = logging.StreamHandler(stream=sys.stdout)
-        h.addFilter(_ColourFilter())
-        fmt = cfg.get("console", {}).get("format", _DEFAULT_FMT)
+        h.addFilter(_ColourFilter(logging_cfg.console.colour_enabled))
+        fmt = logging_cfg.console.format or _DEFAULT_FMT
         h.setFormatter(logging.Formatter(fmt))
         root.addHandler(h)
 
     # ---------------- file -------------------
-    file_cfg = cfg.get("file", {})
-    if file_cfg.get("enabled", False):
-        path = Path(file_cfg.get("path", "logs/app.log"))
+    file_cfg = logging_cfg.file
+    if file_cfg.enabled:
+        path = Path(file_cfg.path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        if file_cfg.get("rotation", {}).get("enabled", True):
+        if file_cfg.file_rotation:
             h = RotatingFileHandler(
                 path,
-                maxBytes=file_cfg.get("rotation", {}).get("max_bytes", 10_000_000),
-                backupCount=file_cfg.get("rotation", {}).get("backup_count", 5),
+                maxBytes=file_cfg.max_bytes,
+                backupCount=file_cfg.backup_count,
             )
         else:
             h = logging.FileHandler(path)
 
-        h.setLevel(getattr(logging, file_cfg.get("level", "DEBUG").upper(), logging.DEBUG))
-        h.setFormatter(logging.Formatter(file_cfg.get("format", _DEFAULT_FILE_FMT)))
+        h.setLevel(getattr(logging, file_cfg.level.upper(), logging.DEBUG))
+        h.setFormatter(logging.Formatter(file_cfg.format or _DEFAULT_FILE_FMT))
         root.addHandler(h)
 
+    # ---------------- library level loggers -------------------
+    libraries_config = logging_cfg.libraries
+    for field in dataclasses.fields(libraries_config):
+        lib_name = field.name
+        level = getattr(libraries_config, lib_name)
+        logging.getLogger(lib_name).setLevel(level.upper())
 
-def reload_logger(config_path: str | Path) -> None:
+
+def reload_logger() -> None:
     """
     Reconfigure logging at runtime (clears current root handlers).
     """
     logging.getLogger().handlers.clear()
-    init_logger(config_path)
+    init_logger()
 
 
 def get_logger(name: str) -> logging.Logger:
