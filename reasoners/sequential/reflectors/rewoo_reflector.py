@@ -127,7 +127,7 @@ class ReWOOReflector(Reflector):
             error.__class__.__name__,
             step.text,
         )
-        if not (self.llm and self.tools and self.memory):
+        if any(s is None for s in (self._llm, self._tools, self._memory)):
             raise RuntimeError(f"{__name__}: Services llm, tools, and memory not attached")
 
         step.status, step.error = StepStatus.FAILED, str(error)

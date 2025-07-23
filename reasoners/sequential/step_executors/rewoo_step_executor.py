@@ -137,7 +137,7 @@ class ReWOOStepExecutor(StepExecutor):
 
     # ---------- public --------------------------------------------------
     def execute(self, step: Step, state: ReasonerState) -> Dict[str, Any] | None:
-        if not (self.llm and self.tools and self.memory):
+        if any(s is None for s in (self._llm, self._tools, self._memory)):
             raise RuntimeError(f"{__name__}: Services llm, tools, and memory not attached")
         logger.info(f"phase=EXECUTE_STEP step_text='{step.text}'")
         step.status = StepStatus.RUNNING

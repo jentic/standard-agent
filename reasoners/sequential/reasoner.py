@@ -25,14 +25,15 @@ class SequentialReasoner(BaseReasoner):
         reflector: Reflector | None = None,
         answer_builder: AnswerBuilder
     ):
-        super().__init__(llm=llm, tools=tools, memory=memory)
         self.planner = planner
         self.step_executor = step_executor
         self.reflector = reflector
         self.answer_builder = answer_builder
 
-        # Pass services to individual components
-        self._pass_services_to_components()
+
+        # BaseReasoner will wire up the services
+        # (broadcast them to the above components by calling _pass_services_to_components).
+        super().__init__(llm=llm, tools=tools, memory=memory)
 
     # ---------- Broadcasting context to components --------------
     def _pass_services_to_components(self) -> None:
