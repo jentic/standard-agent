@@ -101,6 +101,7 @@ class BulletListPlanner(Planner):
     """An LLM-based planner that generates a markdown bullet list."""
 
     def __init__(self, max_retries: int = 1):
+        super().__init__()
         self.max_retries = max_retries
 
     def plan(self, goal: str) -> Deque[Step]:

@@ -3,24 +3,60 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Deque, Dict
 
-from reasoners.models import RuntimeContext
+from llm.base_llm import BaseLLM
+from tools.interface import ToolInterface
+from memory.base_memory import BaseMemory
 from reasoners.models import ReasonerState, Step
 
 
 class BaseComponent(ABC):
-    """All components keep a reference to the shared RuntimeContext."""
-    _ctx: RuntimeContext | None = None
+    def __init__(
+            self,
+            *,
+            llm: BaseLLM | None = None,
+            tools: ToolInterface | None = None,
+            memory: BaseMemory | None = None,
+    ) -> None:
+        self._llm: BaseLLM | None = None
+        self._tools: ToolInterface | None = None
+        self._memory: BaseMemory | None = None
 
-    def set_context(self, ctx: RuntimeContext) -> None:
-        self._ctx = ctx
+        if llm or tools or memory:
+            self.set_services(llm=llm, tools=tools, memory=memory)
 
-    # convenience shorthands
+    # --------------------------- wiring ------------------------------ #
+    def set_services(
+            self,
+            *,
+            llm: BaseLLM | None = None,
+            tools: ToolInterface | None = None,
+            memory: BaseMemory | None = None,
+    ) -> None:
+        if llm is not None:
+            self._llm = llm
+        if tools is not None:
+            self._tools = tools
+        if memory is not None:
+            self._memory = memory
+
+    # ------------------------ convenience --------------------------- #
     @property
-    def llm(self):    return self._ctx.llm
+    def llm(self) -> BaseLLM:
+        if self._llm is None:
+            raise RuntimeError(f"{self.__class__.__name__} has no LLM wired in")
+        return self._llm
+
     @property
-    def tools(self):  return self._ctx.tools
+    def tools(self) -> ToolInterface:
+        if self._tools is None:
+            raise RuntimeError(f"{self.__class__.__name__} has no Tools interface wired in")
+        return self._tools
+
     @property
-    def memory(self): return self._ctx.memory
+    def memory(self) -> BaseMemory:
+        if self._memory is None:
+            raise RuntimeError(f"{self.__class__.__name__} has no Memory wired in")
+        return self._memory
 
 
 class Planner(BaseComponent):

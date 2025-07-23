@@ -109,6 +109,7 @@ class ReWOOReflector(Reflector):
     """Retry-oriented reflection for ReWOO executors."""
 
     def __init__(self, *, max_retries: int = 2):
+        super().__init__()
         self.max_retries = max_retries
         logger.info("phase=REWOO_REFLECTOR_INITIALIZED max_retries=%d", self.max_retries)
 

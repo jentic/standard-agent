@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+from collections import deque
 
 from reasoners.base_reasoner import BaseReasoner
-from reasoners.models import ReasoningResult, ReasonerState, Step, RuntimeContext
+from reasoners.models import ReasoningResult, ReasonerState, Step
 from reasoners.sequential.interface import Planner, Reflector, StepExecutor, AnswerBuilder
-from collections import deque
+from llm.base_llm import BaseLLM
+from tools.interface import ToolInterface
+from memory.base_memory import BaseMemory
 
 
 class SequentialReasoner(BaseReasoner):
@@ -14,26 +17,36 @@ class SequentialReasoner(BaseReasoner):
     def __init__(
         self,
         *,
+        llm: BaseLLM | None = None,
+        tools: ToolInterface | None = None,
+        memory: BaseMemory | None = None,
         planner: Planner | None = None,
         step_executor: StepExecutor,
         reflector: Reflector | None = None,
         answer_builder: AnswerBuilder
     ):
+        super().__init__(llm=llm, tools=tools, memory=memory)
         self.planner = planner
         self.step_executor = step_executor
         self.reflector = reflector
         self.answer_builder = answer_builder
 
+        # Pass services to individual components
+        self._pass_context_to_components()
+
     # ---------- Broadcasting context to components --------------
-    def _pass_context_to_components(self, ctx: RuntimeContext) -> None:
+    def _pass_context_to_components(self) -> None:
+
+        if self._llm is None and self._tools is None and self._memory is None:
+            # not wired yet – nothing to broadcast
+            return
+
         for comp in (self.planner, self.step_executor, self.reflector, self.answer_builder):
             if comp is not None:
-                comp.set_context(ctx)
+                comp.set_services(llm=self.llm, tools=self.tools, memory=self.memory)
 
     # ---------- main loop ---------------------------------------
     def run(self, goal: str, *, meta: Dict[str, Any] | None = None) -> ReasoningResult:
-        if not hasattr(self, "llm"):
-            raise RuntimeError("attach_services() was never called")
 
         meta = meta or {}
         max_iter = meta.get("max_iterations", self.DEFAULT_MAX_ITER)

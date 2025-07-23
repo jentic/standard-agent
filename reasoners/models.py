@@ -1,21 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from collections import deque
 from enum import Enum, auto
 from typing import Any, Deque, List, Optional
 from pydantic import BaseModel, Field
 
-from memory.base_memory import BaseMemory
-from llm.base_llm import BaseLLM
-from tools.interface import ToolInterface
 
 __all__ = [
     "Step",
     "StepStatus",
     "ReasonerState",
     "ReasoningResult",
-    "RuntimeContext",
 ]
 
 class StepStatus(str, Enum):
@@ -64,11 +59,3 @@ class ReasoningResult(BaseModel):
     tool_calls: List[dict[str, Any]]
     success: bool
     error_message: str | None = None
-
-
-@dataclass(slots=True)
-class RuntimeContext:
-    """Shared runtime services injected once and passed everywhere."""
-    llm    : BaseLLM
-    tools  : ToolInterface
-    memory : BaseMemory

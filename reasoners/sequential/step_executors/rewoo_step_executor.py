@@ -131,6 +131,7 @@ class ReWOOStepExecutor(StepExecutor):
     """Executes ReWOO steps (plan-first + reflection)."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._tool_cache: Dict[str, Tool] = {}
         logger.info("phase=REWOO_STEP_EXECUTOR_INITIALIZED")
 
