@@ -8,9 +8,7 @@ agent owns the services; the reasoner simply uses what the agent provides.
 from __future__ import annotations
 
 from  agents.models import Goal
-from  inbox.base_inbox import BaseInbox
 from  memory.base_memory import BaseMemory
-from  outbox.base_outbox import BaseOutbox
 from  reasoners.base_reasoner import BaseReasoner
 from  llm.base_llm import BaseLLM
 from  reasoners.models import ReasoningResult
@@ -67,26 +65,10 @@ class StandardAgent:
 
         try:
             result = self.reasoner.run(goal.text, meta=goal.metadata)
-            if hasattr(self.memory, "store"):
-                self.memory.store(f"result:{run_id}", result.model_dump())
+            self.memory.store(f"result:{run_id}", result.model_dump())
             self._state = AgentState.READY
             return result
 
         except Exception:
             self._state = AgentState.NEEDS_ATTENTION
             raise
-
-    def tick(self, inbox: BaseInbox, outbox: BaseOutbox) -> bool:
-        """Processes one item from an inbox (service-style API).
-
-        Returns:
-            True if a goal was processed, False otherwise.
-        """
-        if not (goal_text := inbox.get_next_goal()):
-            return False
-
-        goal = Goal(text=goal_text)
-        result = self.solve(goal)
-        outbox.send(result)
-        inbox.acknowledge_goal(goal_text)
-        return True
