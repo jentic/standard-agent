@@ -6,7 +6,7 @@ from reasoners.sequential.interface import AnswerBuilder
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
-FINAL_ANSWER_SYNTHESIS_PROMPT: str = (
+FINAL_ANSWER_BUILDER_PROMPT: str = (
     """
     You are the Final Answer Synthesizer for an autonomous agent. Your sole responsibility is to generate a clear, concise, and user-friendly final answer based on the provided information.
 
@@ -44,7 +44,7 @@ class FinalAnswerBuilder(AnswerBuilder):
             logger.warning("phase=SYNTHESIZE_FALLBACK reason='No LLM attached'")
             return self._heuristic(state)
 
-        prompt = FINAL_ANSWER_SYNTHESIS_PROMPT.format(
+        prompt = FINAL_ANSWER_BUILDER_PROMPT.format(
             goal=state.goal,
             history="\n".join(state.history),
         )

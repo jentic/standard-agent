@@ -3,7 +3,7 @@ from reasoners.sequential.planners.bullet_list_planner import BulletListPlanner
 from reasoners.sequential.reasoner import SequentialReasoner
 from reasoners.sequential.reflectors.rewoo_reflector import ReWOOReflector
 from .sequential.step_executors.rewoo_step_executor import ReWOOStepExecutor
-from .sequential.synthesizers.final_answer_synthesizer import FinalAnswerBuilder
+from .sequential.answer_builder.final_answer_builder import FinalAnswerBuilder
 
 
 class ReWOOReasoner(SequentialReasoner):

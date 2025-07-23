@@ -101,19 +101,19 @@ from reasoners.sequential.reasoner import SequentialReasoner
 from reasoners.sequential.planners.bullet_list_planner import BulletListPlanner
 from reasoners.sequential.step_executors.rewoo_step_executor import ReWOOStepExecutor
 from reasoners.sequential.reflectors.rewoo_reflector import ReWOOReflector
-from reasoners.sequential.synthesizers.final_answer_synthesizer import FinalAnswerBuilder
+from reasoners.sequential.answer_builder.final_answer_builder import FinalAnswerBuilder
 
 # 1. Manually assemble the agent's high-level components.
 llm = LiteLLMChatLLM(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
-tools = JenticToolInterface() # Will use JENTIC_API_KEY from .env
+tools = JenticToolInterface()  # Will use JENTIC_API_KEY from .env
 memory = ScratchPadMemory()
 
 # 2. Compose the SequentialReasoner from its parts.
 reasoner = SequentialReasoner(
-    planner=BulletListPlanner(),
-    step_executor=ReWOOStepExecutor(),
-    reflector=ReWOOReflector(max_retries=2),
-    answer_builder=FinalAnswerBuilder(),
+  planner=BulletListPlanner(),
+  step_executor=ReWOOStepExecutor(),
+  reflector=ReWOOReflector(max_retries=2),
+  answer_builder=FinalAnswerBuilder(),
 )
 
 # 3. Instantiate the StandardAgent with your custom-built reasoner.
@@ -126,8 +126,8 @@ outbox = CLIOutbox()
 # 5. Run the agent's main loop.
 print("Custom agent is ready. Press Ctrl+C to exit.")
 while True:
-    agent.tick(inbox, outbox)
-    time.sleep(1.0)
+  agent.tick(inbox, outbox)
+  time.sleep(1.0)
 ```
 
 ### Project Layout
@@ -148,6 +148,7 @@ while True:
 │       ├── planners/               # Concrete Planner implementations (e.g., BulletListPlanner)
 │       ├── step_executors/         # Concrete StepExecutor implementations (e.g., ReWOOStepExecutor)
 │       └── reflectors/             # Concrete Reflector implementations (e.g., ReWOOReflector)
+│       └── answer_builder/         # Concrete AnswerBuilder implementations (e.g., FinalAnswerBuilder)
 │
 ├── tools/                          # Abstractions for actions the agent can take
 │   ├── interface.py                # Defines the core ToolInterface contract
