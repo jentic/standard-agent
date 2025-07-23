@@ -62,15 +62,52 @@ REASONING_STEP_PROMPT: str = (
 )
 
 TOOL_SELECTION_PROMPT: str = (
-    """You are an expert orchestrator. Given the *step* and the *tools* list below,\n"
-    "return **only** the `id` of the single best tool to execute the step, or\n"
-    "the word `none` if **none of the tools in the provided list are suitable** for the step.\n\n"
-    "Step:\n{step}\n\n"
-    "Tools (JSON):\n{tools_json}\n\n"
-    "Respond with just the id (e.g. `tool_123`) or `none`. Do not include any other text."""
+    """
+    <role>
+    You are an expert orchestrator working within the Jentic API ecosystem.
+    Your job is to select the best tool to execute a specific plan step, using a list of available tools. Each tool may vary in API domain, supported actions, and required parameters. You must evaluate each tool's suitability and return the **single best matching tool** — or the wordnone if none qualify.
+
+    Your selection will be executed by an agent, so precision and compatibility are critical.
+    </role>
+
+    <instructions>
+    Analyze the provided step and evaluate all candidate tools. Use the scoring criteria to assess each tool’s fitness for executing the step. Return the tool `id` with the highest total score. If no tool scores ≥60, return the word none.
+    You are selecting the **most execution-ready** tool, not simply the closest match.
+    </instructions>
+
+    <input>
+    Step:
+    {step}
+
+    Tools (JSON):
+    {tools_json}
+    </input>
+
+    <scoring_criteria>
+    - **API Domain Match** (30 pts): Relevance of the tool’s API domain to the step's intent.
+    - **Action Compatibility** (25 pts): How well the tool’s action matches the step’s intent, considering common verb synonyms (e.g., "send" maps well to "post", "create" to "add").
+    - **Parameter Compatibility** (20 pts): Whether required parameters are available or can be inferred from the current context.
+    - **Workflow Fit** (15 pts): Alignment with the current workflow’s sequence and memory state.
+    - **Simplicity & Efficiency** (10 pts): Prefer tools that perform the intended action directly and efficiently; if both an operation and a workflow accomplish the same goal, favor the simpler operation unless the workflow provides a clear added benefit.
+    </scoring_criteria>
+
+    <rules>
+    1. Score each tool using the weighted criteria above. Max score: 100 points.
+    2. Select the tool with the highest total score.
+    3. If no tool scores at least 60 points, return none.
+    4. Do **not** include any explanation, formatting, or metadata — only the tool `id` or none.
+    5. Use available step context and known inputs to inform scoring.
+    6. Penalize tools misaligned with the intended action.
+    </rules>
+
+    <output_format>
+    Respond with a **single line** which only includes the selected tool’s `id`
+    **No additional text** should be included.
+    </output_format>
+    """
 )
 
-PARAMETER_GENERATION_PROMPT = ("""
+PARAMETER_GENERATION_PROMPT_1 = ("""
     "You are Parameter‑Builder AI.\n\n"
 
     "🛑 OUTPUT FORMAT REQUIREMENT 🛑\n"
@@ -99,6 +136,59 @@ PARAMETER_GENERATION_PROMPT = ("""
 
     "🚨 FINAL RULE: Your reply MUST contain only a single raw JSON object. No explanation. No markdown. No escaping. No backticks."
     "Note: Authentication credentials will be automatically injected by the platform."
+    """
+)
+
+PARAMETER_GENERATION_PROMPT = (
+    """
+    <role>
+    You are a Parameter Builder within the Jentic agent ecosystem. Your mission is to enable seamless API execution by generating precise parameters from step context and memory data. You specialize in data extraction, content formatting, and parameter mapping to ensure successful tool execution.
+
+    Your core responsibilities:
+    - Extract meaningful data from complex memory structures
+    - Format content appropriately for target APIs
+    - Apply quantity constraints and filtering logic
+    - Generate valid parameters that enable successful API calls
+    </role>
+
+    <goal>
+    Generate precise JSON parameters for the specified API call by extracting relevant data from step context and memory.
+    </goal>
+
+    <input>
+    STEP: {step}
+    MEMORY: {step_inputs}
+    SCHEMA: {tool_schema}
+    ALLOWED_KEYS: {allowed_keys}
+    </input>
+
+    <data_extraction_rules>
+    • **Articles/News**: Extract title/headline and URL fields, format as "Title: URL\n"
+    • **Arrays**: Process each item, combine into formatted string
+    • **Nested Objects**: Access properties using dot notation
+    • **Quantities**: "a/an/one" = 1, "few" = 3, "several" = 5, numbers = exact
+    • **Never use placeholder text** - always extract real data from memory
+    </data_extraction_rules>
+
+    <instructions>
+    1. Analyze MEMORY for relevant data structures
+    2. Extract actual values using the data extraction rules
+    3. Format content appropriately for the target API
+    4. Apply quantity constraints from step language
+    5. Generate valid parameters using only ALLOWED_KEYS
+    </instructions>
+
+    <constraints>
+    - Output ONLY valid JSON - no markdown, explanations, or backticks
+    - Use only keys from ALLOWED_KEYS
+    - Extract actual data values from MEMORY, never placeholder text
+    - For messaging APIs: format as readable text with titles and links
+    - Required parameters take priority over optional ones
+    </constraints>
+
+    <output_format>
+    Valid JSON object starting with {{ and ending with }} and confirm the output is parsable with `JSON.parse()`
+    </output_format>
     """
 )
 
@@ -149,7 +239,6 @@ class ReWOOStepExecutor(StepExecutor):
             self._do_reasoning(step, inputs, state)
         else:
             self._do_tool(step, inputs, state)
-        logger.info(f"phase=EXECUTE_STEP_COMPLETE result='{step.result}'")
 
     # ---------- step kinds ---------------------------------------------
     def _do_reasoning(
