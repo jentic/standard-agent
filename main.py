@@ -23,8 +23,8 @@ logger = get_logger(__name__)
 def main() -> None:
     init_logger()
     load_dotenv()
-
     config = load_config()
+    
     agent = get_rewoo_agent(model=config.llm.model)
     inbox = CLIInbox(prompt="🤖 Enter your goal: ")
     outbox = CLIOutbox()
