@@ -32,7 +32,7 @@ class SequentialReasoner(BaseReasoner):
 
 
         # BaseReasoner will wire up the services
-        # (broadcast them to the above components by calling _pass_services_to_components).
+        # (broadcast them to the components by calling _pass_services_to_components in BaseReasoner __init__).
         super().__init__(llm=llm, tools=tools, memory=memory)
 
     # ---------- Broadcasting context to components --------------
