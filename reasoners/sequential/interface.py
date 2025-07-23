@@ -3,23 +3,24 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Deque, Dict
 
-from memory.base_memory import BaseMemory
-from tools.interface import ToolInterface
-from llm.base_llm import BaseLLM
+from reasoners.models import RuntimeContext
 from reasoners.models import ReasonerState, Step
 
 
 class BaseComponent(ABC):
-    """Super-small DI hook shared by all components."""
+    """All components keep a reference to the shared RuntimeContext."""
+    _ctx: RuntimeContext | None = None
 
-    llm: BaseLLM | None = None
-    tools: ToolInterface | None = None
-    memory: BaseMemory | None = None
+    def set_context(self, ctx: RuntimeContext) -> None:
+        self._ctx = ctx
 
-    def attach_services(
-        self, *, llm: BaseLLM, tools: ToolInterface, memory: BaseMemory
-    ) -> None:
-        self.llm, self.tools, self.memory = llm, tools, memory
+    # convenience shorthands
+    @property
+    def llm(self):    return self._ctx.llm
+    @property
+    def tools(self):  return self._ctx.tools
+    @property
+    def memory(self): return self._ctx.memory
 
 
 class Planner(BaseComponent):
