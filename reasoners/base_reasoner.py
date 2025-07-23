@@ -27,7 +27,6 @@ class BaseReasoner(ABC):
         self._tools: ToolInterface | None = None
         self._memory: BaseMemory | None = None
 
-        # Constructor-time injection (optional)
         if llm or tools or memory:
             self.set_services(llm=llm, tools=tools, memory=memory)
 
@@ -64,7 +63,7 @@ class BaseReasoner(ABC):
         if memory is not None:
             self._memory = memory
 
-        # Push the context to sub-components if any
+        # Pass services to components if any
         self._pass_context_to_components()
 
     def _pass_context_to_components(self) -> None:
