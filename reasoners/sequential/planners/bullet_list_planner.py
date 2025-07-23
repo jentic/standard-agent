@@ -107,8 +107,8 @@ class BulletListPlanner(Planner):
     def plan(self, goal: str) -> Deque[Step]:
         """Generate and validate a plan, with retries on failure."""
         if not self.llm:
-            logger.error(f"{__name__}: LLM not attached. Call attach_services first.")
-            raise RuntimeError(f"{__name__}: LLM not attached. Call attach_services first.")
+            logger.error(f"{__name__}: LLM not attached")
+            raise RuntimeError(f"{__name__}: LLM not attached")
         prompt = PLAN_GENERATION_PROMPT.format(goal=goal)
         messages = [{"role": "user", "content": prompt}]
 

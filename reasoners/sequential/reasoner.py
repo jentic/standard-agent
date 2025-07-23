@@ -32,10 +32,10 @@ class SequentialReasoner(BaseReasoner):
         self.answer_builder = answer_builder
 
         # Pass services to individual components
-        self._pass_context_to_components()
+        self._pass_services_to_components()
 
     # ---------- Broadcasting context to components --------------
-    def _pass_context_to_components(self) -> None:
+    def _pass_services_to_components(self) -> None:
 
         if self._llm is None and self._tools is None and self._memory is None:
             # not wired yet – nothing to broadcast
@@ -57,7 +57,6 @@ class SequentialReasoner(BaseReasoner):
         if self.planner:
             state.plan = self.planner.plan(goal)
         else:
-
             state.plan = deque([Step(text=goal)])
 
         if not state.plan:

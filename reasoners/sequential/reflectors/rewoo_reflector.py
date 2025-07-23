@@ -128,7 +128,7 @@ class ReWOOReflector(Reflector):
             step.text,
         )
         if not (self.llm and self.tools and self.memory):
-            raise RuntimeError("attach_services() not called on Reflector")
+            raise RuntimeError(f"{__name__}: Services llm, tools, and memory not attached")
 
         step.status, step.error = StepStatus.FAILED, str(error)
 

@@ -64,9 +64,9 @@ class BaseReasoner(ABC):
             self._memory = memory
 
         # Pass services to components if any
-        self._pass_context_to_components()
+        self._pass_services_to_components()
 
-    def _pass_context_to_components(self) -> None:
+    def _pass_services_to_components(self) -> None:
         """
         Hook for subclasses to broadcast the services to their components.
 

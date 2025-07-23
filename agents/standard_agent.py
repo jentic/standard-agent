@@ -58,9 +58,7 @@ class StandardAgent:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
 
-        if hasattr(self.memory, "store"):
-            self.memory.store(f"goal:{run_id}", goal)
-
+        self.memory.store(f"goal:{run_id}", goal)
         self._state = AgentState.BUSY
 
         try:
