@@ -5,6 +5,40 @@ This module contains shared prompts used across the reasoning pipeline.
 Component-specific prompts should be kept in their respective modules.
 """
 
+STEP_CLASSIFICATION_PROMPT: str = (
+    """
+    <role>
+    You are a Step Classifier within the Jentic agent ecosystem. Your sole purpose is to determine whether a given step requires external API/tool execution or can be completed through internal reasoning alone.
+    </role>
+
+    <goal>
+    Classify the provided step as either TOOL or REASONING based on whether it requires external API calls.
+    </goal>
+
+    <input>
+    Step: {step_text}
+    Available Memory Keys: {keys_list}
+    </input>
+
+    <classification_rules>
+    TOOL steps require:
+    - External API calls (e.g., "search articles", "send email", "create task")
+    - Third-party service interactions
+    - Data retrieval from external sources
+
+    REASONING steps include:
+    - Data transformation or formatting
+    - Summarization or analysis of existing data
+    - Logic operations using available memory
+    - Internal calculations or processing
+    </classification_rules>
+
+    <output_format>
+    Respond with ONLY one word: either "TOOL" or "REASONING"
+    </output_format>
+    """
+)
+
 TOOL_SELECTION_PROMPT = (
    """
    <role>

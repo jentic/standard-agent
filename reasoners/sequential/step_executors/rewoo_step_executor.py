@@ -9,7 +9,8 @@ from reasoners.sequential.interface import StepExecutor
 from reasoners.prompts import (
     REASONING_STEP_PROMPT,
     TOOL_SELECTION_PROMPT,
-    PARAMETER_GENERATION_PROMPT
+    PARAMETER_GENERATION_PROMPT,
+    STEP_CLASSIFICATION_PROMPT
 )
 from tools.interface import Tool
 from reasoners.sequential.exceptions import (
@@ -94,12 +95,10 @@ class ReWOOStepExecutor(StepExecutor):
 
     # ---------- helpers -------------------------------------------------
     def _classify_step(self, step: Step) -> Step.StepType:
-        # Classification is based on the presence of keyword_search_query in the step
-        # If the step has a keyword_search_query, it's a TOOL step
-        # Otherwise, it's a REASONING step
-        if step.keyword_search_query:
-            return Step.StepType.TOOL
-        return Step.StepType.REASONING
+        keys_list = ", ".join(getattr(self.memory, "keys", lambda: [])())
+        prompt    = STEP_CLASSIFICATION_PROMPT.format(step_text=step.text, keys_list=keys_list)
+        reply     = self._call_llm(prompt).strip().lower()
+        return Step.StepType.TOOL if reply.startswith("tool") else Step.StepType.REASONING
 
     def _fetch_inputs(self, step: Step) -> Dict[str, Any]:
         logger.debug(f"phase=FETCH_INPUTS keys='{step.input_keys}'")
@@ -130,9 +129,7 @@ class ReWOOStepExecutor(StepExecutor):
 
     # ---------- tool selection -----------------------------------------
     def _select_tool(self, step: Step) -> str:
-        # Use keyword_search_query for tool search if available, otherwise fall back to step.text
-        search_query = step.keyword_search_query if step.keyword_search_query else step.text
-        tools = self.tools.search(search_query, top_k=20)
+        tools = self.tools.search(step.text, top_k=20)
         prompt = TOOL_SELECTION_PROMPT.format(
             step=step.text,
             tools_json=json.dumps([t.dict() for t in tools], ensure_ascii=False),
