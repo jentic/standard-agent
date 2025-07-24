@@ -21,65 +21,101 @@ PLAN_GENERATION_PROMPT: str = (
     </role>
 
     <main_instructions>
-    Transform the user's goal into a structured **markdown bullet-list plan**, optimized for execution by API-integrated agents.
+    Transform the user's goal into a structured plan, optimized for execution by API-integrated agents.
 
-    Output rules:
-    1. Output only the fenced list using triple backticks — no prose before or after.
-    2. Top-level steps begin with `- ` and no indentation.
-    3. Sub-steps must be indented by exactly two spaces.
-    4. Each step must follow this format:  
-      `<verb> <object>` followed by:
-      - `(input: input_a, input_b)` — if the step requires prior outputs
-      - `(output: result_key)` — a **required** unique snake_case identifier
-    5. Use `input:` only when the step depends on earlier step outputs.
-    6. Do **not** include tool names, APIs, markdown formatting outside the fenced block, or explanatory prose.
-    7. Try to use CRUD specific verbs in your steps.
+    <rules>
+    1. Each step must be a top-level bullet beginning with `- ` and no indentation.
+    2. For any step that requires an API or tool call, the `→ keyword search query:` line must be indented by exactly two spaces and placed immediately after the relevant step.
+    3. Add `→ keyword search query:` only if the API call is completely necessary. Pure reasoning or internal transformation steps do **not** need it.
+    4. Each step must follow this format: `<verb> <object> (input: input_a, input_b) (output: result_key)`
+      - Use `(input: ...)` only when the step requires prior outputs.
+      - `(output: result_key)` is a **required** unique snake_case identifier for the step's result.
+    5. Do **not** include tool names or APIs within the step description. Avoid explanatory prose outside the described structure.
+    6. Try to use CRUD and API specific verbs in your steps.
+    </rules>
     </main_instructions>
 
     <keyword_instructions>
-    For each step that requires an API or tool call (e.g., a Jentic tool execution), generate a concise keyword search query to facilitate tool discovery:
-    - Create a search query of 5-7 capability-focused keywords describing the required functionality for that step.
-    - Include EXACTLY ONE provider/platform keyword (e.g., 'github', 'discord', 'trello') if the platform is clear from the step context; otherwise omit.
-    - Do NOT combine multiple providers or API platforms in the same query.
-    - Do NOT include irrelevant terms.
-    - Focus on clear, action-oriented keywords and CRUD specific verbs based on the current step, yet taking the overall goal into consideration.
-    - Output the keyword search query as a sibling bullet under the step, prefixed by: `→ keyword search query: "<query>"`.
-    - If the step is a reasoning, data transformation, summarization, or any AI-only operation that does not require an API/tool call, do **not** output a keyword search query line.
+      <role>
+      You are a highly specialized Keyword Generator. Your sole purpose is to create concise and effective keyword search queries for API or tool calls.
+      Generate a focused keyword search query for an API/tool call based on the given step.
+      </role>
+
+      <rules>
+      - **Focus on Capability:** Describe *what* the tool does, not specific user data.
+      - **Concise:** 4-6 keywords; prioritize precision over brevity.
+      - **Structure:** `ACTION + RESOURCE TYPE + [SERVICE] + [CONTEXT]`.
+      </rules>
+
+      <component_definitions>
+      1. **Primary Action Verb:** Tool's fundamental operation. Choose from: `send`, `post`, `notify`, `message`, `get`, `fetch`, `list`, `search`, `find`, `create`, `add`, `make`, `generate`, `upload`, `download`, `save`, `attach`, `update`, `delete`, `assign`, `manage`, `invite`, `remove`.
+      2. **Resource Type:** Object tool acts on (`email`, `message`, `file`, `event`, `issue`, `video`, `member`, `article`, `task`, `card`, `link`, `channel`, `user`, `playlist`).
+      3. **Service Context:** Platform if explicitly mentioned (`gmail`, `slack`, `discord`, `github`, `spotify`, `stripe`, `asana`, `trello`, `youtube`, `twilio`). **Always include when explicit; use standard abbreviations.**
+      4. **Distinguishing Context:** Critical qualifiers for differentiation:
+          - **Location:** `channel`, `folder`, `repository`, `board`, `list`, `server`, `inbox`
+          - **Temporal:** `latest`, `new`, `recent`
+          - **Scope:** `user`, `member`, `group`
+          - **Operation:** `assign`, `notification`, `attachment`
+      </component_definitions>
+
+      <exclusions>
+      **NEVER INCLUDE:** User-specific content (search queries, names, dates, IDs, file names, message content), or generic terms (`content`, `data`, `information`, `about`).
+      **NEVER INCLUDE:** Markdown code block delimiters (``` or ```markdown) in your output.
+      </exclusions>
+
+      <critical_patterns>
+      **Essential Qualifiers:**
+      - **User/Member Operations:** Always include `user` or `member` (e.g., "get user asana", "add member mailchimp")
+      - **Channel/Group Communications:** Include platform + `channel` (e.g., "send message discord channel")
+      - **Assignment Operations:** Use `assign` verb specifically (e.g., "create task asana assign")
+      - **Latest/New Content:** Add temporal qualifier (e.g., "get email gmail new")
+      - **File with Destination:** Include location context (e.g., "upload file drive folder")
+      - **Playlist/List Operations:** Include container type (e.g., "get playlist spotify", "get list trello")
+      </critical_patterns>
+
+      <quality_validation>
+      **Before finalizing, verify:**
+      1. Does this distinguish from similar operations on the same platform?
+      2. Would this rank the correct tool above alternatives?
+      3. Is the service context included when it's critical for tool selection?
+      4. Are the keywords specific enough to avoid generic matches?
+      </quality_validation>
+
+      <keyword_output_format>
+      `→ keyword search query: "<action_verb> <resource_type> <service> [context]"`
+      </keyword_output_format>
     </keyword_instructions>
 
-    <self_check>
-    Before returning your answer, silently confirm all of the following:
-    - All output keys are unique and use snake_case.
-    - All input keys reference a valid prior `output:` key.
-    - Indentation is strictly correct: 0 for top-level, 2 spaces for sub-items.
-    - No extraneous text or formatting appears outside the code block.
-    </self_check>
+      <skip_queries_for>
+      Pure reasoning tasks, data transformation without external tools, or logic operations.
+      </skip_queries_for>
 
-    <examples>
-    Example 1 — Goal: "Search NYT articles about artificial intelligence and send them to Discord channel 12345"
-    ```
-    - fetch recent NYT articles mentioning "artificial intelligence" (output: nyt_articles)
-      → if fails: report that article search failed.
-    - send articles as a Discord message to Discord channel 12345 (input: article_list) (output: post_confirmation)
-      → if fails: notify the user that posting to Discord failed.
-    - Get recent New York Times (NYT) articles mentioning "artificial intelligence" (output: nyt_articles)
-      → keyword search query: "get article nytimes new york times search query filter"
-    - send articles as a Discord message to Discord channel 12345 (input: nyt_articles) (output: post_confirmation)
-      → keyword search query: "send message discord channel post content"
-    ```
+      <examples>
+      Example 1 — Goal: "Search NYT articles about artificial intelligence and send them to Discord channel 12345"
 
-    Example 2 — Goal: "Gather the latest 10 Hacker News posts about 'AI', summarise them, and email the summary to alice@example.com"
-    ```
-    - fetch latest 10 Hacker News posts containing "AI" (output: hn_posts)
-      → if fails: report that fetching Hacker News posts failed.
-      → keyword search query: "get fetch posts hackernews searchquery filter"
-    - summarise hn_posts into a concise bullet list (input: hn_posts) (output: summary_text)
-      → if fails: report that summarisation failed.
-    - email summary_text to alice@example.com (input: summary_text) (output: email_confirmation)
-      → if fails: notify the user that email delivery failed.
-      → keyword search query: "post send email gmail to user"
-    ```
-    </examples>
+      <example_output>
+      - Get recent New York Times (NYT) articles mentioning "artificial intelligence" (output: nyt_articles)
+        → keyword search query: "get article nytimes new york times search query filter"
+      - send articles as a Discord message to Discord channel 12345 (input: nyt_articles) (output: post_confirmation)
+        → keyword search query: "send message discord channel post content"
+      </example_output>
+
+      Example 2 — Goal: "Gather the latest 10 Hacker News posts about 'AI', summarise them, and email the summary to alice@example.com"
+
+      <example_output>
+      - fetch latest 10 Hacker News posts containing "AI" (output: hn_posts)
+        → keyword search query: "get fetch posts hackernews searchquery filter"
+      - summarise hn_posts into a concise bullet list (input: hn_posts) (output: summary_text)
+      - email summary_text to alice@example.com (input: summary_text) (output: email_confirmation)
+        → keyword search query: "post send email gmail to user"
+      </example_output>
+      </examples>
+
+    <output_format>
+    Output a bullet list of steps, each following the required step and keyword query formatting.
+    Do not include the goal statement or any explanatory prose or formatting.
+    Do **not** include markdown code block delimiters (``` or ```markdown) in your output.
+    </output_format>
 
     <goal>
     Goal: {goal}
@@ -87,50 +123,61 @@ PLAN_GENERATION_PROMPT: str = (
     """
 )
 
-TOOL_SELECTION_PROMPT: str = (
-    """
-    <role>
-    You are an expert orchestrator working within the Jentic API ecosystem.
-    Your job is to select the best tool to execute a specific plan step, using a list of available tools. Each tool may vary in API domain, supported actions, and required parameters. You must evaluate each tool's suitability and return the **single best matching tool** — or the word none if none qualify.
+TOOL_SELECTION_PROMPT = (
+   """
+   <role>
+   You are an expert orchestrator working within the Jentic API ecosystem.
+   Your job is to select the best tool to execute a specific plan step, using a list of available tools. Each tool may vary in API domain, supported actions, and required parameters. You must evaluate each tool's suitability and return the **single best matching tool** — or the word none if none qualify.
 
-    Your selection will be executed by an agent, so precision and compatibility are critical.
-    </role>
+   Your selection will be executed by an agent, so precision and compatibility are critical.
+   </role>
 
-    <instructions>
-    Analyze the provided step and evaluate all candidate tools. Use the scoring criteria to assess each tool's fitness for executing the step. Return the tool `id` with the highest total score. If no tool scores ≥60, return the word none.
-    You are selecting the **most execution-ready** tool, not simply the closest match.
-    </instructions>
+   <instructions>
+   Analyze the provided step and evaluate all candidate tools. Use the scoring criteria to assess each tool's fitness for executing the step. Return the tool `id` with the highest total score. If no tool scores ≥60, return the word none.
+   You are selecting the **most execution-ready** tool, not simply the closest match.
+   </instructions>
 
-    <input>
-    Step:
-    {step}
+   <input>
+   Step:
+   {step}
 
-    Tools (JSON):
-    {tools_json}
-    </input>
+   Tools (JSON):
+   {tools_json}
+   </input>
 
-    <scoring_criteria>
-    - **API Domain Match** (30 pts): Relevance of the tool's API domain to the step's intent.
-    - **Action Compatibility** (25 pts): How well the tool's action matches the step's intent, considering common verb synonyms (e.g., "send" maps well to "post", "create" to "add").
-    - **Parameter Compatibility** (20 pts): Whether required parameters are available or can be inferred from the current context.
-    - **Workflow Fit** (15 pts): Alignment with the current workflow's sequence and memory state.
-    - **Simplicity & Efficiency** (10 pts): Prefer tools that perform the intended action directly and efficiently; if both an operation and a workflow accomplish the same goal, favor the simpler operation unless the workflow provides a clear added benefit.
-    </scoring_criteria>
+   <scoring_criteria>
+   - **Action Compatibility** (35 pts): Evaluate how well the tool's primary action matches the step's intent. Consider synonyms (e.g., "send" ≈ "post", "create" ≈ "add"), but prioritize tools that closely reflect the intended verb-object structure and scope. Penalize mismatches in type, scope, or intent (e.g., "get all members" for "get new members").
 
-    <rules>
-    1. Score each tool using the weighted criteria above. Max score: 100 points.
-    2. Select the tool with the highest total score.
-    3. If no tool scores at least 60 points, return none.
-    4. Do **not** include any explanation, formatting, or metadata — only the tool `id` or none.
-    5. Use available step context and known inputs to inform scoring.
-    6. Penalize tools misaligned with the intended action.
-    </rules>
+   - **API Domain Match** (30 pts): This is a critical criterion.
+       - **If the step EXPLICITLY mentions a specific platform or system (e.g., "Gmail", "Asana", "Microsoft Teams")**:
+           - **Perfect Match (30 pts):** If the tool's `api_name` directly matches the explicitly mentioned platform.
+           - **Severe Penalty (0 pts):** If the tool's `api_name` does *not* match the explicitly mentioned platform. Do NOT select tools from other domains in this scenario.
+       - **If NO specific platform or system is EXPLICITLY mentioned (e.g., "book a flight", "send an email")**:
+           - **Relevant Match (25-30 pts):** If the tool's `api_name` is generally relevant to the task (e.g., a flight booking tool for "book a flight"). Prefer tools with broader applicability if multiple options exist.
+           - **Irrelevant Match (0-10 pts):** If the tool's `api_name` is clearly irrelevant.
 
-    <output_format>
-    Respond with a **single line** which only includes the selected tool's `id`
-    **No additional text** should be included.
-    </output_format>
-    """
+   - **Parameter Compatibility** (20 pts): Determine if the tool's required parameters are explicitly present in the step or clearly inferable. Penalize tools with ambiguous, unsupported, or overly strict input requirements.
+
+   - **Workflow Fit** (10 pts): Assess how logically the tool integrates into the surrounding workflow. Does it build upon prior steps or prepare outputs needed for future ones?
+
+   - **Simplicity & Efficiency** (5 pts): Prefer tools that accomplish the task directly and without unnecessary complexity. Penalize overly complex workflows if a simpler operation would suffice. This includes preferring a single-purpose tool over a multi-purpose tool if the single-purpose tool directly addresses the step's need (e.g., "Get a user" over "Get multiple users" if only one user is needed).
+   </scoring_criteria>
+
+   <rules>
+   1. Score each tool using the weighted criteria above. Max score: 100 points.
+   2. Select the tool with the highest total score.
+   3. If no tool scores at least 60 points, return none.
+   4. Do **not** include any explanation, formatting, or metadata — only the tool `id` or none.
+   5. Use available step context and known inputs to inform scoring.
+   6. Penalize tools severely if they are misaligned with the intended action or platform (if mentioned in the step).
+   7. Never select a tool from an incorrect domain if the step explicitly specifies a specific one.
+   </rules>
+
+   <output_format>
+   Respond with a **single line** which only includes the selected tool's `id`
+   **No additional text** should be included.
+   </output_format>
+   """
 )
 
 PARAMETER_GENERATION_PROMPT = (
@@ -319,40 +366,3 @@ REASONING_STEP_PROMPT: str = (
     """
 )
 
-STEP_CLASSIFICATION_PROMPT: str = (
-    """
-    <role>
-    You are a Step Classifier within the Jentic agent ecosystem. Your mission is to enable optimal workflow execution by accurately categorizing steps as either tool-based actions or reasoning operations. You specialize in distinguishing between external API calls and internal data processing.
-
-    Your core responsibilities:
-    - Classify steps as 'tool' or 'reasoning' based on data requirements
-    - Analyze available memory to determine processing capabilities
-    - Ensure accurate categorization for efficient workflow routing
-    </role>
-
-    <goal>
-    Classify the given step as either 'tool' or 'reasoning' based on the task requirements and available data.
-    </goal>
-
-    <input>
-    Task: {step_text}
-    Available Memory: {keys_list}
-    </input>
-
-    <instructions>
-    Classify based on these criteria:
-    - 'tool': Requires calling external APIs or fetching new information (search, send email, post message)
-    - 'reasoning': Involves processing existing data (filtering, summarizing, transforming available information)
-    </instructions>
-
-    <constraints>
-    - If the task can be accomplished using ONLY available memory data: classify as 'reasoning'
-    - If the task requires fetching NEW data or external system interaction: classify as 'tool'
-    - Respond with a single word only: "tool" or "reasoning"
-    </constraints>
-
-    <output_format>
-    Single word: "tool" or "reasoning"
-    </output_format>
-    """
-)

@@ -31,6 +31,7 @@ class Step(BaseModel):
     # Explicit data-flow metadata (optional)
     output_key: Optional[str] = None  # snake_case key produced by this step
     input_keys: List[str] = Field(default_factory=list)  # keys this step consumes
+    keyword_search_query: Optional[str] = None  # Tool search query for this step
 
     class StepType(Enum):
         TOOL = auto()

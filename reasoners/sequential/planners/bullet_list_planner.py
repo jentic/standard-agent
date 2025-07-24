@@ -22,27 +22,49 @@ def _parse_bullet_plan(markdown: str) -> Deque[Step]:
     """Parse a flat markdown bullet list into a queue of ``Step`` objects."""
 
     steps: Deque[Step] = deque()
-    for raw_line in markdown.splitlines():
+    lines = markdown.splitlines()
+    i = 0
+    
+    while i < len(lines):
+        raw_line = lines[i]
         if not raw_line.strip() or not _BULLET_PATTERN.match(raw_line):
+            i += 1
             continue
+            
         stripped = _strip_bullet(raw_line)
         input_keys: List[str] = []
         output_key = None
+        keyword_search_query = None
+        
+        # Parse input/output directives
         for io_match in _IO_DIRECTIVE_PATTERN.finditer(stripped):
             kind, payload = io_match.groups()
             if kind == "output":
                 output_key = payload.strip()
             else:
                 input_keys = [k.strip() for k in payload.split(',') if k.strip()]
+        
         cleaned_text = _IO_DIRECTIVE_PATTERN.sub("", stripped).strip()
+        
+        # Check next line for keyword search query
+        if i + 1 < len(lines):
+            next_line = lines[i + 1].strip()
+            if next_line.startswith("→ keyword search query:"):
+                keyword_search_query = next_line.split("→ keyword search query:", 1)[1].strip().strip('"')
+                i += 1  # Skip the keyword line in next iteration
+        
+        # Create step with all parsed information
         steps.append(
             Step(
                 text=cleaned_text,
                 output_key=output_key,
                 input_keys=input_keys,
+                keyword_search_query=keyword_search_query,
             )
         )
         logger.debug(f"phase=PLAN PARSED SUCCESSFULLY")
+        i += 1
+        
     return steps
 
 def _validate_plan(steps: Deque[Step]) -> None:
