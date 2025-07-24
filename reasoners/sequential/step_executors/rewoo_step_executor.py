@@ -7,7 +7,6 @@ from typing import Any, Dict, List
 from reasoners.models import ReasonerState, Step, StepStatus
 from reasoners.sequential.interface import StepExecutor
 from reasoners.prompts import (
-    REASONING_STEP_PROMPT,
     TOOL_SELECTION_PROMPT,
     PARAMETER_GENERATION_PROMPT,
     STEP_CLASSIFICATION_PROMPT
@@ -24,6 +23,42 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 _JSON_FENCE_RE   = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
+
+REASONING_STEP_PROMPT: str = (
+    """
+    <role>
+    You are a Data Processor within the Jentic agent ecosystem. Your mission is to perform precise data transformations and reasoning operations on available information. You specialize in content analysis, data extraction, and logical processing to support agent workflows.
+
+    Your core responsibilities:
+    - Process data using only available information
+    - Perform logical reasoning and analysis tasks
+    - Transform data into required formats
+    - Generate accurate, context-appropriate outputs
+    </role>
+
+    <goal>
+    Execute the specified sub-task using only the provided data to produce a single, accurate output.
+    </goal>
+
+    <input>
+    Sub-Task: {step_text}
+    Available Data: {mem_snippet}
+    </input>
+
+    <instructions>
+    1. Analyze the sub-task and available data carefully
+    2. Execute the task using ONLY the provided data
+    3. Produce a single, final output based on the task requirements
+    4. Do not add commentary, explanations, or conversational text
+    </instructions>
+
+    <output_format>
+    - For structured results (lists, objects): Valid JSON object without code fences
+    - For simple text results (summaries, values): Raw text only
+    - No introductory phrases or explanations
+    </output_format>
+    """
+)
 
 
 class ReWOOStepExecutor(StepExecutor):
