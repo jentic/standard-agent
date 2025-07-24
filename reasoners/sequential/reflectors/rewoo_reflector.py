@@ -5,6 +5,7 @@ from typing import Dict, Any
 
 from reasoners.models import ReasonerState, Step, StepStatus
 from reasoners.sequential.interface import Reflector
+from reasoners.prompts import ALTERNATIVE_TOOLS_SECTION
 from tools.exceptions import ToolExecutionError
 from reasoners.sequential.exceptions import (
     ParameterGenerationError,
@@ -16,92 +17,46 @@ logger = get_logger(__name__)
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
 
-### Prompts ###
 BASE_REFLECTION_PROMPT: str = (
-    """You are a self-healing reasoning engine. A step in your plan failed. Your task is to analyze the error and propose a single, precise fix.
-
-🛑 **OUTPUT FORMAT REQUIREMENT** 🛑
-Your reply MUST be a single, raw, valid JSON object. No explanation, no markdown, no backticks.
-Your reply MUST start with '{{' and end with '}}' - nothing else.
-
-**JSON Schema (for reference only, do NOT include this block in your reply)**
-{{
-  "reasoning": "A brief explanation of why the step failed.",
-  "action": "one of 'retry_params', 'change_tool', 'rephrase_step', or 'give_up'",
-  "tool_id": "(Required if action is 'change_tool') The ID of the new tool to use.",
-  "params": "(Required if action is 'retry_params' or 'change_tool') A valid JSON object of parameters for the tool.",
-  "step": "(Required if action is 'rephrase_step') The new, improved text for the step."
-}}
-
-
-**Example of a valid response (for reference only):**
-{{
-  "reasoning": "The error indicates a required parameter 'channel_id' was missing, which can be extracted from the goal.",
-  "action": "retry_params",
-  "params": {{
-    "channel_id": "#general",
-    "content": "Welcome!"
-  }}
-}}
-
-
----
-
-✅ BEFORE YOU RESPOND, SILENTLY SELF-CHECK:
-1. Does your reply start with '{{' and end with '}}'?
-2. Is your reply valid JSON parsable by `JSON.parse()`?
-3. Are all required keys present and correctly typed?
-4. Have you removed ALL markdown, code fences, and explanatory text?
-   - If any check fails, REGENERATE your answer.
-
----
-
-**Your Turn: Real Context**
-
-**Goal:**
-{goal}
-
-**Failed Step:**
-{step}
-
-**Failed Tool:**
-{failed_tool_id}
-
-**Error:**
-{error_type}: {error_message}
-
-**Tool Schema (if available):**
-{tool_schema}
-"""
-)
-
-ALTERNATIVE_TOOLS_SECTION: str = (
     """
-    **Alternative Tools:**
-    The previous tool failed. Please select a more suitable tool from the following list to achieve the step's goal.
-    {alternative_tools}
-    """
-)
+    <role>
+    You are a Self-Healing Engine operating within the Jentic agent ecosystem. Your mission is to enable resilient agentic applications by diagnosing step failures and proposing precise corrective actions. You specialize in error analysis, parameter adjustment, and workflow recovery to maintain system reliability.
 
-JSON_CORRECTION_PROMPT: str = (
-    """Your previous response was not valid JSON. Please correct it.
+    Your core responsibilities:
+    - Analyze step failures and identify root causes
+    - Propose targeted fixes for parameter or tool issues
+    - Maintain workflow continuity through intelligent recovery
+    - Enable autonomous error resolution within the agent pipeline
+    </role>
 
-    STRICT RULES:
-    1.  Your reply MUST be a single, raw, valid JSON object.
-    2.  Do NOT include any explanation, markdown, or code fences.
-    3.  Do NOT change the data, only fix the syntax.
+    <goal>
+    Analyze the failed step and propose a single, precise fix that will allow the workflow to continue successfully.
+    </goal>
 
-    Original Prompt:
-    ---
-    {original_prompt}
-    ---
+    <input>
+    Goal: {goal}
+    Failed Step: {step}
+    Failed Tool: {failed_tool_id}
+    Error: {error_type}: {error_message}
+    Tool Schema: {tool_schema}
+    </input>
 
-    Faulty JSON Response:
-    ---
-    {bad_json}
-    ---
+    <constraints>
+    - Output ONLY valid JSON - no explanation, markdown, or backticks
+    - Must start with '{{' and end with '}}'
+    - Choose one action: 'retry_params', 'change_tool', 'rephrase_step', or 'give_up'
+    - Provide all required fields for the chosen action
+    </constraints>
 
-    Corrected JSON Response:
+    <output_format>
+    {{
+      "reasoning": "Brief explanation of why the step failed",
+      "action": "one of 'retry_params', 'change_tool', 'rephrase_step', or 'give_up'",
+      "tool_id": "(Required if action is 'change_tool') The ID of the new tool to use",
+      "params": "(Required if action is 'retry_params' or 'change_tool') Valid JSON object of parameters",
+      "step": "(Required if action is 'rephrase_step') The new, improved text for the step"
+    }}
+    </output_format>
     """
 )
 
@@ -234,12 +189,23 @@ class ReWOOReflector(Reflector):
         return response
 
     def _json_or_retry(self, raw: str, prompt: str) -> Dict[str, Any]:
+        """Parse JSON with fallback for markdown-wrapped responses."""
+        # First try raw parsing
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
-            logger.warning("phase=JSON_DECODE_FAILED, attempting retry raw='%.100s...'", raw)
-            fixed = self._call_llm(
-                JSON_CORRECTION_PROMPT.format(bad_json=raw, original_prompt=prompt)
-            )
-            logger.info("phase=JSON_DECODE_RETRY_SUCCESS fixed='%.100s...'", fixed)
-            return json.loads(fixed)
+            pass
+        
+        # Try extracting from markdown code blocks
+        _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([^`]+)\s*```")
+        match = _JSON_FENCE_RE.search(raw)
+        if match:
+            extracted = match.group(1).strip()
+            try:
+                return json.loads(extracted)
+            except json.JSONDecodeError:
+                pass
+        
+        # Log failure and raise error
+        logger.warning("phase=JSON_PARSE_FAIL raw='%s'", raw)
+        raise ParameterGenerationError(f"LLM returned invalid JSON: {raw}")

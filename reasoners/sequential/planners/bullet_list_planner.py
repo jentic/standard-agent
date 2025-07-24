@@ -12,30 +12,51 @@ logger = get_logger(__name__)
 _BULLET_PATTERN = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)(.*)$")
 _IO_DIRECTIVE_PATTERN = re.compile(r"\((input|output):\s*([^)]*)\)")
 
+# Bullet List Planner specific prompt
 PLAN_GENERATION_PROMPT: str = (
     """
-    You are an expert planning assistant.
+    <role>
+    You are a world-class planning assistant operating within the Jentic platform.
+    You specialize in transforming high-level user goals into structured, step-by-step plans that can be executed by API-integrated agents.
+    </role>
 
-    TASK
-    • Decompose the *user goal* below into a **markdown bullet-list** plan.
+    <goal>
+    Decompose the user goal below into a markdown bullet-list plan.
+    </goal>
 
-    OUTPUT FORMAT
-    1. Return **only** the fenced list (triple back-ticks) — no prose before or after.
+    <output_format>
+    1. Return **only** the bullet list — no prose before or after.
     2. Each bullet should be on its own line, starting with "- ".
-    3. Each bullet = <verb> <object> … followed, in this order, by (input: key_a, key_b) (output: key_c)
+    3. Each bullet = <verb> <object> ... followed, in this order, by (input: key_a, key_b) (output: key_c)
        where the parentheses are literal.
-    4. `output:` key is mandatory when the step’s result is needed later; exactly one **snake_case** identifier.
+    4. `output:` key is mandatory when the step's result is needed later; exactly one **snake_case** identifier.
     5. `input:` is optional; if present, list comma-separated **snake_case** keys produced by earlier steps.
     6. Do **not** mention specific external tool names.
+    7. **CRITICAL**: Preserve quantity constraints from the goal throughout the plan.
+    8. **CRITICAL**: When a step consumes data with quantity constraints, propagate the constraint (e.g., if step 1 gets "3 articles", step 2 should "send 3 articles").
+    </output_format>
 
-    SELF-CHECK  
+    <self_check>
     After drafting, silently verify — regenerate the list if any check fails:
-    • All output keys unique & snake_case.  
-    • All input keys reference existing outputs.  
-    • No tool names or extra prose outside the fenced block.
+    • All output keys unique & snake_case.
+    • All input keys reference existing outputs.
+    • No tool names or extra prose outside the list.
+    </self_check>
 
-    REAL GOAL
+    <examples>
+    Example 1 — Goal: "Search 2 NYT articles about artificial intelligence and send them to Discord channel 12345"
+    - Get 2 recent New York Times articles mentioning "artificial intelligence" (output: nyt_articles)
+    - Send 2 articles as a Discord message to Discord channel 12345 (input: nyt_articles) (output: post_confirmation)
+
+    Example 2 — Goal: "Gather the latest 10 Hacker News posts about 'AI', summarise them, and email the summary to alice@example.com"
+    - Fetch latest 10 Hacker News posts containing "AI" (output: hn_posts)
+    - Summarise hn_posts into a concise bullet list (input: hn_posts) (output: summary_text)
+    - Email summary_text to alice@example.com (input: summary_text) (output: email_confirmation)
+    </examples>
+
+    <real_goal>
     Goal: {goal}
+    </real_goal>
     """
 )
 
@@ -48,19 +69,36 @@ def _parse_bullet_plan(markdown: str) -> Deque[Step]:
     """Parse a flat markdown bullet list into a queue of ``Step`` objects."""
 
     steps: Deque[Step] = deque()
-    for raw_line in markdown.splitlines():
-        if not raw_line.strip() or not _BULLET_PATTERN.match(raw_line):
+    lines = markdown.splitlines()
+    i = 0
+    
+    while i < len(lines):
+        raw_line = lines[i]
+        
+        # Skip keyword search query lines if present
+        if raw_line.strip().startswith("→ keyword search query:"):
+            i += 1
             continue
+            
+        if not raw_line.strip() or not _BULLET_PATTERN.match(raw_line):
+            i += 1
+            continue
+            
         stripped = _strip_bullet(raw_line)
         input_keys: List[str] = []
         output_key = None
+        
+        # Parse input/output directives
         for io_match in _IO_DIRECTIVE_PATTERN.finditer(stripped):
             kind, payload = io_match.groups()
             if kind == "output":
                 output_key = payload.strip()
             else:
                 input_keys = [k.strip() for k in payload.split(',') if k.strip()]
+        
         cleaned_text = _IO_DIRECTIVE_PATTERN.sub("", stripped).strip()
+        
+        # Create step with parsed information
         steps.append(
             Step(
                 text=cleaned_text,
@@ -69,6 +107,8 @@ def _parse_bullet_plan(markdown: str) -> Deque[Step]:
             )
         )
         logger.debug(f"phase=PLAN PARSED SUCCESSFULLY")
+        i += 1
+        
     return steps
 
 def _validate_plan(steps: Deque[Step]) -> None:
