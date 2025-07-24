@@ -9,3 +9,12 @@ class ToolExecutionError(Exception):
         self.tool_id = tool_id
         self.message = message
         super().__init__(f"Tool '{tool_id}': {message}")
+
+
+class MissingEnvironmentVariableError(Exception):
+    """Raised when a required environment variable for tool execution is not set."""
+
+    def __init__(self, env_var: str, *, tool_id: str):
+        self.env_var = env_var
+        self.tool_id = tool_id
+        super().__init__(f"Tool '{tool_id}': Environment variable '{env_var}' is not set.")

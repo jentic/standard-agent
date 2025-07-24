@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from tools.exceptions import ToolExecutionError
+from tools.exceptions import ToolExecutionError, MissingEnvironmentVariableError
 
 # Standard module logger
 logger = logging.getLogger(__name__)
@@ -155,6 +155,28 @@ class JenticClient:
         if hasattr(results, "model_dump"):
             results = results.model_dump(exclude_none=False)
 
+        # Validate that required environment variables are present.
+        # If multiple auth schemes are defined, at least ONE complete scheme must be satisfied.
+        env_mappings = results.get("environment_variable_mappings", {})
+        auth_schemes: Dict[str, Dict[str, str]] = env_mappings.get("auth", {})  # {scheme: {key: ENV_NAME}}
+
+        if auth_schemes:
+            unmet_by_scheme: Dict[str, List[str]] = {}
+            for scheme, mapping in auth_schemes.items():
+                missing = [env for env in mapping.values() if env and os.getenv(env) is None]
+                if missing:
+                    unmet_by_scheme[scheme] = missing
+
+            # If ALL auth schemes have missing vars, raise. Otherwise at least one scheme is satisfied.
+            if len(unmet_by_scheme) == len(auth_schemes):
+                api_name = tool_meta.get("api_name", "unknown")
+                details = "; ".join(
+                    f"{scheme}: {', '.join(vars)}" for scheme, vars in unmet_by_scheme.items()
+                )
+                raise MissingEnvironmentVariableError(
+                    f"Missing env vars ({details}) required for API '{api_name}'", tool_id=tool_id
+                )
+
         return self._format_load_results(tool_id, results)
 
 
@@ -202,11 +224,15 @@ class JenticClient:
 
             result = self._sync(exec_coro)
 
-            # The result object from the SDK has a 'status' and 'outputs'.
-            # A failure in the underlying tool execution is not an exception, but a
-            # result with a non-success status.
-            if hasattr(result, "status") and result.status != "success":
-                error_payload = result.outputs if hasattr(result, "outputs") else str(result)
+            # The SDK returns an OperationResult which exposes `success: bool` and may
+            # also provide `error` and/or `output` payloads. Treat any `success == False`
+            # as a failure irrespective of status codes.
+            if not getattr(result, "success", False):
+                error_payload = (
+                    getattr(result, "error", None)
+                    or getattr(result, "output", None)
+                    or str(result)
+                )
                 logger.warning(
                     "Tool execution reported failure for tool '%s': %s", tool_id, error_payload
                 )
