@@ -32,6 +32,8 @@ PLAN_GENERATION_PROMPT: str = (
     4. `output:` key is mandatory when the step's result is needed later; exactly one **snake_case** identifier.
     5. `input:` is optional; if present, list comma-separated **snake_case** keys produced by earlier steps.
     6. Do **not** mention specific external tool names.
+    7. **CRITICAL**: Preserve quantity constraints from the goal throughout the plan.
+    8. **CRITICAL**: When a step consumes data with quantity constraints, propagate the constraint (e.g., if step 1 gets "3 articles", step 2 should "send 3 articles").
     </output_format>
 
     <self_check>
@@ -42,9 +44,9 @@ PLAN_GENERATION_PROMPT: str = (
     </self_check>
 
     <examples>
-    Example 1 — Goal: "Search NYT articles about artificial intelligence and send them to Discord channel 12345"
-    - Get recent New York Times articles mentioning "artificial intelligence" (output: nyt_articles)
-    - Send articles as a Discord message to Discord channel 12345 (input: nyt_articles) (output: post_confirmation)
+    Example 1 — Goal: "Search 2 NYT articles about artificial intelligence and send them to Discord channel 12345"
+    - Get 2 recent New York Times articles mentioning "artificial intelligence" (output: nyt_articles)
+    - Send 2 articles as a Discord message to Discord channel 12345 (input: nyt_articles) (output: post_confirmation)
 
     Example 2 — Goal: "Gather the latest 10 Hacker News posts about 'AI', summarise them, and email the summary to alice@example.com"
     - Fetch latest 10 Hacker News posts containing "AI" (output: hn_posts)

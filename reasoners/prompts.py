@@ -124,15 +124,17 @@ PARAMETER_GENERATION_PROMPT = (
     • **Arrays**: Process each item, combine into formatted string
     • **Nested Objects**: Access properties using dot notation
     • **Quantities**: "a/an/one" = 1, "few" = 3, "several" = 5, numbers = exact
+    • **Array Slicing**: When processing arrays from memory, look for quantity constraints in the STEP text and slice accordingly
     • **Never use placeholder text** - always extract real data from memory
     </data_extraction_rules>
 
     <instructions>
     1. Analyze MEMORY for relevant data structures
     2. Extract actual values using the data extraction rules
-    3. Format content appropriately for the target API
-    4. Apply quantity constraints from step language
-    5. Generate valid parameters using only ALLOWED_KEYS
+    3. **CRITICAL**: Check STEP text for quantity constraints (e.g., "send 3 articles", "post 2 items")
+    4. If processing arrays from memory and STEP has quantity constraint, slice array to that size
+    5. Format content appropriately for the target API
+    6. Generate valid parameters using only ALLOWED_KEYS
     </instructions>
 
     <constraints>
@@ -142,13 +144,6 @@ PARAMETER_GENERATION_PROMPT = (
     - For messaging APIs: format as readable text with titles and links
     - Required parameters take priority over optional ones
     </constraints>
-
-    <simplicity_rule>
-      • **Avoid Redundant Filtering**: If the selected tool is already domain-specific (e.g., NYT API for news, Discord API for messaging), do NOT add additional
-      source/platform filters
-      • **Extract Core Intent**: Focus on the main search terms or content, ignore platform specifications that are already handled by tool selection
-      • **Minimal Parameters**: Only generate parameters that change the operation, not ones that confirm the tool choice
-    </simplicity_rule>
 
     <output_format>
     Valid JSON object starting with {{ and ending with }}
