@@ -5,6 +5,7 @@ pydantic>=2.0
 python-dotenv>=1.0.0
 litellm
 google-generativeai
+structlog
 
 # dev / quality
 pytest>=8.0

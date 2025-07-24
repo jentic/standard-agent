@@ -1,0 +1,21 @@
+# Python cache directories
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+logs/
+*.log
+
+# Environment files
+.env
+
+# Virtual environment
+.venv/
+venv/
+
+# Task and planning files
+tasks/
+plan.md
+todo.md
+count_code_lines.py

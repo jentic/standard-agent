@@ -1,28 +1,24 @@
 """
-Lightweight logging module
+Structured logging module using structlog
 
 Features
 --------
-• Console colour (auto-detect; honour NO_COLOR)
-• Optional rotating file handler
-• One-shot initialiser – respects existing root config
-• Tiny (≈ 80 LOC), stdlib-only
+• Structured logging with automatic context
+• Console colour support
+• Optional file logging with rotation
+• Automatic method entry/exit tracing
 """
 from __future__ import annotations
-import json, logging, os, sys
+import json
+import logging
+import os
+import sys
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
-from typing import Any, Dict, List
+from typing import Any, Dict
+from functools import wraps
 
-# ------------------------------------------------------------------- colour
-_ANSI = {
-    "DEBUG": "\033[36m",     # cyan
-    "INFO": "\033[32m",      # green
-    "WARNING": "\033[33m",   # yellow
-    "ERROR": "\033[31m",     # red
-    "CRITICAL": "\033[35m",  # magenta
-}
-_RESET = "\033[0m"
+import structlog
 
 
 def _supports_colour() -> bool:
@@ -32,23 +28,6 @@ def _supports_colour() -> bool:
     if sys.platform == "win32" and os.getenv("TERM") != "xterm":
         return False
     return sys.stdout.isatty()
-
-
-class _ColourFilter(logging.Filter):
-    """Adds levelname_coloured to each record."""
-    _enable = _supports_colour()
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        colour = _ANSI.get(record.levelname, "")
-        record.levelname_coloured = (
-            f"{colour}{record.levelname}{_RESET}" if self._enable and colour else record.levelname
-        )
-        return True
-
-
-# ------------------------------------------------------------------- config helpers
-_DEFAULT_FMT = "%(asctime)s | %(levelname_coloured)s | %(name)s: %(message)s"
-_DEFAULT_FILE_FMT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 
 
 def _read_cfg(path: str | Path | None) -> Dict[str, Any]:
@@ -63,58 +42,83 @@ def _read_cfg(path: str | Path | None) -> Dict[str, Any]:
         raise ValueError(f"Invalid JSON in logging config: {e}") from e
 
 
-# ------------------------------------------------------------------- public API
 def init_logger(config_path: str | Path | None = None) -> None:
-    """
-    Configure the *root* logger.
-
-    If root already has handlers, we respect the existing configuration.
-    """
-    root = logging.getLogger()
-    if root.handlers:
-        return  # app/framework configured logging already – do nothing
-
+    """Configure structlog with console and optional file output."""
     cfg = _read_cfg(config_path)
+    
+    # Configure standard library logging first
+    logging.basicConfig(
+        format="%(message)s",
+        stream=sys.stdout,
+        level=getattr(logging, cfg.get("level", "INFO").upper(), logging.INFO),
+    )
 
-    level = getattr(logging, cfg.get("level", "INFO").upper(), logging.INFO)
-    root.setLevel(level)
+    # Configure structlog processors
+    processors = [
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="ISO"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
 
-    # ---------------- console ----------------
-    if cfg.get("console", {}).get("enabled", True):
-        h = logging.StreamHandler(stream=sys.stdout)
-        h.addFilter(_ColourFilter())
-        fmt = cfg.get("console", {}).get("format", _DEFAULT_FMT)
-        h.setFormatter(logging.Formatter(fmt))
-        root.addHandler(h)
+    # Add console renderer
+    if _supports_colour():
+        processors.append(structlog.dev.ConsoleRenderer(colors=True))
+    else:
+        processors.append(structlog.dev.ConsoleRenderer(colors=False))
 
-    # ---------------- file -------------------
+    # Configure structlog
+    structlog.configure(
+        processors=processors,  # type: ignore[arg-type]
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    # Setup file logging if enabled
     file_cfg = cfg.get("file", {})
     if file_cfg.get("enabled", False):
         path = Path(file_cfg.get("path", "logs/app.log"))
         path.parent.mkdir(parents=True, exist_ok=True)
 
         if file_cfg.get("rotation", {}).get("enabled", True):
-            h = RotatingFileHandler(
+            handler = RotatingFileHandler(
                 path,
                 maxBytes=file_cfg.get("rotation", {}).get("max_bytes", 10_000_000),
                 backupCount=file_cfg.get("rotation", {}).get("backup_count", 5),
             )
         else:
-            h = logging.FileHandler(path)
+            handler = logging.FileHandler(path)  # type: ignore[assignment]
 
-        h.setLevel(getattr(logging, file_cfg.get("level", "DEBUG").upper(), logging.DEBUG))
-        h.setFormatter(logging.Formatter(file_cfg.get("format", _DEFAULT_FILE_FMT)))
-        root.addHandler(h)
-
-
-def reload_logger(config_path: str | Path) -> None:
-    """
-    Reconfigure logging at runtime (clears current root handlers).
-    """
-    logging.getLogger().handlers.clear()
-    init_logger(config_path)
+        handler.setLevel(getattr(logging, file_cfg.get("level", "DEBUG").upper(), logging.DEBUG))
+        formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+        handler.setFormatter(formatter)
+        
+        # Add to root logger
+        logging.getLogger().addHandler(handler)
 
 
-def get_logger(name: str) -> logging.Logger:
-    """Shortcut to `logging.getLogger(name)`."""
-    return logging.getLogger(name)
+def get_logger(name: str):
+    """Get a structlog logger instance."""
+    return structlog.get_logger(name)
+
+
+def trace_method(func):
+    """Decorator to automatically trace method entry/exit at debug level."""
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        logger = get_logger(func.__module__)
+        method_name = f"{self.__class__.__name__}.{func.__name__}"
+        
+        logger.debug("method_entry", method=method_name)
+        try:
+            result = func(self, *args, **kwargs)
+            logger.debug("method_exit", method=method_name, success=True)
+            return result
+        except Exception as e:
+            logger.debug("method_exit", method=method_name, success=False, error=str(e))
+            raise
+    return wrapper
