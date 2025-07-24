@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from tools.exceptions import ToolExecutionError
+from tools.exceptions import ToolExecutionError, MissingEnvironmentVariableError
 
 # Standard module logger
 logger = logging.getLogger(__name__)
@@ -154,6 +154,28 @@ class JenticClient:
         # Convert Pydantic → dict for downstream processing.
         if hasattr(results, "model_dump"):
             results = results.model_dump(exclude_none=False)
+
+        # Validate that required environment variables are present.
+        # If multiple auth schemes are defined, at least ONE complete scheme must be satisfied.
+        env_mappings = results.get("environment_variable_mappings", {})
+        auth_schemes: Dict[str, Dict[str, str]] = env_mappings.get("auth", {})  # {scheme: {key: ENV_NAME}}
+
+        if auth_schemes:
+            unmet_by_scheme: Dict[str, List[str]] = {}
+            for scheme, mapping in auth_schemes.items():
+                missing = [env for env in mapping.values() if env and os.getenv(env) is None]
+                if missing:
+                    unmet_by_scheme[scheme] = missing
+
+            # If ALL auth schemes have missing vars, raise. Otherwise at least one scheme is satisfied.
+            if len(unmet_by_scheme) == len(auth_schemes):
+                api_name = tool_meta.get("api_name", "unknown")
+                details = "; ".join(
+                    f"{scheme}: {', '.join(vars)}" for scheme, vars in unmet_by_scheme.items()
+                )
+                raise MissingEnvironmentVariableError(
+                    f"Missing env vars ({details}) required for API '{api_name}'", tool_id=tool_id
+                )
 
         return self._format_load_results(tool_id, results)
 

@@ -12,6 +12,7 @@ from inbox.cli_inbox import CLIInbox
 from outbox.cli_outbox import CLIOutbox
 from agents.prebuilt_agents import get_rewoo_agent
 from agents.models import Goal
+from tools.exceptions import MissingEnvironmentVariableError
 
 POLL_DELAY = 2.0
 
@@ -46,6 +47,10 @@ def main() -> None:
         except KeyboardInterrupt:
             logger.info("🤖 Bye!")
             break
+
+        except MissingEnvironmentVariableError as exc:
+            logger.error(f"🤖 Missing environment variable: {exc}, please set it and restart the agent.")
+            time.sleep(POLL_DELAY)
 
         except Exception as exc:
             logger.exception(f"🤖 Solve failed exception: {exc}")
