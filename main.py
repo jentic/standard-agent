@@ -12,7 +12,7 @@ from inbox.cli_inbox import CLIInbox
 from outbox.cli_outbox import CLIOutbox
 from agents.prebuilt_agents import get_rewoo_agent
 from agents.models import Goal
-from tools.exceptions import MissingEnvironmentVariableError
+from tools.exceptions import MissingAPIKeyError
 
 POLL_DELAY = 2.0
 
@@ -48,8 +48,20 @@ def main() -> None:
             logger.info("🤖 Bye!")
             break
 
-        except MissingEnvironmentVariableError as exc:
-            logger.error(f"🤖 Missing environment variable: {exc}, please set it and restart the agent.")
+        except MissingAPIKeyError as exc:
+            # Show friendly guidance (exc message may be LLM-generated)
+            print(f"\n{exc}\n")
+            env_var = exc.env_var
+            api = exc.api_name or "API"
+            while True:
+                user_val = input(f"🔑 Provide {env_var} for {api} as {env_var}=<value>: ").strip()
+                try:
+                    key, val = map(str.strip, user_val.split("=", 1))
+                    os.environ[key] = val
+                    break
+                except ValueError:
+                    print("Format must be ENV_VAR=value")
+
             time.sleep(POLL_DELAY)
 
         except Exception as exc:

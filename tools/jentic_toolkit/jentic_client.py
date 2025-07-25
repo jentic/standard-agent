@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from tools.exceptions import ToolExecutionError, MissingEnvironmentVariableError
+from tools.exceptions import ToolExecutionError, MissingAPIKeyError
 
 # Standard module logger
 logger = logging.getLogger(__name__)
@@ -173,8 +173,12 @@ class JenticClient:
                 details = "; ".join(
                     f"{scheme}: {', '.join(vars)}" for scheme, vars in unmet_by_scheme.items()
                 )
-                raise MissingEnvironmentVariableError(
-                    f"Missing env vars ({details}) required for API '{api_name}'", tool_id=tool_id
+                first_missing = next(iter(unmet_by_scheme.values()))[0]
+                raise MissingAPIKeyError(
+                    env_var=first_missing,
+                    tool_id=tool_id,
+                    api_name=api_name,
+                    message=f"Missing env vars ({details}) required for API '{api_name}'",
                 )
 
         return self._format_load_results(tool_id, results)
