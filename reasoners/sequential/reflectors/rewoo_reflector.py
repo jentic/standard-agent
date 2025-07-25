@@ -177,7 +177,7 @@ class ReWOOReflector(Reflector):
                 logger.debug("phase=LOAD_TOOL_SCHEMA_SUCCESS")
                 return schema
             except Exception as e:
-                logger.warning(f"phase=LOAD_TOOL_SCHEMA_FAILED tool_id={tool_id} error={e}", tool_id)
+                logger.warning("phase=LOAD_TOOL_SCHEMA_FAILED tool_id=%s error=%s", tool_id, e)
         return {}
 
     def _add_alternatives(self, prompt: str, step: Step, failed_tool_id: str) -> str:

@@ -27,7 +27,6 @@ FINAL_ANSWER_BUILDER_PROMPT: str = (
         -   Use only the information from the log. Do NOT use outside knowledge.
         -   Present the answer clearly using Markdown for formatting (e.g., headings, lists, bold text).
         -   Do NOT reveal the internal monologue, failed steps, or raw data snippets. Your tone should be that of a helpful, expert assistant.
-
     **Final Answer:**
     """
 )
@@ -52,7 +51,7 @@ class FinalAnswerBuilder(AnswerBuilder):
 
         try:
             reply = (self.llm.chat([{"role": "user", "content": prompt}],).strip())
-            logger.info(f"FINAL ANSWER: {reply}")
+            logger.debug(f"FINAL ANSWER: {reply}")
             logger.debug(f"phase=SYNTHESIZE_LLM_REPLY reply={reply}")
 
             if not reply:
