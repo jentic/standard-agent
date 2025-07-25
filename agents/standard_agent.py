@@ -13,6 +13,7 @@ from  reasoners.base_reasoner import BaseReasoner
 from  llm.base_llm import BaseLLM
 from  reasoners.models import ReasoningResult
 from  tools.interface import ToolInterface
+from  tools.exceptions import MissingAPIKeyError
 
 from  uuid import uuid4
 from  enum import Enum
@@ -70,6 +71,30 @@ class StandardAgent:
             self._state = AgentState.READY
             return result
 
+        except MissingAPIKeyError as exc:
+            # Use LLM to craft a user-friendly help message, then raise again.
+            self._state = AgentState.NEEDS_ATTENTION
+            if self.llm:
+                prompt = (
+                    "You are an assistant helping a user provide a missing API key.\n"
+                    f"Missing environment variable: {exc.env_var}\n"
+                    f"API / Service: {getattr(exc, 'api_name', 'unknown')}\n\n"
+                    "Write a concise instruction explaining how the user can obtain this key "
+                    "and how to set it using the format ENV_VAR=value (suitable for CLI or Discord).\n"
+                )
+                try:
+                    print('Missing key prompt:', prompt)
+                    friendly_msg = self.llm.chat([{"role": "user", "content": prompt}]).strip()
+                    raise MissingAPIKeyError(
+                        env_var=exc.env_var,
+                        tool_id=exc.tool_id,
+                        api_name=getattr(exc, "api_name", None),
+                        message=friendly_msg,
+                    ) from exc
+                except Exception:
+                    # If LLM fails, fall back to original exception
+                    raise
+            raise
         except Exception:
             self._state = AgentState.NEEDS_ATTENTION
             raise

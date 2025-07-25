@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 from reasoners.base_reasoner import BaseReasoner
 from reasoners.models import ReasoningResult, ReasonerState, Step
 from reasoners.sequential.interface import Planner, Reflector, StepExecutor, AnswerBuilder
-from tools.exceptions import MissingEnvironmentVariableError
+from tools.exceptions import MissingAPIKeyError
 
 from collections import deque
 
@@ -64,9 +64,9 @@ class SequentialReasoner(BaseReasoner):
                 if isinstance(meta, dict):
                     tool_calls.append(meta)
                 iterations += 1
-            except MissingEnvironmentVariableError as exc:
-                state.history.append(f"Missing environment variable: {getattr(exc, 'env_var', str(exc))}")
-                break
+            except MissingAPIKeyError:
+                # Propagate upward so the Agent/integration layer can handle user input.
+                raise
             except Exception as exc:
                 if self.reflector:
                     self.reflector.handle(exc, step, state)
