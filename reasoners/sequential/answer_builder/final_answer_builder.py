@@ -27,11 +27,6 @@ FINAL_ANSWER_BUILDER_PROMPT: str = (
         -   Use only the information from the log. Do NOT use outside knowledge.
         -   Present the answer clearly using Markdown for formatting (e.g., headings, lists, bold text).
         -   Do NOT reveal the internal monologue, failed steps, or raw data snippets. Your tone should be that of a helpful, expert assistant.
-    4.  **Missing environment variable:** 
-        -   If the log contains a missing environment variable, you MUST reply suggesting the user to set it.
-        -   If you are able to provide hints to the user on how to create the API KEY, you MUST do so.
-            - Example: To create for new york times search API key, visit https://developer.nytimes.com/.
-        -   Providing hints on how to set the env variable is also acceptable. example env file here standard_agent/.env.example
     **Final Answer:**
     """
 )
