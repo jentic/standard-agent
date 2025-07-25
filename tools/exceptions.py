@@ -25,7 +25,9 @@ class MissingAPIKeyError(Exception):
         self.env_var = env_var
         self.tool_id = tool_id
         self.api_name = api_name
+        self.message = message
         base_msg = message or f"Environment variable '{env_var}' is not set with the required API KEY."
         if api_name:
             base_msg += f" (required for API '{api_name}')"
-        super().__init__(f"Tool '{tool_id}': {base_msg}")
+        self.message = f"Tool '{tool_id}': {base_msg}"
+        super().__init__(self.message)
