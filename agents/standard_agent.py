@@ -7,7 +7,7 @@ agent owns the services; the reasoner simply uses what the agent provides.
 """
 from __future__ import annotations
 
-from  agents.models import Goal
+from  agents.models import Goal, PendingAPIKeyInfo
 from  memory.base_memory import BaseMemory
 from  reasoners.base_reasoner import BaseReasoner
 from  llm.base_llm import BaseLLM
@@ -17,11 +17,13 @@ from  tools.exceptions import MissingAPIKeyError
 
 from  uuid import uuid4
 from  enum import Enum
+import os
 
 class AgentState(str, Enum):
-    READY               = "READY"
-    BUSY                = "BUSY"
-    NEEDS_ATTENTION     = "NEEDS_ATTENTION"
+    READY                   = "READY"
+    BUSY                    = "BUSY"
+    NEEDS_ATTENTION         = "NEEDS_ATTENTION"
+    WAITING_FOR_API_KEY     = "WAITING_FOR_API_KEY"
 
 class StandardAgent:
     """Wires together a reasoner with shared services (LLM, memory, tools)."""
@@ -51,6 +53,7 @@ class StandardAgent:
         self.reasoner.attach_services(llm=llm, tools=tools, memory=memory)
 
         self._state: AgentState = AgentState.READY
+        self._pending_api_key_info: PendingAPIKeyInfo | None = None
 
     @property
     def state(self) -> AgentState:
@@ -72,7 +75,6 @@ class StandardAgent:
             return result
 
         except MissingAPIKeyError as exc:
-            self._state = AgentState.NEEDS_ATTENTION
             if self.llm:
                 prompt = (
                     "You are an assistant helping a user provide a **missing API key**.\n\n"
@@ -87,6 +89,13 @@ class StandardAgent:
                 )
                 try:
                     friendly_msg = self.llm.chat([{"role": "user", "content": prompt}]).strip()
+                    self._state = AgentState.WAITING_FOR_API_KEY
+                    self._pending_api_key_info = PendingAPIKeyInfo(
+                        env_var=exc.env_var,
+                        tool_id=exc.tool_id,
+                        api_name=getattr(exc, "api_name", None),
+                        user_help_message=friendly_msg
+                    )
                     raise MissingAPIKeyError(
                         env_var=exc.env_var,
                         tool_id=exc.tool_id,
@@ -94,9 +103,25 @@ class StandardAgent:
                         message=friendly_msg,
                     ) from exc
                 except Exception:
-                    # If LLM fails, fall back to original exception
                     raise
             raise
         except Exception:
             self._state = AgentState.NEEDS_ATTENTION
             raise
+
+    def accept_api_key(self, key: str, value: str) -> None:
+        """
+        Injects the missing API key into the environment and resets state.
+        """
+        if not self._pending_api_key_info:
+            raise RuntimeError("No API key is currently pending")
+
+        os.environ[key] = value
+        self._pending_api_key_info = None
+        self._state = AgentState.READY
+
+    def get_pending_api_key_info(self) -> PendingAPIKeyInfo | None:
+        """
+        Returns info about the missing key, or None if not waiting.
+        """
+        return self._pending_api_key_info
