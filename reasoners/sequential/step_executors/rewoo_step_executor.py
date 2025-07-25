@@ -230,6 +230,13 @@ class ReWOOStepExecutor(StepExecutor):
 
     # ---------- tool selection -----------------------------------------
     def _select_tool(self, step: Step) -> str:
+        # Check memory for a forced tool_id from the reflector
+        forced_tool_key = f"forced_tool:{step.text}"
+        if forced_tool_id := self.memory.retrieve(forced_tool_key):
+            logger.info(f"phase=FORCED_TOOL_USED tool_id='{forced_tool_id}'")
+            self.memory.delete(forced_tool_key)
+            return forced_tool_id
+
         tools = self.tools.search(step.text, top_k=20)
         prompt = TOOL_SELECTION_PROMPT.format(
             step=step.text,
@@ -247,11 +254,20 @@ class ReWOOStepExecutor(StepExecutor):
     def _generate_params(
         self, step: Step, tool_id: str, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
+        # Check memory for forced parameters from the reflector
+        forced_params_key = f"forced_params:{step.text}"
+        if forced_params := self.memory.retrieve(forced_params_key):
+            logger.info(f"phase=FORCED_PARAMS_USED params='{forced_params}'")
+            self.memory.delete(forced_params_key)
+            return forced_params
+
+        # If no forced params, generate them using the LLM
         raw = ""
         try:
-            schema = self._get_tool(tool_id).parameters or {}
+            tool = self._get_tool(tool_id)
+            schema = tool.parameters or {}
             allowed = ",".join(schema.keys())
-            prompt  = PARAMETER_GENERATION_PROMPT.format(
+            prompt = PARAMETER_GENERATION_PROMPT.format(
                 step=step.text,
                 tool_schema=json.dumps(schema, ensure_ascii=False),
                 step_inputs=json.dumps(inputs, ensure_ascii=False),
