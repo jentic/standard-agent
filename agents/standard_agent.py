@@ -104,12 +104,7 @@ class StandardAgent:
                         api_name=getattr(exc, "api_name", None),
                         user_help_message=friendly_msg
                     )
-                    raise MissingAPIKeyError(
-                        env_var=exc.env_var,
-                        tool_id=exc.tool_id,
-                        api_name=getattr(exc, "api_name", None),
-                        message=friendly_msg,
-                    ) from exc
+                    raise exc
                 except Exception:
                     raise
             raise

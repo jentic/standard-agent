@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from inbox.cli_inbox import CLIInbox
 from outbox.cli_outbox import CLIOutbox
 from agents.prebuilt_agents import get_rewoo_agent
-from agents.models import Goal
+from agents.models import Goal, PendingAPIKeyInfo
 from tools.exceptions import MissingAPIKeyError
 
 POLL_DELAY = 2.0
@@ -21,15 +21,12 @@ from utils.logger import get_logger, init_logger
 logger = get_logger(__name__)
 
 
-def prompt_for_missing_api_key(exc: MissingAPIKeyError) -> tuple[str, str]:
+def prompt_for_missing_api_key(info: PendingAPIKeyInfo) -> tuple[str, str]:
     """
     Prompt the user to provide a missing API key.
     Optionally persist it to the `.env` file.
     """
-    env_var = exc.env_var
-    api = exc.api_name or "API"
-
-    print(f"\n🔑 Missing key for {api}. Required: `{env_var}`")
+    env_var = info.env_var
     while True:
         user_val = input(f"Enter `{env_var}` as `{env_var}=<value>`: ").strip()
         try:
@@ -97,11 +94,11 @@ def main() -> None:
             logger.info("🤖 Bye!")
             break
 
-        except MissingAPIKeyError as exc:
+        except MissingAPIKeyError:
             info = agent.get_pending_api_key_info()
             print(info.user_help_message)
             try:
-                prompt_for_missing_api_key(exc)
+                prompt_for_missing_api_key(info)
                 retry_buffer.append(goal_text)
             except KeyboardInterrupt:
                 logger.info("⚠️ Aborted key entry.")
