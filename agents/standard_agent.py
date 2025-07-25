@@ -72,18 +72,20 @@ class StandardAgent:
             return result
 
         except MissingAPIKeyError as exc:
-            # Use LLM to craft a user-friendly help message, then raise again.
             self._state = AgentState.NEEDS_ATTENTION
             if self.llm:
                 prompt = (
-                    "You are an assistant helping a user provide a missing API key.\n"
-                    f"Missing environment variable: {exc.env_var}\n"
+                    "You are an assistant helping a user provide a **missing API key**.\n\n"
+                    f"Missing environment variable: `{exc.env_var}`\n"
                     f"API / Service: {getattr(exc, 'api_name', 'unknown')}\n\n"
-                    "Write a concise instruction explaining how the user can obtain this key "
-                    "and how to set it using the format ENV_VAR=value (suitable for CLI or Discord).\n"
+                    "Please craft a short, actionable message for the user that includes:\n"
+                    "1. A one-line explanation of why the key is required.\n"
+                    "2. If you know how to obtain or generate this key, provide a brief hint or official link.\n"
+                    "3. Show exactly how to send the key back in the format: `{exc.env_var}=<value>`.\n"
+                    "4. Optionally mention that they can add it to an `.env` file for future runs.\n\n"
+                    "Return only the helpful instructions—no extra commentary.\n"
                 )
                 try:
-                    print('Missing key prompt:', prompt)
                     friendly_msg = self.llm.chat([{"role": "user", "content": prompt}]).strip()
                     raise MissingAPIKeyError(
                         env_var=exc.env_var,
