@@ -16,7 +16,7 @@ class Goal:
 
 @dataclass
 class PendingAPIKeyInfo:
-    """Represents a missing API info object."""
+    """Represents a missing API KEY info object."""
 
     env_var: str
     tool_id: str

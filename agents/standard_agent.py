@@ -90,6 +90,7 @@ class StandardAgent:
             return result
 
         except MissingAPIKeyError as exc:
+            friendly_msg = f"Missing API Key for {exc.api_name or 'a required tool'}. Please provide a value for the environment variable: `{exc.env_var}`"
             if self.llm:
                 prompt = MISSING_API_KEY_PROMPT.format(
                     env_var=exc.env_var,
@@ -97,17 +98,19 @@ class StandardAgent:
                 )
                 try:
                     friendly_msg = self.llm.chat([{"role": "user", "content": prompt}]).strip()
-                    self._state = AgentState.WAITING_FOR_API_KEY
-                    self._pending_api_key_info = PendingAPIKeyInfo(
-                        env_var=exc.env_var,
-                        tool_id=exc.tool_id,
-                        api_name=getattr(exc, "api_name", None),
-                        user_help_message=friendly_msg
-                    )
-                    raise exc
                 except Exception:
-                    raise
-            raise
+                    pass
+
+            self._state = AgentState.WAITING_FOR_API_KEY
+            self._pending_api_key_info = PendingAPIKeyInfo(
+                env_var=exc.env_var,
+                tool_id=exc.tool_id,
+                api_name=getattr(exc, "api_name", None),
+                user_help_message=friendly_msg
+            )
+
+            raise exc
+
         except Exception:
             self._state = AgentState.NEEDS_ATTENTION
             raise
