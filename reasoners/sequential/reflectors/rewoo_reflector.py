@@ -110,6 +110,7 @@ class ReWOOReflector(Reflector):
     """Retry-oriented reflection for ReWOO executors."""
 
     def __init__(self, *, max_retries: int = 2):
+        super().__init__()
         self.max_retries = max_retries
         logger.info("phase=REWOO_REFLECTOR_INITIALIZED max_retries=%d", self.max_retries)
 
@@ -127,8 +128,8 @@ class ReWOOReflector(Reflector):
             error.__class__.__name__,
             step.text,
         )
-        if not (self.llm and self.tools and self.memory):
-            raise RuntimeError("attach_services() not called on Reflector")
+        if any(s is None for s in (self._llm, self._tools, self._memory)):
+            raise RuntimeError(f"{__name__}: Services llm, tools, and memory not attached")
 
         step.status, step.error = StepStatus.FAILED, str(error)
 

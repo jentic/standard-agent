@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+from collections import deque
 
 from reasoners.base_reasoner import BaseReasoner
 from reasoners.models import ReasoningResult, ReasonerState, Step
 from reasoners.sequential.interface import Planner, Reflector, StepExecutor, AnswerBuilder
-from collections import deque
+from llm.base_llm import BaseLLM
+from tools.interface import ToolInterface
+from memory.base_memory import BaseMemory
 
 
 class SequentialReasoner(BaseReasoner):
@@ -14,6 +17,9 @@ class SequentialReasoner(BaseReasoner):
     def __init__(
         self,
         *,
+        llm: BaseLLM | None = None,
+        tools: ToolInterface | None = None,
+        memory: BaseMemory | None = None,
         planner: Planner | None = None,
         step_executor: StepExecutor,
         reflector: Reflector | None = None,
@@ -24,18 +30,24 @@ class SequentialReasoner(BaseReasoner):
         self.reflector = reflector
         self.answer_builder = answer_builder
 
-    # ---------- DI broadcast ------------------------------------
-    def attach_services(self, *, llm, tools, memory):
-        super().attach_services(llm=llm, tools=tools, memory=memory)
+
+        # BaseReasoner will wire up the services
+        # (broadcast them to the components by calling _pass_services_to_components in BaseReasoner __init__).
+        super().__init__(llm=llm, tools=tools, memory=memory)
+
+    # ---------- Broadcasting context to components --------------
+    def _pass_services_to_components(self) -> None:
+
+        if self._llm is None and self._tools is None and self._memory is None:
+            # not wired yet – nothing to broadcast
+            return
 
         for comp in (self.planner, self.step_executor, self.reflector, self.answer_builder):
             if comp is not None:
-                comp.attach_services(llm=llm, tools=tools, memory=memory)
+                comp.set_services(llm=self.llm, tools=self.tools, memory=self.memory)
 
     # ---------- main loop ---------------------------------------
     def run(self, goal: str, *, meta: Dict[str, Any] | None = None) -> ReasoningResult:
-        if not hasattr(self, "llm"):
-            raise RuntimeError("attach_services() was never called")
 
         meta = meta or {}
         max_iter = meta.get("max_iterations", self.DEFAULT_MAX_ITER)
@@ -46,7 +58,6 @@ class SequentialReasoner(BaseReasoner):
         if self.planner:
             state.plan = self.planner.plan(goal)
         else:
-
             state.plan = deque([Step(text=goal)])
 
         if not state.plan:

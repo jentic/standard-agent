@@ -101,13 +101,14 @@ class BulletListPlanner(Planner):
     """An LLM-based planner that generates a markdown bullet list."""
 
     def __init__(self, max_retries: int = 1):
+        super().__init__()
         self.max_retries = max_retries
 
     def plan(self, goal: str) -> Deque[Step]:
         """Generate and validate a plan, with retries on failure."""
         if not self.llm:
-            logger.error(f"{__name__}: LLM not attached. Call attach_services first.")
-            raise RuntimeError(f"{__name__}: LLM not attached. Call attach_services first.")
+            logger.error(f"{__name__}: LLM not attached")
+            raise RuntimeError(f"{__name__}: LLM not attached")
         prompt = PLAN_GENERATION_PROMPT.format(goal=goal)
         messages = [{"role": "user", "content": prompt}]
 

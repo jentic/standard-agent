@@ -131,13 +131,14 @@ class ReWOOStepExecutor(StepExecutor):
     """Executes ReWOO steps (plan-first + reflection)."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._tool_cache: Dict[str, Tool] = {}
         logger.info("phase=REWOO_STEP_EXECUTOR_INITIALIZED")
 
     # ---------- public --------------------------------------------------
     def execute(self, step: Step, state: ReasonerState) -> Dict[str, Any] | None:
-        if not (self.llm and self.tools and self.memory):
-            raise RuntimeError("Services not attached; call attach_services()")
+        if any(s is None for s in (self._llm, self._tools, self._memory)):
+            raise RuntimeError(f"{__name__}: Services llm, tools, and memory not attached")
         logger.info(f"phase=EXECUTE_STEP step_text='{step.text}'")
         step.status = StepStatus.RUNNING
         inputs = self._fetch_inputs(step)
@@ -149,7 +150,7 @@ class ReWOOStepExecutor(StepExecutor):
             self._do_reasoning(step, inputs, state)
         else:
             self._do_tool(step, inputs, state)
-        logger.info(f"phase=EXECUTE_STEP_COMPLETE result='{step.result}'")
+        logger.info(f"phase=EXECUTE_STEP_COMPLETE")
 
     # ---------- step kinds ---------------------------------------------
     def _do_reasoning(
@@ -166,7 +167,7 @@ class ReWOOStepExecutor(StepExecutor):
             step.result = reply
             step.status = StepStatus.DONE
             self._store_output(step, state)
-            logger.info("phase=REASONING_STEP_SUCCESS")
+            logger.info(f"phase=REASONING_STEP_SUCCESS result='{reply}'")
         except Exception as exc:
             logger.error(f"phase=REASONING_STEP_FAILED error='{exc}'")
             raise ReasoningStepError(str(exc)) from exc

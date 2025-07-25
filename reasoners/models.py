@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections import deque
 from enum import Enum, auto
 from typing import Any, Deque, List, Optional
-
 from pydantic import BaseModel, Field
+
 
 __all__ = [
     "Step",

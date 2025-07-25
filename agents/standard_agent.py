@@ -1,9 +1,8 @@
 """
 StandardAgent
 
-Lightweight façade that wires together the core runtime services (LLM, memory,
-external tools) with a pluggable *reasoner* implementation.  The
-agent owns the services; the reasoner simply uses what the agent provides.
+Lightweight façade that wires together the core runtime services
+(LLM, memory, external tools) with a pluggable *reasoner* implementation.
 """
 from __future__ import annotations
 
@@ -44,10 +43,10 @@ class StandardAgent:
         self.llm = llm
         self.tools = tools
         self.memory = memory
-        self.reasoner = reasoner
 
-        # Explicit handshake to wire services into the reasoner
-        self.reasoner.attach_services(llm=llm, tools=tools, memory=memory)
+        # Set llm, tools, and memory on the reasoner
+        self.reasoner = reasoner
+        self.reasoner.set_services(llm=llm, tools=tools, memory=memory)
 
         self._state: AgentState = AgentState.READY
 
@@ -59,9 +58,7 @@ class StandardAgent:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
 
-        if hasattr(self.memory, "store"):
-            self.memory.store(f"goal:{run_id}", goal)
-
+        self.memory.store(f"goal:{run_id}", goal)
         self._state = AgentState.BUSY
 
         try:
