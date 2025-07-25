@@ -1,17 +1,19 @@
 from llm.base_llm import BaseLLM
 from typing import List, Dict
+from utils.load_config import load_config
 
 class LiteLLMChatLLM(BaseLLM):
     """Wrapper around litellm.completion."""
 
     def __init__(
         self,
-        model: str = "gpt-4",
+        model: str = None,
         temperature: float = 0.2,
         max_tokens: int | None = None,
     ) -> None:
         import litellm
-        self.model = model
+        config = load_config()
+        self.model = model if model is not None else config.llm.model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._client = litellm
