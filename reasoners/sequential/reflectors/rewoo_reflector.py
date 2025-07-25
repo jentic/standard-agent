@@ -2,6 +2,7 @@ from __future__ import annotations
 import json, re
 from copy import deepcopy
 from typing import Dict, Any
+from pydantic import BaseModel
 
 from reasoners.models import ReasonerState, Step, StepStatus
 from reasoners.sequential.interface import Reflector
@@ -143,13 +144,18 @@ class ReWOOReflector(Reflector):
         failed_tool_id = failed_tool_id or getattr(error, "tool_id", "unknown")
         tool_schema    = self._tool_schema(failed_tool_id)
 
+        if isinstance(tool_schema, BaseModel):
+            tool_schema_json = tool_schema.model_dump_json(indent=2)
+        else:
+            tool_schema_json = json.dumps(tool_schema, indent=2)
+
         prompt = BASE_REFLECTION_PROMPT.format(
             goal           = state.goal,
             step           = step.text,
             failed_tool_id = failed_tool_id,
             error_type     = error.__class__.__name__,
             error_message  = str(error),
-            tool_schema    = json.dumps(tool_schema),
+            tool_schema    = tool_schema_json,
         )
 
         if isinstance(error, (ToolExecutionError, ToolSelectionError, ParameterGenerationError)):

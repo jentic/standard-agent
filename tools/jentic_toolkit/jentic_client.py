@@ -202,11 +202,15 @@ class JenticClient:
 
             result = self._sync(exec_coro)
 
-            # The result object from the SDK has a 'status' and 'outputs'.
-            # A failure in the underlying tool execution is not an exception, but a
-            # result with a non-success status.
-            if hasattr(result, "status") and result.status != "success":
-                error_payload = result.outputs if hasattr(result, "outputs") else str(result)
+            # The SDK returns an OperationResult which exposes `success: bool` and may
+            # also provide `error` and/or `output` payloads. Treat any `success == False`
+            # as a failure irrespective of status codes.
+            if not getattr(result, "success", False):
+                error_payload = (
+                    getattr(result, "error", None)
+                    or getattr(result, "output", None)
+                    or str(result)
+                )
                 logger.warning(
                     "Tool execution reported failure for tool '%s': %s", tool_id, error_payload
                 )
