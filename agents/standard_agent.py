@@ -19,6 +19,21 @@ from  uuid import uuid4
 from  enum import Enum
 import os
 
+MISSING_API_KEY_PROMPT = """
+You are an assistant helping a user provide a **missing API key**.
+
+Missing environment variable: `{env_var}`
+API / Service: {api_name}
+
+Please craft a short, actionable message for the user that includes:
+1. A one-line explanation of why the key is required.
+2. If you know how to obtain or generate this key, provide a brief hint or official link.
+3. Show exactly how to send the key back in the format: `{env_var}=<value>`.
+4. Optionally mention that they can add it to an `.env` file for future runs.
+
+Return only the helpful instructions—no extra commentary.
+"""
+
 class AgentState(str, Enum):
     READY                   = "READY"
     BUSY                    = "BUSY"
@@ -76,16 +91,9 @@ class StandardAgent:
 
         except MissingAPIKeyError as exc:
             if self.llm:
-                prompt = (
-                    "You are an assistant helping a user provide a **missing API key**.\n\n"
-                    f"Missing environment variable: `{exc.env_var}`\n"
-                    f"API / Service: {getattr(exc, 'api_name', 'unknown')}\n\n"
-                    "Please craft a short, actionable message for the user that includes:\n"
-                    "1. A one-line explanation of why the key is required.\n"
-                    "2. If you know how to obtain or generate this key, provide a brief hint or official link.\n"
-                    "3. Show exactly how to send the key back in the format: `{exc.env_var}=<value>`.\n"
-                    "4. Optionally mention that they can add it to an `.env` file for future runs.\n\n"
-                    "Return only the helpful instructions—no extra commentary.\n"
+                prompt = MISSING_API_KEY_PROMPT.format(
+                    env_var=exc.env_var,
+                    api_name=getattr(exc, "api_name", "unknown"),
                 )
                 try:
                     friendly_msg = self.llm.chat([{"role": "user", "content": prompt}]).strip()
