@@ -7,13 +7,14 @@ class LiteLLMChatLLM(BaseLLM):
 
     def __init__(
         self,
-        model: str = None,
+        model: str,
         temperature: float = 0.2,
         max_tokens: int | None = None,
     ) -> None:
         import litellm
-        config = load_config()
-        self.model = model if model is not None else config.llm.model
+        if not model:
+            raise ValueError("model parameter is required and cannot be empty")
+        self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._client = litellm

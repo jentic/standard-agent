@@ -7,8 +7,8 @@ from llm.lite_llm import LiteLLMChatLLM
 
 
 # Prebuilt ReWOO agent
-def get_rewoo_agent(model: str | None = None) -> StandardAgent:
-    llm     = LiteLLMChatLLM()
+def get_rewoo_agent(model: str) -> StandardAgent:
+    llm     = LiteLLMChatLLM(model=model)
     tools   = JenticToolInterface(client=JenticClient())
     memory  = ScratchPadMemory()
 
