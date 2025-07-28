@@ -5,7 +5,6 @@ from typing import Dict, Any
 
 from reasoners.models import ReasonerState, Step, StepStatus
 from reasoners.sequential.interface import Reflector
-from reasoners.prompts import ALTERNATIVE_TOOLS_SECTION
 from tools.exceptions import ToolExecutionError
 from reasoners.sequential.exceptions import (
     ParameterGenerationError,
@@ -16,6 +15,14 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
+
+ALTERNATIVE_TOOLS_SECTION: str = (
+    """
+    **Alternative Tools:**
+    The previous tool failed. Please select a more suitable tool from the following list to achieve the step's goal.
+    {alternative_tools}
+    """
+)
 
 BASE_REFLECTION_PROMPT: str = (
     """
