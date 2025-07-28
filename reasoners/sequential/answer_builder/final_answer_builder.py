@@ -6,7 +6,7 @@ from reasoners.sequential.interface import AnswerBuilder
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
-FINAL_ANSWER_SYNTHESIS_PROMPT: str = (
+FINAL_ANSWER_BUILDER_PROMPT: str = (
     """
     <role>
     You are the Final Answer Synthesizer for autonomous agents within the Jentic ecosystem. Your mission is to transform raw execution logs into clear, user-friendly responses that demonstrate successful goal achievement. You specialize in data interpretation, content formatting, and user communication.
@@ -64,7 +64,7 @@ class FinalAnswerBuilder(AnswerBuilder):
             logger.warning("phase=SYNTHESIZE_FALLBACK reason='No LLM attached'")
             return self._heuristic(state)
 
-        prompt = FINAL_ANSWER_SYNTHESIS_PROMPT.format(
+        prompt = FINAL_ANSWER_BUILDER_PROMPT.format(
             goal=state.goal,
             history="\n".join(state.history),
         )

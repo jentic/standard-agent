@@ -15,6 +15,7 @@ from reasoners.sequential.exceptions import (
 )
 
 from utils.logger import get_logger
+from utils.json_parser import parse_json
 logger = get_logger(__name__)
 
 _JSON_FENCE_RE   = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
@@ -337,7 +338,10 @@ class ReWOOStepExecutor(StepExecutor):
             )
             raw = self._call_llm(prompt).strip()
 
-            params = _json_or_retry(raw, prompt)
+            try:
+                params = parse_json(raw)
+            except json.JSONDecodeError as e:
+                raise ParameterGenerationError(str(e)) from e
             return {k: v for k, v in params.items() if k in schema}
         except (json.JSONDecodeError, TypeError, ValueError) as e:
             logger.error(
@@ -357,26 +361,4 @@ class ReWOOStepExecutor(StepExecutor):
 # ---------- helper funcs -----------------------------------------------
 def _is_valid_tool(reply: str, tools: List[Tool]) -> bool:
     return any(t.id == reply for t in tools)
-
-def _json_or_retry(raw: str, prompt: str) -> Dict[str, Any]:
-    """Parse JSON with fallback for markdown-wrapped responses."""
-    # First try raw parsing
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        pass
-    
-    # Try extracting from markdown code blocks
-    _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([^`]+)\s*```")
-    match = _JSON_FENCE_RE.search(raw)
-    if match:
-        extracted = match.group(1).strip()
-        try:
-            return json.loads(extracted)
-        except json.JSONDecodeError:
-            pass
-    
-    # Log failure and raise error
-    logger.warning(f"phase=JSON_PARSE_FAIL raw='{raw}'")
-    raise ParameterGenerationError(f"LLM returned invalid JSON: {raw}")
 

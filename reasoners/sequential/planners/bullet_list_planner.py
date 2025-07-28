@@ -33,7 +33,6 @@ PLAN_GENERATION_PROMPT: str = (
     5. `input:` is optional; if present, list comma-separated **snake_case** keys produced by earlier steps.
     6. Do **not** mention specific external tool names.
     7. **CRITICAL**: Preserve quantity constraints from the goal throughout the plan.
-    8. **CRITICAL**: When a step consumes data with quantity constraints, propagate the constraint (e.g., if step 1 gets "3 articles", step 2 should "send 3 articles").
     </output_format>
 
     <self_check>
@@ -75,11 +74,6 @@ def _parse_bullet_plan(markdown: str) -> Deque[Step]:
     while i < len(lines):
         raw_line = lines[i]
         
-        # Skip keyword search query lines if present
-        if raw_line.strip().startswith("→ keyword search query:"):
-            i += 1
-            continue
-            
         if not raw_line.strip() or not _BULLET_PATTERN.match(raw_line):
             i += 1
             continue
