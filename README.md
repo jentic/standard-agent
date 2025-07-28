@@ -3,9 +3,6 @@
 A **modular framework** for building AI agents that can plan, act, and **autonomously recover from failures**.
 It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool platform out of the box, but every layer is swappable.
 
-
-
-
 - [Quick Start](#quick-start)
 - [Usage Examples](#usage-examples)
 - [Project Layout](#project-layout)
@@ -64,119 +61,68 @@ We provide two ways to use the agent framework: a quick-start method using a pre
 
 #### 1. Quick Start: Running a Pre-built Agent
 
-This is the fastest way to get started. The `get_rewoo_agent` factory provides a `StandardAgent` instance that is already configured with a powerful reasoner, LLM, tools, and memory.
+This is the fastest way to get started. The `ReWOOAgent` class provides a `StandardAgent` instance that is already configured with a powerful reasoner, LLM, tools, and memory.
 
 ```python
 # main.py
-import os, time
-from agents.prebuilt_agents import get_rewoo_agent
-from inbox.cli_inbox import CLIInbox
-from outbox.cli_outbox import CLIOutbox
+import os
+from dotenv import load_dotenv
+from agents.prebuilt import ReWOOAgent
+from utils.cli import read_user_goal, print_result
 
-# 1. Get the pre-built agent. API keys are loaded from your .env file.
-agent = get_rewoo_agent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
+# Load API keys from .env file
+load_dotenv()
 
-# 2. Set up the inbox and outbox for command-line interaction.
-inbox = CLIInbox(prompt="🤖 Enter your goal: ")
-outbox = CLIOutbox()
+# 1. Get the pre-built agent.
+agent = ReWOOAgent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
 
-# 3. Run the agent's main loop.
-print("Agent is ready. Press Ctrl+C to exit.")
+# 2. Run the agent's main loop.
+print("🤖 Agent is ready. Press Ctrl+C to exit.")
 while True:
-    agent.tick(inbox, outbox)
-    time.sleep(1.0)
+    goal_text = None
+    try:
+        goal = read_user_goal()
+        if not goal:
+            continue
+        
+        result = agent.solve(goal)
+        print_result(result)
+
+    except KeyboardInterrupt:
+        print("\n🤖 Bye!")
+        break
 ```
 
-#### 2. Build Your Own Agent & Reasoner
-
-This example demonstrates the framework's true flexibility. It shows how to construct a `SequentialReasoner` from its individual components and then wire it into a `StandardAgent`.
-
-```python
-# main_build_your_own_agent.py
-import os, time
-from agents.standard_agent import StandardAgent
-from agents.llm.litellm import LiteLLM
-from agents.tools.jentic import JenticClient
-from agents.memory.scratch_pad import ScratchPadMemory
-from inbox.cli_inbox import CLIInbox
-from outbox.cli_outbox import CLIOutbox
-
-# Import the reasoner and its components
-from agents.reasoner.sequential.reasoner import SequentialReasoner
-from agents.reasoner.sequential.planners.bullet_list import BulletListPlan
-from agents.reasoner.sequential.executors.rewoo import ReWOOExecuteStep
-from agents.reasoner.sequential.reflectors.rewoo import ReWOOReflect
-from agents.reasoner.sequential.summarizer.default import DefaultSummarizeResult
-
-# 1. Manually assemble the agent's high-level components.
-llm = LiteLLM(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
-tools = JenticClient()  # Will use JENTIC_API_KEY from .env
-memory = ScratchPadMemory()
-
-# 2. Compose the SequentialReasoner from its parts.
-reasoner = SequentialReasoner(
-  plan=BulletListPlan(),
-  execute_step=ReWOOExecuteStep(),
-  reflect=ReWOOReflect(max_retries=2),
-  summarize_result=DefaultSummarizeResult(llm=llm),
-)
-
-# 3. Instantiate the StandardAgent with your custom-built reasoner.
-agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=reasoner)
-
-# 4. Set up the inbox and outbox.
-inbox = CLIInbox(prompt="🤖 Enter your goal: ")
-outbox = CLIOutbox()
-
-# 5. Run the agent's main loop.
-print("Custom agent is ready. Press Ctrl+C to exit.")
-while True:
-  agent.tick(inbox, outbox)
-  time.sleep(1.0)
-```
 
 ### Project Layout
 
 ```
 .
-├── agents/                         # High-level agent orchestration
-│   ├── models.py                   # Defines Goal, AgentState
-│   └── standard_agent.py           # The StandardAgent
-│   └── prebuilt_agents.py          # Prebuilt agents like ReWOO etc
+├── agents/
+│   ├── standard_agent.py           # The main agent class orchestrating all components
+│   ├── prebuilt.py                 # Factory functions for pre-configured agents (e.g., ReWOO)
+│   ├── llm/                        # LLM wrappers (e.g., LiteLLM)
+│   ├── memory/                     # Memory backends (e.g., in-memory dictionary)
+│   ├── tools/                      # Tool integrations (e.g., Jentic client)
+│   └── reasoner/                   # Core reasoning and execution logic
+│       ├── base.py                 # Base classes and interfaces for reasoners
+│       ├── prebuilt.py             # Pre-composed, ready-to-use reasoner implementations
+│       └── sequential/             # A step-by-step reasoner (Plan -> Execute -> Reflect)
+│           ├── reasoner.py         # Orchestrates the sequential reasoning loop
+│           ├── planners/           # Components for generating plans
+│           ├── executors/          # Components for executing single steps of a plan
+│           ├── reflectors/         # Components for analyzing failures and self-healing
+│           └── summarizer/         # Components for summarizing final results
 │
-├── reasoner/                       # Core reasoning logic
-│   └── prebuilt.py                 # Precomposed ready to use reasoner implementations
-│   ├── models.py                   # Defines Step, ReasonerState, etc.
-│   └── sequential/                 # Implementation of a sequential reasoner
-│       ├── reasoner.py             # Orchestrates the plan -> execute -> reflect loop
-│       ├── interface.py            # Defines Plan contracts
-│       ├── planners/               # Concrete Plan implementations (e.g., BulletListPlan)
-│       ├── executors/              # Concrete ExecuteStep implementations (e.g., ReWOOExecuteStep)
-│       └── reflectors/             # Concrete Reflector implementations (e.g., ReWOOReflector)
-│       └── summarizer/             # Concrete SummarizeResult implementations (e.g., DefaultSummarizeResult)
+├── utils/
+│   ├── cli.py                      # Command-line interface helpers
+│   └── logger.py                   # Logging configuration
 │
-├── tools/                          # Abstractions for actions the agent can take
-│   ├── base.py                     # Defines the core JustInTimeToolingBase contract
-│   ├── exceptions.py               # Defines ToolExecutionError
-│   └── jentic.py                   # Jentic tools implementation
-│
-├── llm/                            # Wrappers for different Language Model providers
-│   ├── base_llm.py                 # Defines the abstract BaseLLM interface
-│   └── litellm.py                  # Concrete implementation using the LiteLLM library
-│
-├── memory/                         # Pluggable memory backends for the agent
-│   ├── base_memory.py              # Defines the abstract BaseMemory interface
-│   └── scratch_pad.py              # A simple, in-memory dictionary implementation
-│
-├── inbox/                          # How the agent receives goals
-│   ├── base_inbox.py
-│   └── cli_inbox.py
-│
-├── outbox/                         # How the agent delivers results
-│   ├── base_outbox.py
-│   └── cli_outbox.py
-│
-└── main.py                         # Example entry point to run a CLI-based agent
+├── tests/                          # Unit and integration tests
+├── main.py                         # Main entry point for running the agent
+├── Makefile                        # Commands for installation, testing, etc.
+├── requirements.txt                # Project dependencies
+└── config.json                     # Agent configuration file
 ```
 
 ---

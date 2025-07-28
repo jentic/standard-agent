@@ -31,7 +31,6 @@ Standard Agent is a **modular AI agent framework** built on composition principl
 
 **StandardAgent** (`agents/standard_agent.py`)
 - Top-level orchestrator that owns and injects LLM, Memory, and Tools into reasoner
-- Coordinates the agent's main tick() loop with inbox/outbox communication
 
 **Reasoners** (`reasoner/`)
 - `SequentialReasoner`: Default Plan → Execute → Reflect loop implementation
@@ -52,10 +51,6 @@ Standard Agent is a **modular AI agent framework** built on composition principl
 - `BaseLLM`: Uniform interface for language models
 - `LiteLLM`: Implementation supporting OpenAI, Anthropic, Google models
 
-**I/O Abstraction** (`inbox/`, `outbox/`)
-- Decouples agent logic from input/output mechanisms
-- `CLIInbox`/`CLIOutbox`: Command-line interface implementations
-
 ### Configuration
 
 **Environment Variables** (create `.env` from `.env.example`):
@@ -67,7 +62,7 @@ Standard Agent is a **modular AI agent framework** built on composition principl
 
 ### Key Design Patterns
 
-**Dependency Injection**: LLM, Memory, and Tools are injected once by StandardAgent and broadcast to all sub-components
+**Dependency Injection**: LLM, Memory, and Tools are injected once by StandardAgent
 
 **Interface Segregation**: Each layer (Planner, ExecuteStep, etc.) implements focused contracts, enabling mix-and-match composition
 

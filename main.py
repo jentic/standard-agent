@@ -30,6 +30,7 @@ def main() -> None:
     logger.info("🤖 Agent started. Enter goals to get started…")
 
     while True:
+        goal_text = None
         try:
             goal_text = read_user_goal()
             if not goal_text:  # Skip empty inputs
