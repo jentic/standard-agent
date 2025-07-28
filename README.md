@@ -23,10 +23,10 @@ To use any Jentic product such as the Jentic SDK or MCP Plugin, you must first o
 jentic register --email '<your_email>'
 ```
 
-This will print your UUID and an export command to set it in your environment:
+This will print your API Key and an export command to set it in your environment:
 
 ```sh
-export JENTIC_UUID=<your-jentic-uuid>
+export JENTIC_API_KEY=<your-jentic-uuid>
 ```
 
 Alternatively, you can use curl to register and obtain your API Key:
