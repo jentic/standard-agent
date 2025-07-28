@@ -8,8 +8,8 @@ from typing import Any, Dict, List, Optional
 
 from jentic import Jentic
 from jentic.models import ApiCapabilitySearchRequest
-from base import JustInTimeToolingBase, ToolBase
-from exceptions import ToolNotFoundError, ToolExecutionError
+from agents.tools.base import JustInTimeToolingBase, ToolBase
+from agents.tools.exceptions import ToolNotFoundError, ToolExecutionError
 
 # Use structlog for consistent logging
 from utils.logger import get_logger
@@ -113,7 +113,7 @@ class JenticClient(JustInTimeToolingBase):
                 operation_uuids=[tool.id] if tool.type == "operation" else [],
                 api_name=tool.api_name,
             )
-        ).model_dump(exclude_none=False)
+        )
 
         # Find a specific result matching the tool we are looking for
         result = (results.get('workflows', {}).get(tool.id) or

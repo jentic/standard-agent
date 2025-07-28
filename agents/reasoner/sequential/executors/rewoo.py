@@ -134,18 +134,21 @@ class ReWOOExecuteStep(ExecuteStep):
             step.result = self.llm.prompt(REASONING_STEP_PROMPT.format(
                 step_text=step.text, available_data=json.dumps(inputs, ensure_ascii=False)
             ))
-            step.status = StepStatus.DONE
-            self._remember(step, state)
         else:
             tool =  self._select_tool(step)
             params = self._generate_params(step, tool, inputs)
             step.result = self.tools.execute(tool, params)
-            step.status = StepStatus.DONE
-            self._remember(step, state)
+
+        step.status = StepStatus.DONE
+        self._remember(step, state)
+
+        # Check if the plan is complete
+        if not state.plan:
+            state.is_complete = True
 
         # Always track step execution in history
         state.history.append(f"Executed step: {step.text} -> {step.result}")
-        logger.info("step_executed", step_text=step.text, step_type=step_type_response, result=step.result[:100] if step.result else None)
+        logger.info("step_executed", step_text=step.text, step_type=step_type_response, result=str(step.result)[:100] if step.result is not None else None)
 
 
     def _remember(self, step, state):
