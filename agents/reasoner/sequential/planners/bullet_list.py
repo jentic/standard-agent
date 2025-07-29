@@ -13,12 +13,16 @@ logger = get_logger(__name__)
 
 
 PLAN_GENERATION_PROMPT = dedent("""
-    You are an expert planning assistant.
+    <role>
+    You are a world-class planning assistant operating within the Jentic platform.
+    You specialize in transforming high-level user goals into structured, step-by-step plans that can be executed by API-integrated agents.
+    </role>
 
-    TASK
-    • Decompose the *user goal* below into a **markdown bullet-list** plan.
+    <goal>
+    Decompose the user goal below into a markdown bullet-list plan.
+    </goal>
 
-    OUTPUT FORMAT
+    <output_format>
     1. Return **only** the fenced list (triple back-ticks) — no prose before or after.
     2. Each bullet should be on its own line, starting with "- ".
     3. Each bullet = <verb> <object> … followed, in this order, by (input: key_a, key_b) (output: key_c)
@@ -27,14 +31,16 @@ PLAN_GENERATION_PROMPT = dedent("""
     5. `input:` is optional; if present, list comma-separated **snake_case** keys produced by earlier steps.
     6. Do **not** mention specific external tool names.
 
-    SELF-CHECK
+    <self_check>
     After drafting, silently verify — regenerate the list if any check fails:
     • All output keys unique & snake_case.
     • All input keys reference existing outputs.
     • No tool names or extra prose outside the fenced block.
+    </self_check>
 
-    REAL GOAL
+    <real_goal>
     Goal: {goal}
+    </real_goal>
 """).strip()
 
 class BulletListPlan(Plan):
