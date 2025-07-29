@@ -32,22 +32,22 @@ Standard Agent is a **modular AI agent framework** built on composition principl
 **StandardAgent** (`agents/standard_agent.py`)
 - Top-level orchestrator that owns and injects LLM, Memory, and Tools into reasoner
 
-**Reasoners** (`reasoner/`)
+**Reasoners** (`agents/reasoner/`)
 - `SequentialReasoner`: Default Plan → Execute → Reflect loop implementation
 - Composed of 4 swappable parts: Planner, ExecuteStep, Reflector, AnswerBuilder
 - Each component follows interface contracts defined in `reasoner/sequential/interface.py`
 
-**Tools** (`tools/`)
+**Tools** (`agents/tools/`)
 - `JustInTimeToolingBase`: Abstract contract for external actions
 - `JenticClient`: Default implementation using Jentic platform
 - Tools are injected globally and accessible to all reasoner components
 
-**Memory** (`memory/`)
+**Memory** (`agents/memory/`)
 - `BaseMemory`: Key-value store interface
 - `ScratchPadMemory`: Simple in-memory implementation
 - Shared across all agent components for state persistence
 
-**LLM Integration** (`llm/`)
+**LLM Integration** (`agents/llm/`)
 - `BaseLLM`: Uniform interface for language models
 - `LiteLLM`: Implementation supporting OpenAI, Anthropic, Google models
 

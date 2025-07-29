@@ -45,7 +45,6 @@ class StandardAgent:
         self.memory = memory
         self.reasoner = reasoner
 
-
         self._state: AgentState = AgentState.READY
 
     @property

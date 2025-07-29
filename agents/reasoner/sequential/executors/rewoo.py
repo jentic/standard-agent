@@ -142,10 +142,6 @@ class ReWOOExecuteStep(ExecuteStep):
         step.status = StepStatus.DONE
         self._remember(step, state)
 
-        # Check if the plan is complete
-        if not state.plan:
-            state.is_complete = True
-
         # Always track step execution in history
         state.history.append(f"Executed step: {step.text} -> {step.result}")
         logger.info("step_executed", step_text=step.text, step_type=step_type_response, result=str(step.result)[:100] if step.result is not None else None)
