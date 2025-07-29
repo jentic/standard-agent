@@ -117,7 +117,10 @@ class BulletListPlan(Plan):
 
             try:
                 result = self._parse_and_validate(response)
-                logger.info("plan_validation_success", goal=goal, step_count=len(result))
+                logger.info("plan_validation_success", step_count=len(result))
+                logger.info("Goal", goal=goal)
+                for i, step in enumerate(result, 1):
+                    logger.info("Step", step_text=step.text, output_key=step.output_key, input_keys=step.input_keys)
                 return result
             except ValueError as e:
                 logger.warning("plan_validation_failed", goal=goal, attempt=attempt, error=str(e))
