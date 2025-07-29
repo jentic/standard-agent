@@ -7,12 +7,11 @@ agent owns the services; the reasoner simply uses what the agent provides.
 """
 from __future__ import annotations
 
-from  agents.models import Goal
-from  memory.base_memory import BaseMemory
-from  reasoners.base_reasoner import BaseReasoner
-from  llm.base_llm import BaseLLM
-from  reasoners.models import ReasoningResult
-from  tools.interface import ToolInterface
+from collections.abc import MutableMapping
+from  agents.reasoner.base import BaseReasoner
+from  agents.llm.base_llm import BaseLLM
+from  agents.reasoner.base import ReasoningResult
+from  agents.tools.base import JustInTimeToolingBase
 
 from  uuid import uuid4
 from  enum import Enum
@@ -29,8 +28,8 @@ class StandardAgent:
         self,
         *,
         llm: BaseLLM,
-        tools: ToolInterface,
-        memory: BaseMemory,
+        tools: JustInTimeToolingBase,
+        memory: MutableMapping,
         reasoner: BaseReasoner,
     ):
         """Initializes the agent and injects services into the reasoner.
@@ -46,27 +45,24 @@ class StandardAgent:
         self.memory = memory
         self.reasoner = reasoner
 
-        # Explicit handshake to wire services into the reasoner
-        self.reasoner.attach_services(llm=llm, tools=tools, memory=memory)
-
         self._state: AgentState = AgentState.READY
 
     @property
     def state(self) -> AgentState:
         return self._state
 
-    def solve(self, goal: Goal) -> ReasoningResult:
+    def solve(self, goal: str) -> ReasoningResult:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
 
-        if hasattr(self.memory, "store"):
-            self.memory.store(f"goal:{run_id}", goal)
+        if hasattr(self.memory, "__setitem__"):
+            self.memory[f"goal:{run_id}"] = goal
 
         self._state = AgentState.BUSY
 
         try:
-            result = self.reasoner.run(goal.text, meta=goal.metadata)
-            self.memory.store(f"result:{run_id}", result.model_dump())
+            result = self.reasoner.run(goal)
+            self.memory[f"result:{run_id}"] = result
             self._state = AgentState.READY
             return result
 

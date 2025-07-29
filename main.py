@@ -6,14 +6,10 @@
 #                                            #
 ##############################################
 
-import os, time
+import os
 from dotenv import load_dotenv
-from inbox.cli_inbox import CLIInbox
-from outbox.cli_outbox import CLIOutbox
-from agents.prebuilt_agents import get_rewoo_agent
-from agents.models import Goal
-
-POLL_DELAY = 2.0
+from agents.prebuilt import ReWOOAgent
+from utils.cli import read_user_goal, print_result
 
 from utils.logger import get_logger, init_logger
 logger = get_logger(__name__)
@@ -21,35 +17,34 @@ logger = get_logger(__name__)
 
 def main() -> None:
     init_logger("config.json")
-
     load_dotenv()
 
-    agent = get_rewoo_agent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
-    inbox = CLIInbox(prompt="🤖 Enter your goal: ")
-    outbox = CLIOutbox()
-
-    logger.info("🤖 Agent started. Polling for goals…")
+    agent = ReWOOAgent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
+    # Or assemble your own agent as follows:
+    # agent = StandardAgent(
+    #     llm = LiteLLM(model=os.getenv("LLM_MODEL", "claude-sonnet-4")),
+    #     tools = JenticClient(),
+    #     memory = DictMemory(),
+    #     reasoner =ReWOOReasoner(),
+    # )
+    logger.info("🤖 Agent started. Enter goals to get started…")
 
     while True:
+        goal_text = None
         try:
-            goal_text = inbox.get_next_goal()
-            if goal_text is None:
-                time.sleep(POLL_DELAY)
+            goal_text = read_user_goal()
+            if not goal_text:  # Skip empty inputs
                 continue
 
-            goal   = Goal(text=goal_text)
-            result = agent.solve(goal)
-
-            outbox.send(result)
-            inbox.acknowledge_goal(goal_text)
+            result = agent.solve(goal_text)
+            print_result(result)
 
         except KeyboardInterrupt:
             logger.info("🤖 Bye!")
             break
 
         except Exception as exc:
-            logger.exception(f"🤖 Solve failed exception: {exc}")
-            time.sleep(POLL_DELAY)
+            logger.exception("solve_failed", goal=goal_text, error=str(exc))
 
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
 # core
-jentic>=0.8.3
+jentic>=0.8.4
 openai>=1.0
 pydantic>=2.0
 python-dotenv>=1.0.0
 litellm
 google-generativeai
+structlog
 
 # dev / quality
 pytest>=8.0
