@@ -48,7 +48,9 @@ GEMINI_API_KEY="your-google-gemini-api-key-here"
 DISCORD_BOT_TOKEN="your-discord-bot-token-here"
 ```
 
-**Note:** The `JENTIC_API_KEY` and at least one LLM provider key are essential for the agent to function.
+**Note:** An LLM provider key is essential for the agent to function. The `JENTIC_API_KEY` is required if you are using the default `JenticClient` tool provider.
+
+However, this layer is swappable. If you build your own tool provider by implementing the `JustInTimeToolingBase` interface, you will need to configure its specific secrets instead. See the "Extending the Framework" section for more details.
 
 You can obtain a jentic key by running the following line from your project directory with the virtual enviroment active:
 ``` bash
@@ -61,7 +63,7 @@ We provide two ways to use the agent framework: a quick-start method using a pre
 
 #### 1. Quick Start: Running a Pre-built Agent
 
-This is the fastest way to get started. The `ReWOOAgent` class provides a `StandardAgent` instance that is already configured with a powerful reasoner, LLM, tools, and memory.
+This is the fastest way to get started. The `ReWOOAgent` class provides a `StandardAgent` instance that is already configured with a reasoner, LLM, tools, and memory.
 
 ```python
 # main.py
@@ -133,7 +135,7 @@ custom_reasoner = SequentialReasoner(
     memory=memory,
     plan=BulletListPlan(llm=llm),
     execute_step=ReWOOExecuteStep(llm=llm, tools=tools, memory=memory),
-    reflect=ReWOOReflect(llm=llm, tools=tools, memory=memory, max_retries=5),  # More retries
+    reflect=ReWOOReflect(llm=llm, tools=tools, memory=memory, max_retries=5),
     summarize_result=DefaultSummarizeResult(llm=llm)
 )
 
@@ -207,29 +209,15 @@ The key insight is that each component follows well-defined interfaces (`BaseLLM
 └── config.json                     # Agent configuration file
 ```
 
----
-
-## ✨  Key Principles
-| Principle | What it means in Standard Agent                                                                     |
-|-----------|-----------------------------------------------------------------------------------------------------|
-| **Composition** | Small, focused components are wired together at runtime.                                            |
-| **Explicit DI** | LLM, Memory and Tools are injected once by the `StandardAgent` and broadcast to all sub-components. |
-| **Swappable everything** | Swap reasoning strategies, memory back-ends or tool providers without touching agent logic.         |
-| **Zero-boilerplate CLI** | A fully working CLI agent is  ~40 lines of glue code.                                               |
-| **Self-healing** | Reflector components analyse errors, edit the plan and retry automatically.                         |
-
----
-
 ### Core Runtime Objects
 
-| Layer            | Class / Protocol                                                | Notes                                                                    |
-|------------------|-----------------------------------------------------------------|--------------------------------------------------------------------------|
-| **Agent**        | `StandardAgent`                                                 | Owns LLM, Memory, and Tools; injects them into a Reasoner.               |
-| **Reasoners**    | `SequentialReasoner`, `TreeSearchReasoner`, etc.                | Each orchestrates a different reasoning algorithm.                       |
-| **Memory**       | `BaseMemory`                               | A key-value store accessible to all components.                          |
-| **Tools**        | `JustInTimeToolingBase`                  | Abstracts external actions (APIs, shell commands, etc.).                 |
-| **Inbox / Outbox** | `BaseInbox` / `BaseOutbox`                                      | Decouples I/O, allowing the agent to run in any environment.             |
-| **LLM Wrapper**  | `BaseLLM`                                     | Provides a uniform interface for interacting with different LLMs.        |
+| Layer            | Class / Protocol                                                     | Notes                                                             |
+|------------------|----------------------------------------------------------------------|-------------------------------------------------------------------|
+| **Agent**        | `StandardAgent`                                                      | Owns Reasoner, LLM, Memory, and Tools                             |
+| **Reasoners**    | `SequentialReasoner`, `TreeSearchReasoner` (to be implemented), etc. | Each orchestrates a different reasoning algorithm.                |
+| **Memory**       | `MutableMapping`                                                         | A key-value store accessible to all components.                   |
+| **Tools**        | `JustInTimeToolingBase`                                              | Abstracts external actions (APIs, shell commands, etc.).          |
+| **LLM Wrapper**  | `BaseLLM`                                                            | Provides a uniform interface for interacting with different LLMs. |
 
 ### The Sequential Reasoner
 
