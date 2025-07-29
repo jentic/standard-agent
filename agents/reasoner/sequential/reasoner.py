@@ -105,10 +105,10 @@ class SequentialReasoner(BaseReasoner):
                 else:
                     raise
 
-        success = state.is_complete and not state.plan
-
         # Summarize the result
         final_answer = self.summarize_result(state)
+
+        success = state.is_complete and not state.plan
 
         return ReasoningResult(
             final_answer=final_answer,
