@@ -93,6 +93,88 @@ while True:
         break
 ```
 
+#### 2. Custom Agent Composition: Build Your Own
+
+The real power of Standard Agent comes from its **composable architecture**. Every component is swappable, allowing you to create custom agents tailored to your specific needs. Here's how to build agents from scratch by mixing and matching components.
+
+```python
+# main_build_your_own_agent.py
+import os
+from dotenv import load_dotenv
+
+# Import the core agent class
+from agents.standard_agent import StandardAgent
+
+# Import different implementations for each layer
+from agents.llm.litellm import LiteLLM
+from agents.tools.jentic import JenticClient
+from agents.memory.dict_memory import DictMemory
+
+# Import reasoner components
+from agents.reasoner.sequential.reasoner import SequentialReasoner
+from agents.reasoner.sequential.planners.bullet_list import BulletListPlan
+from agents.reasoner.sequential.executors.rewoo import ReWOOExecuteStep
+from agents.reasoner.sequential.reflectors.rewoo import ReWOOReflect
+from agents.reasoner.sequential.summarizer.default import DefaultSummarizeResult
+
+from utils.cli import read_user_goal, print_result
+
+load_dotenv()
+
+# Step 1: Choose and configure your components
+llm = LiteLLM(model="gpt-4")
+tools = JenticClient()
+memory = DictMemory()
+
+# Step 2: Build a custom reasoner by composing sequential components
+custom_reasoner = SequentialReasoner(
+    llm=llm,
+    tools=tools, 
+    memory=memory,
+    plan=BulletListPlan(llm=llm),
+    execute_step=ReWOOExecuteStep(llm=llm, tools=tools, memory=memory),
+    reflect=ReWOOReflect(llm=llm, tools=tools, memory=memory, max_retries=5),  # More retries
+    summarize_result=DefaultSummarizeResult(llm=llm)
+)
+
+# Step 3: Wire everything together in the StandardAgent
+agent = StandardAgent(
+    llm=llm,
+    tools=tools,
+    memory=memory,
+    reasoner=custom_reasoner
+)
+
+# Step 4: Use your custom agent
+print("🤖 Custom Agent is ready!")
+while True:
+    goal_text = None
+    try:
+        goal = read_user_goal()
+        if not goal:
+            continue
+            
+        result = agent.solve(goal)
+        print_result(result)
+        
+    except KeyboardInterrupt:
+        print("\n🤖 Bye!")
+        break
+```
+---
+
+**💡 Why This Matters**
+
+This composition approach means you can:
+
+- **Start simple** with pre-built agents like `ReWOOAgent`
+- **Gradually customize** by swapping individual components
+- **Experiment easily** with different LLMs, reasoning strategies, or tool providers
+- **Extend incrementally** by implementing new components that follow the same interfaces
+- **Mix and match** components from different sources without breaking existing code
+
+The key insight is that each component follows well-defined interfaces (`BaseLLM`, `BaseMemory`, `JustInTimeToolingBase`, etc.), so they can be combined in any configuration that makes sense for your use case.
+
 
 ### Project Layout
 
@@ -168,13 +250,13 @@ This design allows you to customize the reasoning process by mixing and matching
 
 The framework is designed to be modular. Here are some common extension points:
 
-| Need                               | How to Implement                                                                                             |
-|------------------------------------|--------------------------------------------------------------------------------------------------------------|
-| **Different reasoning strategy**   | Create a new `BaseReasoner` implementation (e.g., `TreeSearchReasoner`) and inject it into `StandardAgent`.      |
-| **Custom planner**                 | Sub-class `Plan`, place it in `reasoner/sequential/planners/`, and wire it into your `SequentialReasoner`. |
-| **Slack / Discord integration**    | Implement a `SlackOutbox` by sub-classing `BaseOutbox` and pass it to the `agent.tick()` method.             |
-| **Redis / VectorDB memory**        | Implement a `RedisMemory` by sub-classing `BaseMemory` and inject it into the `StandardAgent`.                 |
-| **Local shell tools**              | Create a `ShellToolInterface` that implements the `JustInTimeToolingBase` contract and inject it into the `StandardAgent`. |
+| Need                               | How to Implement                                                                                                                                                                     |
+|------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Different reasoning strategy**   | Create a new `BaseReasoner` implementation (e.g., `TreeSearchReasoner`) and inject it into `StandardAgent`.                                                                          |
+| **Custom sequential logic**        | Create new `Plan`, `ExecuteStep`, `Reflect`, or `SummarizeResult` components and compose your own `SequentialReasoner`.                                                              |
+| **New tool provider**              | Create a class that inherits from `JustInTimeToolingBase`, implement its methods, and pass it to your `StandardAgent`.                                                               |
+| **Persistent memory**              | Create a class that implements the `MutableMapping` interface (e.g., using Redis), and pass it to your `StandardAgent`.                                                              |
+| **New Planners, Executors, etc.**  | Create your own implementations of `Plan`, `ExecuteStep`, `Reflect`, or `SummarizeResult` to invent new reasoning capabilities, then compose them in a `SequentialReasoner`. |
 
 ## 🔮 Roadmap
 
