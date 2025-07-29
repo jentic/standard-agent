@@ -1,10 +1,11 @@
 # Standard Agent 🛠️ — Composable Agents
 
-A **modular framework** for building AI agents that can plan, act, and **autonomously recover from failures**.  
-It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool platform out of the box, but every layer is swappable
 [![Discord](https://img.shields.io/badge/JOIN%20OUR%20DISCORD-COMMUNITY-7289DA?style=plastic&logo=discord&logoColor=white)](https://discord.gg/yrxmDZWMqB)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-40c463.svg)](CODE_OF_CONDUCT.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
+
+A **modular framework** for building AI agents that can plan, act, and **autonomously recover from failures**.  
+It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool platform out of the box, but every layer is swappable
 
 - [Quick Start](#quick-start)
 - [Usage Examples](#usage-examples)
@@ -12,8 +13,6 @@ It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool platfor
 - [Core Runtime Objects](#core-runtime-objects)
 - [Extending the Framework](#extending-the-framework)
 - [Roadmap](#roadmap)
-
-
 
 > **Join our community!** Connect with contributors and users on [Discord](https://discord.gg/yrxmDZWMqB) to discuss ideas, ask questions, and collaborate on the OAK repository.
 
