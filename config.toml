@@ -1,0 +1,23 @@
+[llm]
+model = "gemini/gemini-2.5-flash" # Model names require a provider prefix (e.g., "<provider>/<model>")
+
+[logging]
+[logging.console]
+enabled = true
+colour_enabled = true
+level = "DEBUG"
+format = "%(asctime)s - %(levelname_coloured)s - %(name)s - %(message)s"
+
+[logging.file]
+enabled = true
+level = "INFO"
+format = "%(asctime)s - %(levelname)-8s - %(name)s - %(message)s"
+path = "logs/standard_agent.log"
+file_rotation = true
+max_bytes = 10485760
+backup_count = 5
+
+[logging.libraries]
+LiteLLM = "WARNING"
+httpx = "WARNING"
+httpcore = "WARNING"
