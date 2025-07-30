@@ -34,10 +34,20 @@ BASE_REFLECTION_PROMPT = dedent("""
     Failed Step: {step}
     Failed Tool: {failed_tool_id}
     Error: {error_type}: {error_message}
-    Tool Schema: {tool_schema}
+    Tool Details: {tool_details}
     </input>
 
+    <decision_guide>
+    • retry_params – The tool is appropriate, but its inputs were invalid or incomplete (e.g. wrong data type, missing field, ID not found). You can derive correct values from the goal or earlier outputs.
+    • change_tool   – The current tool clearly cannot accomplish the step (wrong capability, auth scope, or “function not available”), while another tool in the provided Alternative Tools list can.
+    • rephrase_step – Use only if the step text itself is ambiguous or misleading; rewriting it should enable a better tool/parameter selection on the next attempt.
+    • give_up – Choose this if
+        – The error indicates a *required* parameter and that parameter cannot be found in the goal, previous outputs, or memory; or
+        – Any other critical, non-inferable information is missing; 
+    </decision_guide>
+
     <constraints>
+    - Use the decision guide to determine the correct action
     - Output ONLY valid JSON - no explanation, markdown, or backticks and should be parsable using JSON.parse()
     - Must start with '{{' and end with '}}'
     - Choose one action: 'retry_params', 'change_tool', 'rephrase_step', or 'give_up'

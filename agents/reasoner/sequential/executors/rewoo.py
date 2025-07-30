@@ -18,11 +18,13 @@ logger = get_logger(__name__)
 ### Prompts
 STEP_CLASSIFICATION_PROMPT = dedent("""
     <role>
-    You are a Step Classifier within the Agent ecosystem. Your sole purpose is to determine whether a given step requires external API/tool execution or can be completed through internal reasoning alone.
+    You are a Step Classifier within the Agent ecosystem. 
+    Your sole purpose is to determine whether a given step requires external API/tool execution or can be completed through internal reasoning alone.
     </role>
 
     <goal>
-    Classify the provided step as either TOOL or REASONING based on whether it requires external API calls.
+    Classify the provided step as either TOOL or REASONING based on whether it requires external API calls. 
+    Use classification_rules for guidance
     </goal>
 
     <input>
@@ -50,7 +52,9 @@ STEP_CLASSIFICATION_PROMPT = dedent("""
 
 REASONING_STEP_PROMPT = dedent("""
     <role>
-    You are a Data Processor within the Aprompt engineeringent ecosystem. Your mission is to perform precise data transformations and reasoning operations on available information. You specialize in content analysis, data extraction, and logical processing to support agent workflows.
+    You are a Data Processor within the Agent ecosystem. 
+    Your mission is to perform precise data transformations and reasoning operations on available information.
+    You specialize in content analysis, data extraction, and logical processing to support agent workflows.
 
     Your core responsibilities:
     - Process data using only available information
@@ -84,22 +88,24 @@ REASONING_STEP_PROMPT = dedent("""
 
 TOOL_SELECTION_PROMPT = dedent("""
     <role>
-   You are an expert orchestrator working within the Jentic API ecosystem.
-   Your job is to select the best tool to execute a specific plan step, using a list of available tools. Each tool may vary in API domain, supported actions, and required parameters. You must evaluate each tool's suitability and return the **single best matching tool** — or the word none if none qualify.
+   You are an expert orchestrator working within the Agent API ecosystem.
+   Your job is to select the best tool to execute a specific plan step, using a list of available tools. 
+   Each tool may vary in API domain, supported actions, and required parameters. 
+   You must evaluate each tool's suitability and return the **single best matching tool** — or the word none if none qualify.
 
    Your selection will be executed by an agent, so precision and compatibility are critical.
    </role>
 
    <instructions>
-   Analyze the provided step and evaluate all candidate tools. Use the scoring criteria to assess each tool's fitness for executing the step. Return the tool `id` with the highest total score. If no tool scores ≥60, return the word none.
+   Analyze the provided step and evaluate all candidate tools. Use the scoring criteria to assess each tool's fitness for executing the step. 
+   Return the tool `id` with the highest total score. If no tool scores ≥60, return the word none.
    You are selecting the **most execution-ready** tool, not simply the closest match.
    </instructions>
 
    <input>
-   Step:
-   {step}
+   Step: {step}
 
-   Tools (JSON):
+   Tools (JSON): 
    {tools_json}
    </input>
 
@@ -124,22 +130,25 @@ TOOL_SELECTION_PROMPT = dedent("""
    <rules>
    1. Score each tool using the weighted criteria above. Max score: 100 points.
    2. Select the tool with the highest total score.
-   3. If no tool scores at least 60 points, return none.
-   4. Do **not** include any explanation, formatting, or metadata — only the tool `id` or none.
-   5. Use available step context and known inputs to inform scoring.
-   6. Penalize tools severely if they are misaligned with the intended action or platform (if mentioned in the step).
-   7. Never select a tool from an incorrect domain if the step explicitly specifies a specific one.
+   3. If multiple tools tie for the highest score, choose the one that appears first in the Tools list.
+   4. If no tool scores at least 60 points, return none.
+   5. Do **not** include any explanation, formatting, or metadata — only the tool `id` or none.
+   6. Use available step context and known inputs to inform scoring.
+   7. Penalize tools severely if they are misaligned with the intended action or platform (if mentioned in the step).
+   8. Never select a tool from an incorrect domain if the step explicitly specifies a specific one.
    </rules>
 
    <output_format>
-   Respond with a **single line** which only includes the selected tool's `id`
-   **No additional text** should be included.
+   Respond with a **single line** that contains exactly the selected tool's `id` — no quotes, backticks, or leading/trailing whitespace.
+   **No additional text or formatting** should be included.
    </output_format>
 """)
 
 PARAMETER_GENERATION_PROMPT = dedent("""
     <role>
-    You are a Parameter Builder within the agent ecosystem. Your mission is to enable seamless API execution by generating precise parameters from step context and memory data. You specialize in data extraction, content formatting, and parameter mapping to ensure successful tool execution.
+    You are a Parameter Builder within the Agent ecosystem. 
+    Your mission is to enable seamless API execution by generating precise parameters from step context and memory data. 
+    You specialize in data extraction, content formatting, and parameter mapping to ensure successful tool execution.
 
     Your core responsibilities:
     - Extract meaningful data from complex memory structures
@@ -215,10 +224,6 @@ class ReWOOExecuteStep(ExecuteStep):
                 keys_list=", ".join(self.memory.keys())
             )
         )
-
-        print("Rishi")
-        print(step_type_response)
-        print(step.text)
 
         if "reasoning" in step_type_response.lower():
             step.result = self.llm.prompt(REASONING_STEP_PROMPT.format(
