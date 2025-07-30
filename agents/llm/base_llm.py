@@ -27,14 +27,14 @@ JSON_CORRECTION_PROMPT = dedent("""
     </output_format>
     
     STRICT RULES:
-    1. Respond with exactly one JSON object that passes strict JSON.parse — no markdown, comments, or code fences.
+    1. Respond with exactly one JSON object that can be successfully parsed by the json.loads() in Python — no markdown, comments, or code fences.
     2. Preserve every key–value pair from the faulty input; fix syntax only.
     3. Do **not** add explanations or extra fields.
     
     <self_check>
     After drafting your answer:
     - Parse it internally to ensure it is valid JSON.
-    - Verify all data values match the original (order may differ).
+    - Verify all data values match the original.
     If any check fails, silently regenerate until both checks pass.
     </self_check>
 """).strip()
