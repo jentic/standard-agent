@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 ### Prompts
 STEP_CLASSIFICATION_PROMPT = dedent("""
     <role>
-    You are a Step Classifier within the Jentic agent ecosystem. Your sole purpose is to determine whether a given step requires external API/tool execution or can be completed through internal reasoning alone.
+    You are a Step Classifier within the Agent ecosystem. Your sole purpose is to determine whether a given step requires external API/tool execution or can be completed through internal reasoning alone.
     </role>
 
     <goal>
@@ -32,7 +32,7 @@ STEP_CLASSIFICATION_PROMPT = dedent("""
 
     <classification_rules>
     TOOL steps require:
-    - External API calls (e.g., "search articles", "send email", "create task")
+    - External API calls (e.g., "search articles", "send email", etc.)
     - Third-party service interactions
     - Data retrieval from external sources
 
@@ -50,7 +50,7 @@ STEP_CLASSIFICATION_PROMPT = dedent("""
 
 REASONING_STEP_PROMPT = dedent("""
     <role>
-    You are a Data Processor within the agent ecosystem. Your mission is to perform precise data transformations and reasoning operations on available information. You specialize in content analysis, data extraction, and logical processing to support agent workflows.
+    You are a Data Processor within the Aprompt engineeringent ecosystem. Your mission is to perform precise data transformations and reasoning operations on available information. You specialize in content analysis, data extraction, and logical processing to support agent workflows.
 
     Your core responsibilities:
     - Process data using only available information

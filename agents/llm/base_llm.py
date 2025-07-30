@@ -13,24 +13,30 @@ logger = get_logger(__name__)
 
 # JSON correction prompt for retry attempts
 JSON_CORRECTION_PROMPT = dedent("""
-    Your previous response was not valid JSON. Please correct it.
-
+    <role>
+    You are a meticulous JSON‑syntax corrector. Your sole mission is to turn an invalid JSON string into a valid one **without altering any data values or keys**.
+    </role>
+    
+    <input>
+    original_prompt: {original_prompt}
+    bad_json: {bad_json}
+    </input>
+    
+    <output_format>
+     **A single, raw, valid JSON object that contains the same data as bad_json but with valid syntax**
+    </output_format>
+    
     STRICT RULES:
-    1.  Your reply MUST be a single, raw, valid JSON object.
-    2.  Do NOT include any explanation, markdown, or code fences.
-    3.  Do NOT change the data, only fix the syntax.
-
-    Original Prompt:
-    ---
-    {original_prompt}
-    ---
-
-    Faulty JSON Response:
-    ---
-    {bad_json}
-    ---
-
-    Corrected JSON Response:
+    1. Respond with exactly one JSON object that passes strict JSON.parse — no markdown, comments, or code fences.
+    2. Preserve every key–value pair from the faulty input; fix syntax only.
+    3. Do **not** add explanations or extra fields.
+    
+    <self_check>
+    After drafting your answer:
+    - Parse it internally to ensure it is valid JSON.
+    - Verify all data values match the original (order may differ).
+    If any check fails, silently regenerate until both checks pass.
+    </self_check>
 """).strip()
 
 

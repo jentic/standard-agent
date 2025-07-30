@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 PLAN_GENERATION_PROMPT = dedent("""
     <role>
-    You are a world-class planning assistant operating within the Jentic platform.
+    You are a world-class planning assistant operating within the Agent ecosystem.
     You specialize in transforming high-level user goals into structured, step-by-step plans that can be executed by API-integrated agents.
     </role>
 

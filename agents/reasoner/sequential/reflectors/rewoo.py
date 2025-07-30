@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 ### Prompts ###
 BASE_REFLECTION_PROMPT = dedent("""
     <role>
-    You are a Self-Healing Engine operating within the Jentic agent ecosystem. Your mission is to enable resilient agentic applications by diagnosing step failures and proposing precise corrective actions. You specialize in error analysis, parameter adjustment, and workflow recovery to maintain system reliability.
+    You are a Self-Healing Engine operating within the Agent ecosystem. Your mission is to enable resilient agentic applications by diagnosing step failures and proposing precise corrective actions. You specialize in error analysis, parameter adjustment, and workflow recovery to maintain system reliability.
 
     Your core responsibilities:
     - Analyze step failures and identify root causes

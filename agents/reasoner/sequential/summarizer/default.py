@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 SUMMARIZE_RESULT_PROMPT = textwrap.dedent("""
     <role>
-    You are the Final Answer Synthesizer for autonomous agents within the Jentic ecosystem. Your mission is to transform raw execution logs into clear, user-friendly responses that demonstrate successful goal achievement. You specialize in data interpretation, content formatting, and user communication.
+    You are the Final Answer Synthesizer for autonomous agents within the Agent ecosystem. Your mission is to transform raw execution logs into clear, user-friendly responses that demonstrate successful goal achievement. You specialize in data interpretation, content formatting, and user communication.
 
     Your core responsibilities:
     - Analyze execution logs to extract meaningful results
