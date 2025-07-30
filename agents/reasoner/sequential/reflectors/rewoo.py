@@ -144,12 +144,12 @@ class ReWOOReflect(Reflect):
 
         elif action == "change_tool":
             tool_id = decision.get("tool_id")
-            self.memory[f"forced_tool:{new_step.text}"] = tool_id
-            logger.info("reflection_change_tool", step_text=new_step.text, forced_tool_id=tool_id)
+            self.memory[f"rewoo_reflector_suggested_tool:{new_step.text}"] = tool_id
+            logger.info("reflection_change_tool", step_text=new_step.text, rewoo_reflector_suggested_tool=tool_id)
 
         elif action == "retry_params":
             params = decision.get("params")
-            self.memory[f"forced_params:{new_step.text}"] = params
-            logger.info("reflection_retry_params", step_text=new_step.text, forced_params=params)
+            self.memory[f"rewoo_reflector_suggested_params:{new_step.text}"] = params
+            logger.info("reflection_retry_params", step_text=new_step.text, rewoo_reflector_suggested_params=params)
 
         state.plan.appendleft(new_step)

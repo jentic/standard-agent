@@ -10,10 +10,9 @@ from agents.reasoner.sequential.exceptions import (
     ToolSelectionError,
     MissingInputError
 )
-
+from agents.tools.jentic import JenticTool
 from utils.logger import get_logger, trace_method
 logger = get_logger(__name__)
-
 
 ### Prompts
 STEP_CLASSIFICATION_PROMPT = dedent("""
@@ -249,6 +248,11 @@ class ReWOOExecuteStep(ExecuteStep):
             state.history.append(f"remembered {step.output_key} : {step.result}")
 
     def _select_tool(self, step):
+        if rewoo_reflector_suggested_tool_id := self.memory.get(f"rewoo_reflector_suggested_tool:{step.text}"):
+            logger.info("using_rewoo_reflector_suggested_tool", step_text=step.text, rewoo_reflector_suggested_tool_id=rewoo_reflector_suggested_tool_id)
+            del self.memory[f"rewoo_reflector_suggested_tool:{step.text}"]
+            return self.tools.load(JenticTool({"id": rewoo_reflector_suggested_tool_id}))
+
         tools = self.tools.search(step.text, top_k=20)
         tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(
             step=step.text,
@@ -266,6 +270,12 @@ class ReWOOExecuteStep(ExecuteStep):
         return self.tools.load(tool)
 
     def _generate_params(self, step, tool, inputs):
+        if rewoo_reflector_suggested_params := self.memory.get(f"rewoo_reflector_suggested_params:{step.text}"):
+            logger.info("using_rewoo_reflector_suggested_params", step_text=step.text, rewoo_reflector_suggested_params=rewoo_reflector_suggested_params)
+            del self.memory[f"rewoo_reflector_suggested_params:{step.text}"]
+            param_schema = tool.get_parameters() or {}
+            return {k: v for k, v in rewoo_reflector_suggested_params.items() if k in param_schema}
+
         try:
             param_schema = tool.get_parameters() or {}
             prompt  = PARAMETER_GENERATION_PROMPT.format(
