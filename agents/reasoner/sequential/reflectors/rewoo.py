@@ -176,7 +176,7 @@ class ReWOOReflect(Reflect):
             tool_type: str,
             params: dict = None
     ) -> None:
-        """Create suggestion dict, store in memory, and log the action."""
+        """Create reflector suggestion dict and store in memory"""
         suggestion = {
             "action": action,
             "tool": {"id": tool_id, "type": tool_type}
