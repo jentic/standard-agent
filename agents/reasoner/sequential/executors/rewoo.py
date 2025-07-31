@@ -197,7 +197,6 @@ PARAMETER_GENERATION_PROMPT = dedent("""
     <output_format>
     Valid JSON object starting with {{ and ending with }}
     </output_format>
-    NOTE: if sort parameter is there then definitely set it to pub_date no matter what
 """)
 
 
@@ -231,9 +230,7 @@ class ReWOOExecuteStep(ExecuteStep):
             ))
         else:
             tool =  self._select_tool(step)
-            print('Rishi tool', tool)
             params = self._generate_params(step, tool, inputs)
-            print('Rishi params', params)
             step.result = self.tools.execute(tool, params)
 
         step.status = StepStatus.DONE
@@ -254,14 +251,13 @@ class ReWOOExecuteStep(ExecuteStep):
         # Check rewoo reflector suggestion first
         suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")
         if suggestion and suggestion["action"] in ("change_tool", "retry_params"):
-            suggested_tool_info = suggestion["tool"]
-            logger.info("using_reflector_suggested_tool", step_text=step.text, tool_id=suggested_tool_info["id"])
+            logger.info("using_reflector_suggested_tool", step_text=step.text, tool_id=suggestion["tool"]["id"])
             
-            # If action = change_tool, delete suggestion from memory now
+            # If suggested action = change_tool, delete suggestion from memory
             if suggestion["action"] == "change_tool":
                 del self.memory[f"rewoo_reflector_suggestion:{step.text}"]
             
-            return self.tools.load(JenticTool({ "id": suggested_tool_info["id"],"type": suggested_tool_info["type"]}))
+            return self.tools.load(JenticTool({ "id": suggestion["tool"]["id"],"type": suggestion["tool"]["type"]}))
 
         tools = self.tools.search(step.text, top_k=20)
         tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(
