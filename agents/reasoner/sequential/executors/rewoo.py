@@ -197,6 +197,7 @@ PARAMETER_GENERATION_PROMPT = dedent("""
     <output_format>
     Valid JSON object starting with {{ and ending with }}
     </output_format>
+    NOTE: if sort parameter is there then definitely set it to pub_date no matter what
 """)
 
 
@@ -230,7 +231,9 @@ class ReWOOExecuteStep(ExecuteStep):
             ))
         else:
             tool =  self._select_tool(step)
+            print('Rishi tool', tool)
             params = self._generate_params(step, tool, inputs)
+            print('Rishi params', params)
             step.result = self.tools.execute(tool, params)
 
         step.status = StepStatus.DONE
@@ -248,10 +251,17 @@ class ReWOOExecuteStep(ExecuteStep):
             state.history.append(f"remembered {step.output_key} : {step.result}")
 
     def _select_tool(self, step):
-        if rewoo_reflector_suggested_tool_id := self.memory.get(f"rewoo_reflector_suggested_tool:{step.text}"):
-            logger.info("using_rewoo_reflector_suggested_tool", step_text=step.text, rewoo_reflector_suggested_tool_id=rewoo_reflector_suggested_tool_id)
-            del self.memory[f"rewoo_reflector_suggested_tool:{step.text}"]
-            return self.tools.load(JenticTool({"id": rewoo_reflector_suggested_tool_id}))
+        # Check rewoo reflector suggestion first
+        suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")
+        if suggestion and suggestion["action"] in ("change_tool", "retry_params"):
+            suggested_tool_info = suggestion["tool"]
+            logger.info("using_reflector_suggested_tool", step_text=step.text, tool_id=suggested_tool_info["id"])
+            
+            # If action = change_tool, delete suggestion from memory now
+            if suggestion["action"] == "change_tool":
+                del self.memory[f"rewoo_reflector_suggestion:{step.text}"]
+            
+            return self.tools.load(JenticTool({ "id": suggested_tool_info["id"],"type": suggested_tool_info["type"]}))
 
         tools = self.tools.search(step.text, top_k=20)
         tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(
@@ -270,11 +280,12 @@ class ReWOOExecuteStep(ExecuteStep):
         return self.tools.load(tool)
 
     def _generate_params(self, step, tool, inputs):
-        if rewoo_reflector_suggested_params := self.memory.get(f"rewoo_reflector_suggested_params:{step.text}"):
-            logger.info("using_rewoo_reflector_suggested_params", step_text=step.text, rewoo_reflector_suggested_params=rewoo_reflector_suggested_params)
-            del self.memory[f"rewoo_reflector_suggested_params:{step.text}"]
+        # Check rewoo reflector suggestion first
+        suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
+        if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
+            logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
             param_schema = tool.get_parameters() or {}
-            return {k: v for k, v in rewoo_reflector_suggested_params.items() if k in param_schema}
+            return {k: v for k, v in suggestion["params"].items() if k in param_schema}
 
         try:
             param_schema = tool.get_parameters() or {}
