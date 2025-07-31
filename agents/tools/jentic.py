@@ -7,7 +7,8 @@ import json
 from typing import Any, Dict, List, Optional
 
 from jentic import Jentic
-from jentic.models import ApiCapabilitySearchRequest
+from jentic.lib.cfg import AgentConfig
+from jentic.lib.models import SearchRequest, LoadRequest, ExecutionRequest
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolNotFoundError, ToolExecutionError
 
@@ -82,7 +83,7 @@ class JenticClient(JustInTimeToolingBase):
             api_key: Jentic API key. If None, reads from JENTIC_API_KEY environment variable.
         """
         self.api_key = api_key or os.getenv("JENTIC_API_KEY")
-        self._jentic = Jentic(api_key=self.api_key)
+        self._jentic = Jentic()
 
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
         """
@@ -92,8 +93,8 @@ class JenticClient(JustInTimeToolingBase):
 
         # Call jentic search API directly
         results = asyncio.run(
-            self._jentic.search_api_capabilities(
-                ApiCapabilitySearchRequest(capability_description=query, max_results=top_k)
+            self._jentic.search(
+                SearchRequest(query=query, limit=top_k, filter_by_credentials=False)
             )
         ).model_dump(exclude_none=False)
 
@@ -112,10 +113,9 @@ class JenticClient(JustInTimeToolingBase):
 
         # Call jentic load API directly
         results = asyncio.run(
-            self._jentic.load_execution_info(
-                workflow_uuids=[tool.id] if tool.type == "workflow" else [],
-                operation_uuids=[tool.id] if tool.type == "operation" else [],
-                api_name=tool.api_name,
+            self._jentic.load(
+                LoadRequest(workflow_uuids=[tool.id] if tool.type == "workflow" else [],
+                operation_uuids=[tool.id] if tool.type == "operation" else [])
             )
         )
 
@@ -139,9 +139,9 @@ class JenticClient(JustInTimeToolingBase):
         try:
             # Call jentic execute API directly
             if tool.type == "workflow":
-                result = asyncio.run(self._jentic.execute_workflow(tool.id, parameters))
+                result = asyncio.run(self._jentic.execute(ExecutionRequest(uuid=tool.id, inputs=parameters, execution_type='workflow')))
             else:
-                result = asyncio.run(self._jentic.execute_operation(tool.id, parameters))
+                result = asyncio.run(self._jentic.execute(ExecutionRequest(uuid=tool.id, inputs=parameters, execution_type='operation')))
 
             # The result object from the SDK has a 'status' and 'outputs'.
             # A failure in the underlying tool execution is not an exception, but a
