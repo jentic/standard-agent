@@ -31,6 +31,7 @@ class JenticTool(ToolBase):
         if schema is None:
             schema = {}
         self._schema = schema
+
         self.tool_id = schema.get('workflow_id') or schema.get('operation_uuid') or schema.get('id') or ""
         super().__init__(self.tool_id)
 
@@ -92,14 +93,20 @@ class JenticClient(JustInTimeToolingBase):
         logger.info("tool_search", query=query, top_k=top_k)
 
         # Call jentic search API directly
-        results = asyncio.run(
+        response = asyncio.run(
             self._jentic.search(
                 SearchRequest(query=query, limit=top_k, filter_by_credentials=False)
             )
         ).model_dump(exclude_none=False)
 
-        top_results = (results.get("operations", []) + results.get("workflows", []))[:top_k]
-        return [JenticTool(result) for result in top_results]
+        results = response.get('results')
+        if isinstance(results, str):
+            results = json.loads(results)
+        
+        if not results:
+            return []
+
+        return [JenticTool(result) for result in results]
 
 
     def load(self, tool: ToolBase) -> ToolBase:
@@ -114,10 +121,12 @@ class JenticClient(JustInTimeToolingBase):
         # Call jentic load API directly
         results = asyncio.run(
             self._jentic.load(
-                LoadRequest(workflow_uuids=[tool.id] if tool.type == "workflow" else [],
-                operation_uuids=[tool.id] if tool.type == "operation" else [])
+                LoadRequest(
+                    workflow_uuids=[tool.id] if tool.type == "workflow" else [],
+                    operation_uuids=[tool.id] if tool.type == "operation" else []
+                )
             )
-        )
+        ).model_dump(exclude_none=False)
 
         # Find a specific result matching the tool we are looking for
         result = (results.get('workflows', {}).get(tool.id) or
