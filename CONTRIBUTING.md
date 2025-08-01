@@ -1,67 +1,42 @@
 # Contributing to Standard Agent
 
-First off, thank you for considering contributing to Standard Agent! It's people like you that make this project such a great tool.
+First off, thank you for considering contributing to the Standard Agent! This document outlines the process for contributing to the Standard Agent Repository.
 
-This document provides some guidelines for contributing to the project. Please feel free to propose changes to this document in a pull request.
+## Project Philosophy
+
+`standard-agent` is a **modular AI agent framework** built on composition principles. It is intended as a minimal set of reference implementations of different types of agent reasoning and tool-use strategies. The goal is to show that building an agent can be as simple as writing a few lines of code.
+
+The core design follows a **layered architecture** where each component can be swapped independently. This enables developers to mix and match different reasoning strategies, memory backends, and tool integrations without rewriting the entire system.
+
+The core library should be something any reasonably experienced coder can read and understand end-to-end real quick.
+
 
 ## How to Contribute
 
 There are many ways to contribute to the Standard Agent project. We welcome contributions in the following areas:
 
--   **Core Components:**
-    -   **Reasoners:** Implement a new `BaseReasoner` to explore different problem-solving strategies.
-    -   **LLM Integrations:** Add support for new language models by creating a new class that inherits from `BaseLLM`.
-    -   **Tool Backends:** Connect to new tool providers by implementing the `JustInTimeToolingBase` interface.
-    -   **Memory Stores:** Integrate a persistent memory backend by creating a class that implements the `MutableMapping` interface.
--   **Reporting Bugs:** If you find a bug, please open an issue on our GitHub repository. Be sure to include a clear description of the bug, steps to reproduce it, and any relevant logs or error messages.
--   **Suggesting Enhancements:** If you have an idea for a new feature or an improvement to an existing one, please open an issue to discuss it.
--   **Improving Documentation:** If you see an area where the documentation could be improved, please feel free to submit a pull request. This includes the `docs/system_overview.md` file.
+-   **Reasoning Strategies:** The primary goal of this library is to serve as a collection of reference implementations for different agent reasoning strategies implementing the `BaseReasoner` interface. We welcome contributions of well-documented, easy-to-understand implementations of patterns like ReAct, LATS, Plan-Act, etc.
+-   **Examples:** We need good examples that show how `standard-agent` can be used to solve high-level goals. These examples should be clear, concise, and demonstrate the trade-offs between different reasoning strategies.
+-   **Tool Integrations:** While the library comes with a Jentic implementation, you can integrate any tool backend by implementing the `ToolBase` interface. We welcome contributions of new tool integrations.
+-   **Memory Implementations:** The library currently uses simple in-memory dictionaries for storage. We welcome contributions of persistent memory backends (Redis, SQLite, file-based storage) or specialized memory implementations (vector stores, semantic search, conversation summarizers) that implement the `MutableMapping` interface.
+-   **Bug Fixes & Documentation:** We always appreciate well-documented bug reports and improvements to our documentation.
+
+For example, the `SequentialReasoner` is composed of a `Plan`, `ExecuteStep`, `Reflect`, and `SummarizeResult` component. You can create new reasoning behaviors by implementing new "flavors" of these components—such as a ReAct-style executor or a critique-based reflector—and then mixing and matching them to create novel agent architectures. 
+We also encourage the contribution of entirely new `BaseReasoner` implementations to explore different approaches, such as a Tree of Thoughts, Graph Of Thoughts, ReAct, or LATS reasoner.
+
+If you have an idea for a new reasoner, a new component or a new way to combine existing ones, we'd love to see it!
 
 ## Code of Conduct
-
+``
 This project and everyone participating in it is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
 
-## Setting up the Development Environment
-
-To get started with development, you'll need to set up a local development environment. Here's how to do it:
-
-1.  **Fork the repository:** Start by forking the repository on GitHub.
-2.  **Clone your fork:** Clone your forked repository to your local machine.
-    ```bash
-    git clone https://github.com/YOUR_USERNAME/standard_agent.git
-    ```
-3.  **Create a virtual environment:** It's a good practice to use a virtual environment to manage your dependencies.
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-    ```
-4.  **Install dependencies:** Install the required dependencies using pip.
-    ```bash
-    pip install -r requirements.txt
-    ```
-5.  **Run the tests:** To make sure everything is set up correctly, run the test suite.
-    ```bash
-    pytest
-    ```
 
 ## Pull Request Process
 
 1.  **Fork and Branch:** Create a fork of the repository and create a new branch for your feature or bug fix.
 2.  **Code and Test:** Write your code and add tests to cover your changes. Make sure the existing test suite passes.
-3.  **Update Documentation:** If you've added a new feature or changed an existing one, be sure to update the relevant documentation, including the `docs/system_overview.md` file.
+3.  **Update Documentation:** If you've added a new feature or changed an existing one, be sure to update the relevant documentation.
 4.  **Submit a Pull Request:** Open a pull request to the `main` branch of the original repository. Provide a clear description of your changes and reference any relevant issues.
-
-## Configuration
-
-The `config.json` file is used to configure the agent's services. To get started, you will need to add your `JENTIC_API_KEY` to this file.
-
-```json
-{
-  "JENTIC_API_KEY": "your-api-key-here"
-}
-```
-
-**Important:** Do not commit your `config.json` file to the repository. It is included in the `.gitignore` file to prevent accidental exposure of your API keys.
 
 
 ## Styleguides
