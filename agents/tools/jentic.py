@@ -126,7 +126,7 @@ class JenticClient(JustInTimeToolingBase):
                     operation_uuids=[tool.id] if tool.type == "operation" else []
                 )
             )
-        ).model_dump(exclude_none=False)
+        ).parsed()
 
         # Find a specific result matching the tool we are looking for
         result = (results.get('workflows', {}).get(tool.id) or
