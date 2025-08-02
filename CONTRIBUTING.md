@@ -8,7 +8,7 @@ The Standard-Agent library is guided by a simple mission: to demonstrate that bu
 
 Our core principles are:
 
--   **Composition over Configuration:** We believe that new capabilities should emerge from the interplay of simple, independent components. Our goal is to provide a library of swappable parts that can be combined in novel ways, rather than a monolithic framework that requires extensive configuration.
+-   **Composition:** We believe that new capabilities should emerge from the interplay of simple, independent components. Our goal is to provide a library of swappable parts that can be combined in novel ways.
 
 -   **Clarity and Simplicity:** The entire codebase should be something any reasonably experienced coder can read and understand quickly. We prioritize clear, readable code over complex, "magic" abstractions.
 
@@ -37,6 +37,17 @@ If you have an idea to improve the Standard Agent, we'd love to see it!
 This project and everyone participating in it is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
 
 
+## Submitting Issues
+
+We use GitHub Issues for all bug reports and feature requests. Before opening a new issue, please search the existing issues to see if your problem or idea has already been discussed.
+
+When you're ready, please use our issue templates to create a report:
+
+-   **[🐛 Bug Report](https://github.com/jentic/standard-agent/issues/new?assignees=&labels=bug&template=bug_report.md&title=%5BBug%5D+)**
+-   **[✨ Feature Request](https://github.com/jentic/standard-agent/issues/new?assignees=&labels=enhancement&template=feature_request.md&title=%5BFeature%5D+)**
+
+This helps us stay organized and ensures we have all the information we need to address your submission efficiently. We look forward to your feedback!
+
 ## Pull Request Process
 
 To ensure a smooth and transparent process, we ask that all pull requests be linked to a GitHub issue.
@@ -64,13 +75,6 @@ To make the review process as efficient as possible, please try to keep your pul
 - **Branch Naming**: Use descriptive names: `feature/description`, `fix/issue-description`
 - **Commit Messages**: Write clear, concise commit messages describing your changes
 - **Documentation**: Update relevant documentation when making changes
-
-## Community
-
-- **Discussions**: [Insert forum/discussion board]
-- **Questions**: Open an issue with a "question" label for any questions
-- **Meetings**: [Insert information about community meetings if applicable]
-
 
 ## Recognition
 
