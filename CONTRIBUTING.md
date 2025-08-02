@@ -72,9 +72,11 @@ To make the review process as efficient as possible, please try to keep your pul
 
 ## Development Workflow
 
-- **Branch Naming**: Use descriptive names: `feature/description`, `fix/issue-description`
-- **Commit Messages**: Write clear, concise commit messages describing your changes
-- **Documentation**: Update relevant documentation when making changes
+- **Branch Naming**: Use descriptive names: `feature/description` or `fix/issue-description`.
+- **Commit Messages**: Write clear, concise commit messages describing your changes.
+- **Testing**: Before submitting your pull request, please ensure all tests pass by running `make test`.
+- **Linting**: Please ensure your code adheres to the project's style guidelines by running `make lint` and `make lint-strict`.
+- **Documentation**: Update relevant documentation when making changes.
 
 ## Recognition
 
