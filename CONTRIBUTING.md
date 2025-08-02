@@ -1,14 +1,20 @@
 # Contributing to Standard Agent
 
-First off, thank you for considering contributing to the Standard Agent! This document outlines the process for contributing to the Standard Agent Repository.
+Thank you for considering contributing to the Standard Agent! This document outlines the process for contributing to the Standard Agent Repository.
 
-## Project Philosophy
+## Guiding Principles
 
-`Standard-Agent` is a **modular AI agent framework** built on composition principles. It is intended as a minimal set of reference implementations of different types of agent reasoning and tool-use strategies which can then be used to compose agents. The goal is to show that building an agent can be as simple as writing a few lines of code.
+The Standard-Agent library is guided by a simple mission: to demonstrate that building a powerful, modular AI agent can be straightforward and intuitive. We provide a minimal set of reference implementations that can be easily understood, extended, and composed.
 
-The core design follows a **layered architecture** where each component can be swapped independently. This enables developers to mix and match different reasoning strategies, memory backends, and tool integrations without rewriting the entire system.
+Our core principles are:
 
-The core library should be something any reasonably experienced coder can read and understand end-to-end real quick.
+-   **Composition over Configuration:** We believe that new capabilities should emerge from the interplay of simple, independent components. Our goal is to provide a library of swappable parts that can be combined in novel ways, rather than a monolithic framework that requires extensive configuration.
+
+-   **Clarity and Simplicity:** The entire codebase should be something any reasonably experienced coder can read and understand quickly. We prioritize clear, readable code over complex, "magic" abstractions.
+
+-   **Extensibility by Default:** Every core component is built around a clear interface (`BaseReasoner`, `ToolBase`, `MutableMapping`), making it easy to add new reasoning strategies, tool integrations, and memory backends without needing to change the core library.
+
+These principles guide our development and we welcome contributions that share this vision.
 
 
 ## How to Contribute
