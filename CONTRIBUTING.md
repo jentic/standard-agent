@@ -22,7 +22,7 @@ These principles guide our development and we welcome contributions that share t
 There are many ways to contribute to the Standard Agent project. We welcome contributions in the following areas:
 
 -   **Reasoning Strategies:** The primary goal of this library is to serve as a collection of reference implementations for different agent reasoning strategies implementing the `BaseReasoner` interface. We welcome contributions of well-documented, easy-to-understand implementations of patterns like ReAct, LATS, Plan-Act, etc.
--   **Examples:** We need good examples that show how `standard-agent` can be used to solve high-level goals. These examples should be clear, concise, and demonstrate the trade-offs between different reasoning strategies.
+-   **Examples:** We need good examples that show how `standard-agent` can be used to solve high-level goals. These examples should be clear and concise.
 -   **Tool Integrations:** While the library comes with a Jentic implementation, you can integrate any tool backend by implementing the `ToolBase` interface. We welcome contributions of new tool integrations.
 -   **Memory Implementations:** The library currently uses simple in-memory dictionaries for storage. We welcome contributions of persistent memory backends (Redis, SQLite, file-based storage) or specialized memory implementations (vector stores, semantic search, conversation summarizers) that implement the `MutableMapping` interface.
 -   **Bug Fixes & Documentation:** We always appreciate well-documented bug reports and improvements to our documentation.
@@ -58,7 +58,7 @@ To ensure a smooth and transparent process, we ask that all pull requests be lin
 
 2.  **Fork & Branch:** Create a fork of the repository and make your changes in a descriptively named branch.
 
-3.  **Code & Test:** Write your code and add tests to cover your changes. Make sure the existing test suite passes by running `make test`.
+3.  **Code & Test:** Write your code and add tests to cover your changes. Make sure the existing test suite passes.
 
 4.  **Update Documentation:** If you've added a new feature or changed an existing one, be sure to update the relevant documentation.
 
