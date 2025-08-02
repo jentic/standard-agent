@@ -20,8 +20,8 @@ If applicable, add screenshots to help explain your problem.
 
 ## Environment (please complete the following information):
  - OS: [e.g. Mac, Windows]
- - Python Version [e.g. 22]
- - Standard-Agent Version [e.g. 22]
+ - Python Version 
+ - Standard-Agent Version 
 
 ## Additional context
 Add any other context about the problem here.
