@@ -35,7 +35,11 @@ class JenticTool(ToolBase):
 
         self.name = schema.get('summary', 'Unnamed Tool')
         self.description = schema.get('description', '') or f"{schema.get('method')} {schema.get('path')}"
-        self.type = "operation" if 'operation_uuid' in schema else "workflow"
+        # Allow explicit type override, otherwise infer from schema
+        if 'type' in schema:
+            self.type = schema['type']
+        else:
+            self.type = "operation" if 'operation_uuid' in schema else "workflow"
         self.api_name = schema.get('api_name', 'unknown')
         self.method = schema.get('method')  # For operations
         self.path = schema.get('path')      # For operations

@@ -10,10 +10,9 @@ from agents.reasoner.sequential.exceptions import (
     ToolSelectionError,
     MissingInputError
 )
-
+from agents.tools.jentic import JenticTool
 from utils.logger import get_logger, trace_method
 logger = get_logger(__name__)
-
 
 ### Prompts
 STEP_CLASSIFICATION_PROMPT = dedent("""
@@ -249,6 +248,17 @@ class ReWOOExecuteStep(ExecuteStep):
             state.history.append(f"remembered {step.output_key} : {step.result}")
 
     def _select_tool(self, step):
+        # Check rewoo reflector suggestion first
+        suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")
+        if suggestion and suggestion["action"] in ("change_tool", "retry_params"):
+            logger.info("using_reflector_suggested_tool", step_text=step.text, tool_id=suggestion["tool"]["id"])
+            
+            # If suggested action = change_tool, delete suggestion from memory
+            if suggestion["action"] == "change_tool":
+                del self.memory[f"rewoo_reflector_suggestion:{step.text}"]
+            
+            return self.tools.load(JenticTool({ "id": suggestion["tool"]["id"],"type": suggestion["tool"]["type"]}))
+
         tools = self.tools.search(step.text, top_k=20)
         tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(
             step=step.text,
@@ -266,6 +276,13 @@ class ReWOOExecuteStep(ExecuteStep):
         return self.tools.load(tool)
 
     def _generate_params(self, step, tool, inputs):
+        # Check rewoo reflector suggestion first
+        suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
+        if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
+            logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
+            param_schema = tool.get_parameters() or {}
+            return {k: v for k, v in suggestion["params"].items() if k in param_schema}
+
         try:
             param_schema = tool.get_parameters() or {}
             prompt  = PARAMETER_GENERATION_PROMPT.format(

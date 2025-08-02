@@ -12,7 +12,6 @@ from agents.llm.base_llm import BaseLLM
 from utils.logger import get_logger, trace_method
 logger = get_logger(__name__)
 
-
 ### Prompts ###
 BASE_REFLECTION_PROMPT = dedent("""
     <role>
@@ -115,11 +114,11 @@ class ReWOOReflect(Reflect):
         )
 
         # Try to find alternative tools to call.
-        alternatives = "\n".join([
-            t.get_summary()
-            for t in self.tools.search(step.text, top_k=25)
+        alternative_tools = [
+            t for t in self.tools.search(step.text, top_k=25)
             if t.id != failed_tool_id
-        ])
+        ]
+        alternatives = "\n".join([t.get_summary() for t in alternative_tools])
         prompt += ALTERNATIVE_TOOLS_SECTION.format(alternative_tools=alternatives)
 
         # Get the LLM to reflect
@@ -143,13 +142,46 @@ class ReWOOReflect(Reflect):
             logger.info("reflection_rephrase", original_step=step.text, new_step=new_step.text)
 
         elif action == "change_tool":
-            tool_id = decision.get("tool_id")
-            self.memory[f"forced_tool:{new_step.text}"] = tool_id
-            logger.info("reflection_change_tool", step_text=new_step.text, forced_tool_id=tool_id)
+            # Find the new tool from already-searched alternatives
+            new_tool_id = decision.get("tool_id")
+            new_tool = next((t for t in alternative_tools if t.id == new_tool_id), None)
+            self._save_suggestion_in_memory(
+                new_step,
+                "change_tool",
+                new_tool_id,
+                new_tool.type
+            )
+            logger.info("reflection_change_tool", step_text=new_step.text, new_tool_id=new_tool_id)
 
         elif action == "retry_params":
-            params = decision.get("params")
-            self.memory[f"forced_params:{new_step.text}"] = params
-            logger.info("reflection_retry_params", step_text=new_step.text, forced_params=params)
+            # Use the same failed tool with new parameters
+            params = decision.get("params", {})
+            self._save_suggestion_in_memory(
+                new_step,
+                "retry_params",
+                failed_tool_id,
+                error.tool.type,
+                params
+            )
+            logger.info("reflection_retry_params", step_text=new_step.text, params=params)
+
 
         state.plan.appendleft(new_step)
+
+    def _save_suggestion_in_memory(
+            self,
+            new_step: Step,
+            action: str,
+            tool_id: str,
+            tool_type: str,
+            params: dict = None
+    ) -> None:
+        """Create reflector suggestion dict and store in memory"""
+        suggestion = {
+            "action": action,
+            "tool": {"id": tool_id, "type": tool_type}
+        }
+        if params is not None:
+            suggestion["params"] = params
+
+        self.memory[f"rewoo_reflector_suggestion:{new_step.text}"] = suggestion
