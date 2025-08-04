@@ -15,7 +15,7 @@ It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool platfor
 - [Extending the Framework](#extending-the-framework)
 - [Roadmap](#roadmap)
 
-> **Join our community!** Connect with contributors and users on [Discord](https://discord.gg/yrxmDZWMqB) to discuss ideas, ask questions, and collaborate on the OAK repository.
+> **Join our community!** Connect with contributors and users on [Discord](https://discord.gg/yrxmDZWMqB) to discuss ideas, ask questions, and collaborate on the Standard Agent repository.
 
 
 ## Quick Start
