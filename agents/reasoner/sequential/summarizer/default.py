@@ -46,6 +46,21 @@ SUMMARIZE_RESULT_PROMPT = textwrap.dedent("""
     - Do not reveal internal monologue or technical failures
     - Present results as if from a helpful expert assistant
     </constraints>
+    
+    <missing_api_keys>
+    If the execution log shows a tool call failed for lack of credentials (look for Tool Unauthorized: in the Execution Log):
+    
+    Return an additional short block that starts with  
+    `Missing API Credentials:`  ← only once, even if several tools failed
+    
+    Each block must include for each failed tool due to missing credentials:  
+    • **Tool attempted** – the tool that was attempted, api_name and api_vendor information 
+    • **Why the key is required** – one concise line using the tool vendor  
+    • **How to get the key** – brief hint or official link if known, only provide steps to obtain the key if known. 
+    • **Action step** – tell the user to configure the key in Jentic at `www.jentic_keys.com` and retry the goal
+    
+    No extra commentary—just clear, actionable instructions.
+    </missing_api_keys>
 
     <output_format>
     Clear, user-friendly response using markdown formatting (headings, lists, bold text as appropriate)
