@@ -81,8 +81,7 @@ class ImplicitGoalResolver(BaseGoalResolver):
                 logger.info("resolved_ambiguous_goal", goal=goal, revised_goal=response["revised_goal"])
                 return response["revised_goal"]
 
-            clarification_question = response.get("clarification_question")
-            raise ClarificationNeededError(question=clarification_question)
+            raise ClarificationNeededError(question=response.get("clarification_question"))
 
         return goal
 

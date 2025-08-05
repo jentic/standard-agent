@@ -15,7 +15,7 @@ class ReWOOAgent(StandardAgent):
     - JenticClient for external tool access
     - DictMemory for state persistence
     - ReWOO sequential reasoner for planning, execution, and reflection
-    - An ImplicitGoalResolver to enable conversational follow-ups.
+    - ImplicitGoalResolver to enable conversational follow-ups.
     """
 
     def __init__(self, *, model: str | None = None, max_retries: int = 2):

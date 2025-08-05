@@ -45,7 +45,6 @@ class StandardAgent:
             memory: The memory backend.
             reasoner: The reasoning engine that will use the services.
 
-            Optional Args
             goal_resolver: A component to preprocess the user's goal.
             conversation_history_window: The number of past interactions to keep in memory.
         """
