@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, List
 
 from collections.abc import MutableMapping
@@ -12,10 +12,11 @@ from agents.llm.base_llm import BaseLLM
 class ReasoningResult:
     """Lightweight summary returned by a Reasoner run."""
 
-    final_answer: str
-    iterations: int
-    tool_calls: List[dict[str, Any]]
-    success: bool
+    final_answer: str = ""
+    iterations: int = 0
+    tool_calls: List[dict[str, Any]] = field(default_factory=list)
+    success: bool = False
+    clarification_question: str | None = None
     error_message: str | None = None
 
 

@@ -7,11 +7,12 @@ agent owns the services; the reasoner simply uses what the agent provides.
 """
 from __future__ import annotations
 
-from collections.abc import MutableMapping
-from  agents.reasoner.base import BaseReasoner
+from  collections.abc import MutableMapping
+from  collections import deque
+from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
-from  agents.reasoner.base import ReasoningResult
 from  agents.tools.base import JustInTimeToolingBase
+from  agents.goal_processing.base import BaseGoalResolver, ClarificationNeededError
 
 from  uuid import uuid4
 from  enum import Enum
@@ -31,6 +32,10 @@ class StandardAgent:
         tools: JustInTimeToolingBase,
         memory: MutableMapping,
         reasoner: BaseReasoner,
+
+        # Optionals
+        goal_resolver: BaseGoalResolver = None,
+        conversation_history_window: int = 5
     ):
         """Initializes the agent and injects services into the reasoner.
 
@@ -45,6 +50,9 @@ class StandardAgent:
         self.memory = memory
         self.reasoner = reasoner
 
+        self.goal_resolver = goal_resolver
+        self.memory.setdefault("conversation_history", deque(maxlen=conversation_history_window))
+
         self._state: AgentState = AgentState.READY
 
     @property
@@ -55,12 +63,19 @@ class StandardAgent:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
 
+        if self.goal_resolver:
+            try:
+                goal = self.goal_resolver.process(goal, self.memory.get("conversation_history"))
+            except ClarificationNeededError as exc:
+                return ReasoningResult(success=False, clarification_question=exc.question)
+
         self.memory[f"goal:{run_id}"] = goal
         self._state = AgentState.BUSY
 
         try:
             result = self.reasoner.run(goal)
             self.memory[f"result:{run_id}"] = result
+            self.memory["conversation_history"].append({"goal": goal, "result": result.final_answer})
             self._state = AgentState.READY
             return result
 
