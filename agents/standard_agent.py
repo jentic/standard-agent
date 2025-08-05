@@ -12,7 +12,7 @@ from  collections import deque
 from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
 from  agents.tools.base import JustInTimeToolingBase
-from  agents.goal_processing.base import BaseGoalResolver, ClarificationNeededError
+from  agents.goal_processor.base import BaseGoalResolver, ClarificationNeededError
 
 from  uuid import uuid4
 from  enum import Enum
