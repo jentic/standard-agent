@@ -12,7 +12,7 @@ from  collections import deque
 from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
 from  agents.tools.base import JustInTimeToolingBase
-from  agents.goal_processor.base import BaseGoalResolver, ClarificationNeededError
+from  agents.goal_resolver.base import BaseGoalResolver, ClarificationNeededError
 
 from  uuid import uuid4
 from  enum import Enum
@@ -23,7 +23,7 @@ class AgentState(str, Enum):
     NEEDS_ATTENTION     = "NEEDS_ATTENTION"
 
 class StandardAgent:
-    """Wires together a reasoner with shared services (LLM, memory, tools)."""
+    """Top-level class that orchestrates the main components of the agent framework."""
 
     def __init__(
         self,
@@ -37,13 +37,17 @@ class StandardAgent:
         goal_resolver: BaseGoalResolver = None,
         conversation_history_window: int = 5
     ):
-        """Initializes the agent and injects services into the reasoner.
+        """Initializes the agent.
 
         Args:
             llm: The language model instance.
             tools: The interface for accessing external tools.
             memory: The memory backend.
             reasoner: The reasoning engine that will use the services.
+
+            Optional Args
+            goal_resolver: A component to preprocess the user's goal.
+            conversation_history_window: The number of past interactions to keep in memory.
         """
         self.llm = llm
         self.tools = tools

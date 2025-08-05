@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Sequence, Dict, Any
 from textwrap import dedent
 from agents.llm.base_llm import BaseLLM
-from agents.goal_processor.base import ClarificationNeededError, BaseGoalResolver
+from agents.goal_resolver.base import ClarificationNeededError, BaseGoalResolver
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
