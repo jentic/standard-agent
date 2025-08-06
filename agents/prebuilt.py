@@ -3,7 +3,7 @@ from agents.tools.jentic import JenticClient
 from agents.memory.dict_memory import DictMemory
 from agents.reasoner.prebuilt import ReWOOReasoner
 from agents.llm.litellm import LiteLLM
-from agents.goal_preprocessor.implicit_goal_resolver import ConversationalGoalPreprocessor
+from agents.goal_preprocessor.conversational import ConversationalGoalPreprocessor
 
 
 class ReWOOAgent(StandardAgent):
