@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Sequence, Dict, Any, Tuple
 from textwrap import dedent
 from agents.llm.base_llm import BaseLLM
-from agents.goal_resolver.base import BaseGoalResolver
+from agents.goal_preprocessor.base import BaseGoalPreprocessor
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -60,7 +60,7 @@ IMPLICIT_GOAL_RESOLVER_PROMPT = dedent("""
 """)
 
 
-class ImplicitGoalResolver(BaseGoalResolver):
+class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
     """
     LLM-based processor that tries to resolve ambiguous references in a goal
     using recent conversation history. If it cannot, it raises
@@ -80,7 +80,7 @@ class ImplicitGoalResolver(BaseGoalResolver):
                 return response["revised_goal"], None
             else:
                 logger.warning('clarification_question', clarification_question=response["clarification_question"])
-                return goal, response.get("clarification_question", "Could you clarify your request?")
+                return goal, response.get("clarification_question")
 
         return goal, None
 

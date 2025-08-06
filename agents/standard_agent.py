@@ -12,7 +12,7 @@ from  collections import deque
 from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
 from  agents.tools.base import JustInTimeToolingBase
-from  agents.goal_resolver.base import BaseGoalResolver
+from  agents.goal_preprocessor.base import BaseGoalPreprocessor
 
 from  uuid import uuid4
 from  enum import Enum
@@ -34,7 +34,7 @@ class StandardAgent:
         reasoner: BaseReasoner,
 
         # Optionals
-        goal_resolver: BaseGoalResolver = None,
+        goal_resolver: BaseGoalPreprocessor = None,
         conversation_history_window: int = 5
     ):
         """Initializes the agent.
@@ -67,10 +67,10 @@ class StandardAgent:
         run_id = uuid4().hex
 
         if self.goal_resolver:
-            revised_goal, user_message = self.goal_resolver.process(goal, self.memory.get("conversation_history"))
-            if user_message:
-                self.memory["conversation_history"].append({ "goal": goal, "result": f"Asked for clarification: {user_message}"})
-                return ReasoningResult(success=False, final_answer=user_message)
+            revised_goal, intervention_message = self.goal_resolver.process(goal, self.memory.get("conversation_history"))
+            if intervention_message:
+                self.memory["conversation_history"].append({ "goal": goal, "result": f"User Intervention Message: {intervention_message}"})
+                return ReasoningResult(success=False, final_answer=intervention_message)
             goal = revised_goal
 
         self.memory[f"goal:{run_id}"] = goal

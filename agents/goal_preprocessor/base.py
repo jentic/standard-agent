@@ -6,7 +6,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-class BaseGoalResolver(ABC):
+class BaseGoalPreprocessor(ABC):
     """
     Takes a user goal and conversation history, returning a revised goal if the goal is ambiguous.
 
@@ -15,9 +15,9 @@ class BaseGoalResolver(ABC):
             history: A sequence of previous goal/result dictionaries.
 
         Returns:
-            A tuple of (revised_goal, clarification_question).
-            - If clarification_question is None, use the revised_goal.
-            - If clarification_question is present, ask the user that question.
+            A tuple of (revised_goal, intervention_message).
+            - If intervention_message is None, use the revised_goal.
+            - If intervention_message is present, surface the intervention_message to the user.
     """
 
     @abstractmethod

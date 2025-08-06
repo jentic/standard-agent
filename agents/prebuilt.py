@@ -3,7 +3,7 @@ from agents.tools.jentic import JenticClient
 from agents.memory.dict_memory import DictMemory
 from agents.reasoner.prebuilt import ReWOOReasoner
 from agents.llm.litellm import LiteLLM
-from agents.goal_resolver.implicit_goal_resolver import ImplicitGoalResolver
+from agents.goal_preprocessor.implicit_goal_resolver import ConversationalGoalPreprocessor
 
 
 class ReWOOAgent(StandardAgent):
@@ -32,7 +32,7 @@ class ReWOOAgent(StandardAgent):
         memory = DictMemory()
         reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_retries=max_retries)
 
-        goal_processor = ImplicitGoalResolver(llm)
+        goal_processor = ConversationalGoalPreprocessor(llm)
 
         # Call parent constructor with assembled components
         super().__init__(
