@@ -113,15 +113,13 @@ class JenticClient(JustInTimeToolingBase):
         logger.debug("tool_load", tool_id=tool.id)
 
         # Call jentic load API directly
-        results = asyncio.run(self._jentic.load(LoadRequest(ids =[tool.id])))
-        results = results.model_dump(exclude_none=False)
+        response = asyncio.run(self._jentic.load(LoadRequest(ids =[tool.id])))
 
         # Find a specific result matching the tool we are looking for
-        result = (results.get('workflows', {}).get(tool.id) or
-                  results.get('operations', {}).get(tool.id))
+        result = response.tool_info[tool.id]
         if result is None:
             raise ToolNotFoundError("Requested tool could not be loaded", tool)
-        return JenticTool(result)
+        return JenticTool(result.model_dump(exclude_none=False))
 
 
     def execute(self, tool: ToolBase, parameters: Dict[str, Any]) -> Any:
