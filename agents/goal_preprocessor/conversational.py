@@ -21,11 +21,9 @@ CONVERSATIONAL_GOAL_RESOLVER_PROMPT = dedent("""
     1. Analyze the conversation history, prioritizing the most recent goals and results.
     2. Identify **critical ambiguity** in the new goal — references that make the goal impossible to execute (e.g., pronouns like "it" without clear referents, phrases like "do it again" without knowing what "it" is, or unclear targets like "send it to him" without knowing what or who).
     3. **Important**: Goals that are actionable but could be more specific are NOT ambiguous. An agent can make reasonable assumptions and proceed with execution.
-    4. If the goal contains critical ambiguity:
-       - Determine whether the ambiguity can be fully resolved **only using the conversation history**.
-       - If it *can* be resolved, rewrite the goal to be explicit, complete, and self-contained.
-       - If it *cannot* be resolved, generate **a single clear clarification question** for the user.
-    5. If the goal is actionable (even if it could be more detailed), return it unchanged.
+    4. If the goal contains critical ambiguity that can be resolved using conversation history, rewrite the goal to be explicit, complete, and self-contained.
+    5. If the goal contains critical ambiguity that cannot be resolved using conversation history, generate **a single clear clarification question** for the user.
+    6. If the goal is actionable (even if it could be more detailed), provide neither a revised goal nor a clarification question.
     
     Critical ambiguity signals (these make execution impossible):
     - Pronouns without clear referents that prevent action (e.g., "send it" - what is "it"?)
@@ -52,16 +50,15 @@ CONVERSATIONAL_GOAL_RESOLVER_PROMPT = dedent("""
     Respond with a valid JSON object in the following format:
     
     {{
-      "is_ambiguous": boolean,                // True if the goal contains critical ambiguity that prevents execution
-      "can_be_resolved": boolean,            // True only if critical ambiguity can be resolved using history
-      "revised_goal": string,                // If resolvable, return rewritten explicit goal; else empty string
-      "clarification_question": string       // If not resolvable, return a user-facing clarification question; else empty string
+      "revised_goal": string,                // If ambiguity can be resolved, return rewritten explicit goal; otherwise empty string
+      "clarification_question": string       // If ambiguity cannot be resolved, return a user-facing clarification question; otherwise empty string
     }}
     
-    Validation Rules:
-    - If "is_ambiguous" is False, "can_be_resolved" must be False, and both "revised_goal" and "clarification_question" should be empty strings.
-    - If "is_ambiguous" is True and "can_be_resolved" is True, return a meaningful "revised_goal" and an empty "clarification_question".
-    - If "is_ambiguous" is True and "can_be_resolved" is False, return a meaningful "clarification_question" and an empty "revised_goal".
+    Rules:
+    - Provide EITHER a "revised_goal" OR a "clarification_question", never both.
+    - If the goal is clear and actionable as-is, leave both fields as empty strings.
+    - If you can resolve ambiguity using conversation history, provide only "revised_goal".
+    - If you cannot resolve ambiguity, provide only "clarification_question".
     </output_format>
 """)
 
@@ -81,12 +78,12 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
         prompt = CONVERSATIONAL_GOAL_RESOLVER_PROMPT.format(history_str=history_str, goal=goal)
         response = self.llm.prompt_to_json(prompt)
 
-        if response.get("is_ambiguous", False):
-            if response.get("can_be_resolved", False) and response.get("revised_goal"):
-                logger.info("revised_goal", original_goal=goal, revised_goal=response["revised_goal"])
-                return response["revised_goal"], None
-            else:
-                logger.warning('clarification_question', clarification_question=response["clarification_question"])
-                return goal, response.get("clarification_question")
+        if response.get("revised_goal"):
+            logger.info("revised_goal", original_goal=goal, revised_goal=response["revised_goal"])
+            return response["revised_goal"], None
+        
+        if response.get("clarification_question"):
+            logger.warning('clarification_question', clarification_question=response["clarification_question"])
+            return goal, response["clarification_question"]
 
         return goal, None
