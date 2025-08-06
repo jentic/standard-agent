@@ -8,7 +8,7 @@ from agents.goal_preprocessor.base import BaseGoalPreprocessor
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
-IMPLICIT_GOAL_RESOLVER_PROMPT = dedent("""
+CONVERSATIONAL_GOAL_RESOLVER_PROMPT = dedent("""
     <role>
     You are a Goal Disambiguator working within the Agent ecosystem.
     Your responsibility is to analyze a user’s new goal in the context of the recent conversation history and determine whether the goal is ambiguous or underspecified. 
@@ -89,7 +89,7 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
         history_str = "\n".join(
             f"Goal: {item['goal']}\nResult: {item['result']}" for item in history
         )
-        return IMPLICIT_GOAL_RESOLVER_PROMPT.format(
+        return CONVERSATIONAL_GOAL_RESOLVER_PROMPT.format(
             history_str=history_str,
             goal=goal,
         )
