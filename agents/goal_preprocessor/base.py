@@ -17,7 +17,7 @@ class BaseGoalPreprocessor(ABC):
     @abstractmethod
     def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
         """
-        Preprocess a raw user goal using recent conversation history.
+        Preprocess a raw user goal.
         
         Args:
             goal: The raw goal from the user.

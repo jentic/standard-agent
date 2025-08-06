@@ -67,7 +67,7 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
     Resolves ambiguous user goals by leveraging conversation history.
 
     This preprocessor analyzes goals that contain unclear references (like "do it again",
-    "send it to him", or "fix that") and attempts to resolve them using recent
+    "send it again", or "fix that") and attempts to resolve them using recent
     conversation context.
 
     Returns:
