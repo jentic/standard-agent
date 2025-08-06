@@ -70,8 +70,6 @@ class ImplicitGoalResolver(BaseGoalResolver):
         self.llm = llm
 
     def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
-        if not history:
-            return goal, None
 
         prompt = self._build_prompt(goal, history)
         response = self.llm.prompt_to_json(prompt)

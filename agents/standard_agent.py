@@ -67,9 +67,11 @@ class StandardAgent:
         run_id = uuid4().hex
 
         if self.goal_resolver:
-            goal, clarification_question = self.goal_resolver.process(goal, self.memory.get("conversation_history"))
-            if clarification_question:
-                return ReasoningResult(success=False, clarification_question=clarification_question)
+            revised_goal, user_message = self.goal_resolver.process(goal, self.memory.get("conversation_history"))
+            if user_message:
+                self.memory["conversation_history"].append({ "goal": goal, "result": f"Asked for clarification: {user_message}"})
+                return ReasoningResult(success=False, final_answer=user_message)
+            goal = revised_goal
 
         self.memory[f"goal:{run_id}"] = goal
         self._state = AgentState.BUSY

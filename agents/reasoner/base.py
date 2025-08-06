@@ -16,7 +16,6 @@ class ReasoningResult:
     iterations: int = 0
     tool_calls: List[dict[str, Any]] = field(default_factory=list)
     success: bool = False
-    clarification_question: str | None = None
     error_message: str | None = None
 
 
