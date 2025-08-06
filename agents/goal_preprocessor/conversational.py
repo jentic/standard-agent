@@ -77,7 +77,8 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
 
     def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
 
-        prompt = self._build_prompt(goal, history)
+        history_str = "\n".join(f"Goal: {item['goal']}\nResult: {item['result']}" for item in history)
+        prompt = CONVERSATIONAL_GOAL_RESOLVER_PROMPT.format(history_str=history_str, goal=goal)
         response = self.llm.prompt_to_json(prompt)
 
         if response.get("is_ambiguous", False):
@@ -89,13 +90,3 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
                 return goal, response.get("clarification_question")
 
         return goal, None
-
-    @staticmethod
-    def _build_prompt(goal: str, history: Sequence[Dict[str, Any]]) -> str:
-        history_str = "\n".join(
-            f"Goal: {item['goal']}\nResult: {item['result']}" for item in history
-        )
-        return CONVERSATIONAL_GOAL_RESOLVER_PROMPT.format(
-            history_str=history_str,
-            goal=goal,
-        )

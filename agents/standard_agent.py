@@ -34,7 +34,7 @@ class StandardAgent:
         reasoner: BaseReasoner,
 
         # Optionals
-        goal_resolver: BaseGoalPreprocessor = None,
+        goal_preprocessor: BaseGoalPreprocessor = None,
         conversation_history_window: int = 5
     ):
         """Initializes the agent.
@@ -45,7 +45,7 @@ class StandardAgent:
             memory: The memory backend.
             reasoner: The reasoning engine that will use the services.
 
-            goal_resolver: A component to preprocess the user's goal.
+            goal_preprocessor: A component to preprocess the user's goal.
             conversation_history_window: The number of past interactions to keep in memory.
         """
         self.llm = llm
@@ -53,7 +53,7 @@ class StandardAgent:
         self.memory = memory
         self.reasoner = reasoner
 
-        self.goal_resolver = goal_resolver
+        self.goal_preprocessor = goal_preprocessor
         self.memory.setdefault("conversation_history", deque(maxlen=conversation_history_window))
 
         self._state: AgentState = AgentState.READY
@@ -66,8 +66,8 @@ class StandardAgent:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
 
-        if self.goal_resolver:
-            revised_goal, intervention_message = self.goal_resolver.process(goal, self.memory.get("conversation_history"))
+        if self.goal_preprocessor:
+            revised_goal, intervention_message = self.goal_preprocessor.process(goal, self.memory.get("conversation_history"))
             if intervention_message:
                 self.memory["conversation_history"].append({ "goal": goal, "result": f"User Intervention Message: {intervention_message}"})
                 return ReasoningResult(success=False, final_answer=intervention_message)
