@@ -66,8 +66,8 @@ CONVERSATIONAL_GOAL_RESOLVER_PROMPT = dedent("""
 class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
     """
     LLM-based processor that tries to resolve ambiguous references in a goal
-    using recent conversation history. If it cannot, it raises
-    ClarificationNeededError with a follow-up question.
+    using recent conversation history.
+    If it cannot resolve ambiguity, it will ask the user for a clarification question.
     """
     def __init__(self, llm: BaseLLM):
         self.llm = llm
