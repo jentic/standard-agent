@@ -69,7 +69,7 @@ class StandardAgent:
         if self.goal_preprocessor:
             revised_goal, intervention_message = self.goal_preprocessor.process(goal, self.memory.get("conversation_history"))
             if intervention_message:
-                self.memory["conversation_history"].append({ "goal": goal, "result": f"User Intervention Message: {intervention_message}"})
+                self.memory["conversation_history"].append({ "goal": goal, "result": f"user intervention message: {intervention_message}"})
                 return ReasoningResult(success=False, final_answer=intervention_message)
             goal = revised_goal
 
