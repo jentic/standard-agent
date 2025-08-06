@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Sequence, Dict, Any, Tuple
 from textwrap import dedent
-from agents.llm.base_llm import BaseLLM
 from agents.goal_preprocessor.base import BaseGoalPreprocessor
 
 from utils.logger import get_logger
@@ -65,12 +64,17 @@ CONVERSATIONAL_GOAL_RESOLVER_PROMPT = dedent("""
 
 class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
     """
-    LLM-based processor that tries to resolve ambiguous references in a goal
-    using recent conversation history.
-    If it cannot resolve ambiguity, it will ask the user for a clarification question.
+    Resolves ambiguous user goals by leveraging conversation history.
+
+    This preprocessor analyzes goals that contain unclear references (like "do it again",
+    "send it to him", or "fix that") and attempts to resolve them using recent
+    conversation context.
+
+    Returns:
+        Tuple[str, str | None]: (revised_goal, clarification_question)
+        - revised_goal: The goal to execute (original or improved)
+        - clarification_question: Question for user if goal is unclear, None otherwise
     """
-    def __init__(self, llm: BaseLLM):
-        self.llm = llm
 
     def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
 

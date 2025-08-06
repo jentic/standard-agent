@@ -45,7 +45,7 @@ class StandardAgent:
             memory: The memory backend.
             reasoner: The reasoning engine that will use the services.
 
-            goal_preprocessor: A component to preprocess the user's goal.
+            goal_preprocessor: An OPTIONAL component to preprocess the user's goal.
             conversation_history_window: The number of past interactions to keep in memory.
         """
         self.llm = llm
