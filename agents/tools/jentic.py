@@ -7,7 +7,6 @@ import json
 from typing import Any, Dict, List, Optional
 
 from jentic import Jentic
-from jentic.lib.cfg import AgentConfig
 from jentic.lib.models import SearchRequest, LoadRequest, ExecutionRequest
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolNotFoundError, ToolExecutionError
@@ -37,11 +36,6 @@ class JenticTool(ToolBase):
 
         self.name = schema.get('summary', 'Unnamed Tool')
         self.description = schema.get('description', '') or f"{schema.get('method')} {schema.get('path')}"
-        # Allow explicit type override, otherwise infer from schema
-        if 'type' in schema:
-            self.type = schema['type']
-        else:
-            self.type = "operation" if 'operation_uuid' in schema else "workflow"
         self.api_name = schema.get('api_name', 'unknown')
         self.method = schema.get('method')  # For operations
         self.path = schema.get('path')      # For operations
@@ -116,17 +110,11 @@ class JenticClient(JustInTimeToolingBase):
         if not isinstance(tool, JenticTool):
             raise ValueError(f"Expected JenticTool, got {type(tool)}")
 
-        logger.debug("tool_load", tool_id=tool.id, tool_type=tool.type)
+        logger.debug("tool_load", tool_id=tool.id)
 
         # Call jentic load API directly
-        results = asyncio.run(
-            self._jentic.load(
-                LoadRequest(
-                    workflow_uuids=[tool.id] if tool.type == "workflow" else [],
-                    operation_uuids=[tool.id] if tool.type == "operation" else []
-                )
-            )
-        ).parsed()
+        results = asyncio.run(self._jentic.load(LoadRequest(ids =[tool.id])))
+        results = results.model_dump(exclude_none=False)
 
         # Find a specific result matching the tool we are looking for
         result = (results.get('workflows', {}).get(tool.id) or
@@ -143,14 +131,11 @@ class JenticClient(JustInTimeToolingBase):
         if not isinstance(tool, JenticTool):
             raise ValueError(f"Expected JenticTool, got {type(tool)}")
 
-        logger.info("tool_execute", tool_id=tool.id, tool_type=tool.type, param_count=len(parameters))
+        logger.info("tool_execute", tool_id=tool.id, param_count=len(parameters))
 
         try:
             # Call jentic execute API directly
-            if tool.type == "workflow":
-                result = asyncio.run(self._jentic.execute(ExecutionRequest(uuid=tool.id, inputs=parameters, execution_type='workflow')))
-            else:
-                result = asyncio.run(self._jentic.execute(ExecutionRequest(uuid=tool.id, inputs=parameters, execution_type='operation')))
+            result = asyncio.run(self._jentic.execute(ExecutionRequest(id=tool.id, inputs=parameters)))
 
             # The result object from the SDK has a 'status' and 'outputs'.
             # A failure in the underlying tool execution is not an exception, but a

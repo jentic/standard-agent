@@ -144,25 +144,13 @@ class ReWOOReflect(Reflect):
         elif action == "change_tool":
             # Find the new tool from already-searched alternatives
             new_tool_id = decision.get("tool_id")
-            new_tool = next((t for t in alternative_tools if t.id == new_tool_id), None)
-            self._save_suggestion_in_memory(
-                new_step,
-                "change_tool",
-                new_tool_id,
-                new_tool.type
-            )
+            self._save_suggestion_in_memory(new_step, "change_tool", new_tool_id)
             logger.info("reflection_change_tool", step_text=new_step.text, new_tool_id=new_tool_id)
 
         elif action == "retry_params":
             # Use the same failed tool with new parameters
             params = decision.get("params", {})
-            self._save_suggestion_in_memory(
-                new_step,
-                "retry_params",
-                failed_tool_id,
-                error.tool.type,
-                params
-            )
+            self._save_suggestion_in_memory(new_step,"retry_params", failed_tool_id, params)
             logger.info("reflection_retry_params", step_text=new_step.text, params=params)
 
 
@@ -173,13 +161,12 @@ class ReWOOReflect(Reflect):
             new_step: Step,
             action: str,
             tool_id: str,
-            tool_type: str,
             params: dict = None
     ) -> None:
         """Create reflector suggestion dict and store in memory"""
         suggestion = {
             "action": action,
-            "tool": {"id": tool_id, "type": tool_type}
+            "tool_id": tool_id
         }
         if params is not None:
             suggestion["params"] = params
