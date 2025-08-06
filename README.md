@@ -204,10 +204,6 @@ This composition approach means you can:
 
 The key insight is that each component follows well-defined interfaces (`BaseLLM`, `BaseMemory`, `JustInTimeToolingBase`, etc.), so they can be combined in any configuration that makes sense for your use case.
 
-#### Advanced Capability: Goal Processing
-To support more complex interactions, the `StandardAgent` can be configured with an optional **Goal Processor**. This is a swappable component that preprocesses a user's raw goal before the main reasoning loop begins. The pre-built `ReWOOAgent`, for example, includes an `ImplicitGoalResolver` that uses conversation history to understand follow-up questions. In the future, this same extension point could be used to add security layers that detect malicious intent or to sanitize inputs before execution.
-
-
 ### Project Layout
 
 ```
@@ -227,6 +223,7 @@ To support more complex interactions, the `StandardAgent` can be configured with
 │           ├── executors/          # Components for executing single steps of a plan
 │           ├── reflectors/         # Components for analyzing failures and self-healing
 │           └── summarizer/         # Components for summarizing final results
+│   ├── goal_preprocessor/          # [OPTIONAL] Goal preprocessor
 │
 ├── utils/
 │   ├── cli.py                      # Command-line interface helpers
@@ -248,6 +245,8 @@ To support more complex interactions, the `StandardAgent` can be configured with
 | **Memory**       | `MutableMapping`                                                         | A key-value store accessible to all components.                   |
 | **Tools**        | `JustInTimeToolingBase`                                              | Abstracts external actions (APIs, shell commands, etc.).          |
 | **LLM Wrapper**  | `BaseLLM`                                                            | Provides a uniform interface for interacting with different LLMs. |
+| **Goal Preprocessor** | `BaseGoalPreprocessor`                                            | [Optional] Preprocess goals before reasoning                      |
+
 
 ### The Sequential Reasoner
 
@@ -275,7 +274,7 @@ The framework is designed to be modular. Here are some common extension points:
 | **New tool provider**              | Create a class that inherits from `JustInTimeToolingBase`, implement its methods, and pass it to your `StandardAgent`.                                                               |
 | **Persistent memory**              | Create a class that implements the `MutableMapping` interface (e.g., using Redis), and pass it to your `StandardAgent`.                                                              |
 | **New Planners, Executors, etc.**  | Create your own implementations of `Plan`, `ExecuteStep`, `Reflect`, or `SummarizeResult` to invent new reasoning capabilities, then compose them in a `SequentialReasoner`. |
-| **Pre-process or validate goals**  | Create a class that inherits from `BaseGoalProcessor` and pass it to `StandardAgent`. Use this to resolve conversational ambiguities, check for malicious intent, or sanitize inputs. |
+| **Pre-process or validate goals**  | Create a class that inherits from `BaseGoalPreprocessor` and pass it to `StandardAgent`. Use this to resolve conversational ambiguities, check for malicious intent, or sanitize inputs. |
 
 
 ## 🔮 Roadmap
