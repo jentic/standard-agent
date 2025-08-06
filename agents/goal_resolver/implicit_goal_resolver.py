@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Sequence, Dict, Any
+from typing import Sequence, Dict, Any, Tuple
 from textwrap import dedent
 from agents.llm.base_llm import BaseLLM
-from agents.goal_resolver.base import ClarificationNeededError, BaseGoalResolver
+from agents.goal_resolver.base import BaseGoalResolver
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -69,21 +69,22 @@ class ImplicitGoalResolver(BaseGoalResolver):
     def __init__(self, llm: BaseLLM):
         self.llm = llm
 
-    def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> str:
+    def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
         if not history:
-            return goal
+            return goal, None
 
         prompt = self._build_prompt(goal, history)
-        response: Dict[str, Any] = self.llm.prompt_to_json(prompt)
+        response = self.llm.prompt_to_json(prompt)
 
-        if response.get("is_ambiguous"):
-            if response.get("can_be_resolved") and response.get("revised_goal"):
-                logger.info("resolved_ambiguous_goal", goal=goal, revised_goal=response["revised_goal"])
-                return response["revised_goal"]
+        if response.get("is_ambiguous", False):
+            if response.get("can_be_resolved", False) and response.get("revised_goal"):
+                logger.info("revised_goal", original_goal=goal, revised_goal=response["revised_goal"])
+                return response["revised_goal"], None
+            else:
+                logger.warning('clarification_question', clarification_question=response["clarification_question"])
+                return goal, response.get("clarification_question", "Could you clarify your request?")
 
-            raise ClarificationNeededError(question=response.get("clarification_question"))
-
-        return goal
+        return goal, None
 
     @staticmethod
     def _build_prompt(goal: str, history: Sequence[Dict[str, Any]]) -> str:

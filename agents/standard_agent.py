@@ -12,7 +12,7 @@ from  collections import deque
 from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
 from  agents.tools.base import JustInTimeToolingBase
-from  agents.goal_resolver.base import BaseGoalResolver, ClarificationNeededError
+from  agents.goal_resolver.base import BaseGoalResolver
 
 from  uuid import uuid4
 from  enum import Enum
@@ -67,10 +67,9 @@ class StandardAgent:
         run_id = uuid4().hex
 
         if self.goal_resolver:
-            try:
-                goal = self.goal_resolver.process(goal, self.memory.get("conversation_history"))
-            except ClarificationNeededError as exc:
-                return ReasoningResult(success=False, clarification_question=exc.question)
+            goal, clarification_question = self.goal_resolver.process(goal, self.memory.get("conversation_history"))
+            if clarification_question:
+                return ReasoningResult(success=False, clarification_question=clarification_question)
 
         self.memory[f"goal:{run_id}"] = goal
         self._state = AgentState.BUSY

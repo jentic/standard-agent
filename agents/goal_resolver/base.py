@@ -1,24 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Sequence, Dict, Any
+from typing import Sequence, Dict, Any, Tuple
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-class ClarificationNeededError(Exception):
-    """
-    Raised by a GoalProcessor when the user's request is too ambiguous to
-    continue automatically.
-    """
-
-    def __init__(self, question: str):
-        self.question = question
-        super().__init__(f"Clarification needed from user: {question}")
-
-        logger.warning(f"Clarification needed from user: {question}")
-
 
 class BaseGoalResolver(ABC):
     """
@@ -29,11 +15,10 @@ class BaseGoalResolver(ABC):
             history: A sequence of previous goal/result dictionaries.
 
         Returns:
-            A revised, self-contained goal string ready for the reasoner.
-
-        Raises:
-            ClarificationNeededError: If ambiguity cannot be resolved.
+            A tuple of (revised_goal, clarification_question).
+            - If clarification_question is None, use the revised_goal.
+            - If clarification_question is present, ask the user that question.
     """
 
     @abstractmethod
-    def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> str: ...
+    def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]: ...
