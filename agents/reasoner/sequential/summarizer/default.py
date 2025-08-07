@@ -56,8 +56,8 @@ SUMMARIZE_RESULT_PROMPT = textwrap.dedent("""
     Each block must include for each failed tool due to missing credentials:  
     • **Tool attempted** – the tool that was attempted, api_name and api_vendor information 
     • **Why the key is required** – one concise line using the tool vendor  
-    • **How to get the key** – brief hint or official link if known, only provide steps to obtain the key if known. 
-    • **Action step** – tell the user to configure the key in Jentic at `www.jentic_keys.com` and retry the goal
+    • **How to get the key** – brief set of instructions with official link if known, only provide steps to obtain the key if known.
+    • **Action step** – tell the user to configure the key in Jentic at `www.jentic.com` and retry the goal
     
     No extra commentary—just clear, actionable instructions.
     </missing_api_keys>
