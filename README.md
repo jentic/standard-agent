@@ -20,28 +20,6 @@ It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool platfor
 
 ## Quick Start
 
-### Get Your Jentic API Key
-
-To use any Jentic product such as the Jentic SDK or MCP Plugin, you must first obtain a Jentic API Key. The easiest way is using the Jentic CLI. You can _optionally_ include an email address for higher rate limits and for early access to new features.
-
-```sh
-jentic register --email '<your_email>'
-```
-
-This will print your API Key and an export command to set it in your environment:
-
-```sh
-export JENTIC_API_KEY=<your-jentic-uuid>
-```
-
-Alternatively, you can use curl to register and obtain your API Key:
-
-```sh
-curl -X POST https://api.jentic.com/api/v1/auth/register \
-     -H "Content-Type: application/json" \
-     -d '{"email": "<your_email>"}'
-```
-
 ### Installation
 
 ```bash
@@ -58,31 +36,23 @@ source .venv/bin/activate
 # Run the agent
 python main.py
 ```
-
 ### Configuration
 
 Before running the agent, you need to create a `.env` file in the root of the project to store your API keys and other secrets. The application will automatically load these variables.
 
-Create a file named `.env` and add the following content, replacing the placeholder values with your actual keys:
+**Quick Setup:**
+1. Copy the provided template: `cp .env.example .env`
+2. Edit the `.env` file and replace placeholder values with your actual API keys
+3. At minimum, you need one LLM provider key to get started
+4. Add JENTIC_API_KEY for out-of-the-box tool access (recommended)
 
-```dotenv
-# Jentic Platform API Key
-JENTIC_API_KEY="your-jentic-api-key-here"
+See [.env.example](./.env.example) for the complete configuration template with detailed comments and setup instructions.
 
-# LLM Provider API Keys (use the one for your chosen model)
-OPENAI_API_KEY="your-openai-api-key-here"
-ANTHROPIC_API_KEY="your-anthropic-api-key-here"
-GEMINI_API_KEY="your-google-gemini-api-key-here"
-```
+**Key Requirements:**
+- **LLM Model**: `LLM_MODEL` - Choose your preferred model (default: claude-sonnet-4)
+- **LLM Provider**: At least one API key (Anthropic, OpenAI, or Google)
+- **Tool Provider**: `JENTIC_AGENT_API_KEY` for instant access to 1000+ tools (get yours at [app.jentic.com](https://app.jentic.com))
 
-**Note:** An LLM provider key is essential for the agent to function. The `JENTIC_API_KEY` is required if you are using the default `JenticClient` tool provider.
-
-However, this layer is swappable. If you build your own tool provider by implementing the `JustInTimeToolingBase` interface, you will need to configure its specific secrets instead. See the "Extending the Framework" section for more details.
-
-You can obtain a jentic key by running the following line from your project directory with the virtual enviroment active:
-``` bash
-jentic register --email '<your_email>'
-```
 
 ### Usage Examples
 
