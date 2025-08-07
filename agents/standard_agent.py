@@ -7,11 +7,12 @@ agent owns the services; the reasoner simply uses what the agent provides.
 """
 from __future__ import annotations
 
-from collections.abc import MutableMapping
-from  agents.reasoner.base import BaseReasoner
+from  collections.abc import MutableMapping
+from  collections import deque
+from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
-from  agents.reasoner.base import ReasoningResult
 from  agents.tools.base import JustInTimeToolingBase
+from  agents.goal_preprocessor.base import BaseGoalPreprocessor
 
 from  uuid import uuid4
 from  enum import Enum
@@ -22,7 +23,7 @@ class AgentState(str, Enum):
     NEEDS_ATTENTION     = "NEEDS_ATTENTION"
 
 class StandardAgent:
-    """Wires together a reasoner with shared services (LLM, memory, tools)."""
+    """Top-level class that orchestrates the main components of the agent framework."""
 
     def __init__(
         self,
@@ -31,19 +32,29 @@ class StandardAgent:
         tools: JustInTimeToolingBase,
         memory: MutableMapping,
         reasoner: BaseReasoner,
+
+        # Optionals
+        goal_preprocessor: BaseGoalPreprocessor = None,
+        conversation_history_window: int = 5
     ):
-        """Initializes the agent and injects services into the reasoner.
+        """Initializes the agent.
 
         Args:
             llm: The language model instance.
             tools: The interface for accessing external tools.
             memory: The memory backend.
             reasoner: The reasoning engine that will use the services.
+
+            goal_preprocessor: An OPTIONAL component to preprocess the user's goal.
+            conversation_history_window: The number of past interactions to keep in memory.
         """
         self.llm = llm
         self.tools = tools
         self.memory = memory
         self.reasoner = reasoner
+
+        self.goal_preprocessor = goal_preprocessor
+        self.memory.setdefault("conversation_history", deque(maxlen=conversation_history_window))
 
         self._state: AgentState = AgentState.READY
 
@@ -55,12 +66,20 @@ class StandardAgent:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
 
+        if self.goal_preprocessor:
+            revised_goal, intervention_message = self.goal_preprocessor.process(goal, self.memory.get("conversation_history"))
+            if intervention_message:
+                self.memory["conversation_history"].append({ "goal": goal, "result": f"user intervention message: {intervention_message}"})
+                return ReasoningResult(success=False, final_answer=intervention_message)
+            goal = revised_goal
+
         self.memory[f"goal:{run_id}"] = goal
         self._state = AgentState.BUSY
 
         try:
             result = self.reasoner.run(goal)
             self.memory[f"result:{run_id}"] = result
+            self.memory["conversation_history"].append({"goal": goal, "result": result.final_answer})
             self._state = AgentState.READY
             return result
 

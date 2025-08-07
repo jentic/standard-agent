@@ -73,9 +73,6 @@ JENTIC_API_KEY="your-jentic-api-key-here"
 OPENAI_API_KEY="your-openai-api-key-here"
 ANTHROPIC_API_KEY="your-anthropic-api-key-here"
 GEMINI_API_KEY="your-google-gemini-api-key-here"
-
-# Tool-Specific Secrets (add as needed)
-DISCORD_BOT_TOKEN="your-discord-bot-token-here"
 ```
 
 **Note:** An LLM provider key is essential for the agent to function. The `JENTIC_API_KEY` is required if you are using the default `JenticClient` tool provider.
@@ -207,7 +204,6 @@ This composition approach means you can:
 
 The key insight is that each component follows well-defined interfaces (`BaseLLM`, `BaseMemory`, `JustInTimeToolingBase`, etc.), so they can be combined in any configuration that makes sense for your use case.
 
-
 ### Project Layout
 
 ```
@@ -227,6 +223,7 @@ The key insight is that each component follows well-defined interfaces (`BaseLLM
 │           ├── executors/          # Components for executing single steps of a plan
 │           ├── reflectors/         # Components for analyzing failures and self-healing
 │           └── summarizer/         # Components for summarizing final results
+│   ├── goal_preprocessor/          # [OPTIONAL] Goal preprocessor
 │
 ├── utils/
 │   ├── cli.py                      # Command-line interface helpers
@@ -248,6 +245,8 @@ The key insight is that each component follows well-defined interfaces (`BaseLLM
 | **Memory**       | `MutableMapping`                                                         | A key-value store accessible to all components.                   |
 | **Tools**        | `JustInTimeToolingBase`                                              | Abstracts external actions (APIs, shell commands, etc.).          |
 | **LLM Wrapper**  | `BaseLLM`                                                            | Provides a uniform interface for interacting with different LLMs. |
+| **Goal Preprocessor** | `BaseGoalPreprocessor`                                            | [Optional] Preprocess goals before reasoning                      |
+
 
 ### The Sequential Reasoner
 
@@ -275,6 +274,8 @@ The framework is designed to be modular. Here are some common extension points:
 | **New tool provider**              | Create a class that inherits from `JustInTimeToolingBase`, implement its methods, and pass it to your `StandardAgent`.                                                               |
 | **Persistent memory**              | Create a class that implements the `MutableMapping` interface (e.g., using Redis), and pass it to your `StandardAgent`.                                                              |
 | **New Planners, Executors, etc.**  | Create your own implementations of `Plan`, `ExecuteStep`, `Reflect`, or `SummarizeResult` to invent new reasoning capabilities, then compose them in a `SequentialReasoner`. |
+| **Pre-process or validate goals**  | Create a class that inherits from `BaseGoalPreprocessor` and pass it to `StandardAgent`. Use this to resolve conversational ambiguities, check for malicious intent, or sanitize inputs. |
+
 
 ## 🔮 Roadmap
 
