@@ -36,33 +36,24 @@ source .venv/bin/activate
 # Run the agent
 python main.py
 ```
-### Get Your Jentic API Key
- You can obtain your jentic key by visitng app.jentic.com and registering with an email address.
-
 ### Configuration
 
 Before running the agent, you need to create a `.env` file in the root of the project to store your API keys and other secrets. The application will automatically load these variables.
 
-Create a file named `.env` and add the following content, replacing the placeholder values with your actual keys:
+**Quick Setup:**
+1. Copy the provided template: `cp .env.example .env`
+2. Edit the `.env` file and replace placeholder values with your actual API keys
+3. At minimum, you need one LLM provider key to get started
 
-```dotenv
-# Jentic Platform API Key
-JENTIC_API_KEY="your-jentic-api-key-here"
+See [.env.example](./.env.example) for the complete configuration template with detailed comments and setup instructions.
 
-# LLM Provider API Keys (use the one for your chosen model)
-OPENAI_API_KEY="your-openai-api-key-here"
-ANTHROPIC_API_KEY="your-anthropic-api-key-here"
-GEMINI_API_KEY="your-google-gemini-api-key-here"
-```
+**Key Requirements:**
+- **LLM Provider**: At least one API key (Anthropic, OpenAI, or Google)
+- **Tool Provider**: `JENTIC_API_KEY` for instant access to 1000+ tools (recommended)
 
-**Note:** An LLM provider key is essential for the agent to function. The `JENTIC_API_KEY` is required if you are using the default `JenticClient` tool provider.
+**Getting a Jentic API Key:**
+You can obtain a Jentic key by registering at app.jentic.com.
 
-However, this layer is swappable. If you build your own tool provider by implementing the `JustInTimeToolingBase` interface, you will need to configure its specific secrets instead. See the "Extending the Framework" section for more details.
-
-You can obtain a jentic key by running the following line from your project directory with the virtual enviroment active:
-``` bash
-jentic register --email '<your_email>'
-```
 
 ### Usage Examples
 
