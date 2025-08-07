@@ -70,7 +70,6 @@ class JenticClient(JustInTimeToolingBase):
     def __init__(self, api_key: Optional[str] = None):
         """
         Initialize Jentic client.
-
         """
         self._jentic = Jentic()
 
@@ -80,19 +79,8 @@ class JenticClient(JustInTimeToolingBase):
         """
         logger.info("tool_search", query=query, top_k=top_k)
 
-        # Call jentic search API directly
-        response = asyncio.run(
-            self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=False))
-        ).model_dump(exclude_none=False)
-
-        results = response.get('results')
-        if isinstance(results, str):
-            results = json.loads(results)
-        
-        if not results:
-            return []
-
-        return [JenticTool(result) for result in results]
+        response = asyncio.run(self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=False)))
+        return [JenticTool(result.model_dump(exclude_none=False)) for result in response.results] if response.results else []
 
 
     def load(self, tool: ToolBase) -> ToolBase:
@@ -105,7 +93,7 @@ class JenticClient(JustInTimeToolingBase):
         logger.debug("tool_load", tool_id=tool.id)
 
         # Call jentic load API directly
-        response = asyncio.run(self._jentic.load(LoadRequest(ids =[tool.id])))
+        response = asyncio.run(self._jentic.load(LoadRequest(ids=[tool.id])))
 
         # Find a specific result matching the tool we are looking for
         result = response.tool_info[tool.id]
