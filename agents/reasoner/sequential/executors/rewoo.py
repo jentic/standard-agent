@@ -251,13 +251,13 @@ class ReWOOExecuteStep(ExecuteStep):
         # Check rewoo reflector suggestion first
         suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")
         if suggestion and suggestion["action"] in ("change_tool", "retry_params"):
-            logger.info("using_reflector_suggested_tool", step_text=step.text, tool_id=suggestion["tool"]["id"])
+            logger.info("using_reflector_suggested_tool", step_text=step.text, tool_id=suggestion["tool_id"])
             
             # If suggested action = change_tool, delete suggestion from memory
             if suggestion["action"] == "change_tool":
                 del self.memory[f"rewoo_reflector_suggestion:{step.text}"]
             
-            return self.tools.load(JenticTool({ "id": suggestion["tool"]["id"],"type": suggestion["tool"]["type"]}))
+            return self.tools.load(JenticTool({ "id": suggestion["tool_id"]}))
 
         tools = self.tools.search(step.text, top_k=20)
         tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(

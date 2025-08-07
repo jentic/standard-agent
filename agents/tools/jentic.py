@@ -2,16 +2,14 @@
 Thin wrapper around jentic-sdk for centralized auth, retries, and logging.
 """
 import asyncio
-import os
 import json
 from typing import Any, Dict, List, Optional
 
 from jentic import Jentic
-from jentic.models import ApiCapabilitySearchRequest
+from jentic.lib.models import SearchRequest, LoadRequest, ExecutionRequest
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolNotFoundError, ToolExecutionError
 
-# Use structlog for consistent logging
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -24,22 +22,18 @@ class JenticTool(ToolBase):
         Initialize JenticTool from jentic API results.
 
         Args:
-            result: Raw result from jentic search or load API
+            schema: Raw result from jentic search or load API as plain dict
         """
         # Initialize from search result
         if schema is None:
             schema = {}
         self._schema = schema
+
         self.tool_id = schema.get('workflow_id') or schema.get('operation_uuid') or schema.get('id') or ""
         super().__init__(self.tool_id)
 
         self.name = schema.get('summary', 'Unnamed Tool')
         self.description = schema.get('description', '') or f"{schema.get('method')} {schema.get('path')}"
-        # Allow explicit type override, otherwise infer from schema
-        if 'type' in schema:
-            self.type = schema['type']
-        else:
-            self.type = "operation" if 'operation_uuid' in schema else "workflow"
         self.api_name = schema.get('api_name', 'unknown')
         self.method = schema.get('method')  # For operations
         self.path = schema.get('path')      # For operations
@@ -66,7 +60,6 @@ class JenticTool(ToolBase):
         return self._parameters
 
 
-
 class JenticClient(JustInTimeToolingBase):
     """
     Centralized adapter over jentic-sdk that exposes search, load, and execute.
@@ -77,12 +70,8 @@ class JenticClient(JustInTimeToolingBase):
     def __init__(self, api_key: Optional[str] = None):
         """
         Initialize Jentic client.
-
-        Args:
-            api_key: Jentic API key. If None, reads from JENTIC_API_KEY environment variable.
         """
-        self.api_key = api_key or os.getenv("JENTIC_API_KEY")
-        self._jentic = Jentic(api_key=self.api_key)
+        self._jentic = Jentic()
 
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
         """
@@ -90,15 +79,8 @@ class JenticClient(JustInTimeToolingBase):
         """
         logger.info("tool_search", query=query, top_k=top_k)
 
-        # Call jentic search API directly
-        results = asyncio.run(
-            self._jentic.search_api_capabilities(
-                ApiCapabilitySearchRequest(capability_description=query, max_results=top_k)
-            )
-        ).model_dump(exclude_none=False)
-
-        top_results = (results.get("operations", []) + results.get("workflows", []))[:top_k]
-        return [JenticTool(result) for result in top_results]
+        response = asyncio.run(self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=False)))
+        return [JenticTool(result.model_dump(exclude_none=False)) for result in response.results] if response.results else []
 
 
     def load(self, tool: ToolBase) -> ToolBase:
@@ -108,23 +90,16 @@ class JenticClient(JustInTimeToolingBase):
         if not isinstance(tool, JenticTool):
             raise ValueError(f"Expected JenticTool, got {type(tool)}")
 
-        logger.debug("tool_load", tool_id=tool.id, tool_type=tool.type)
+        logger.debug("tool_load", tool_id=tool.id)
 
         # Call jentic load API directly
-        results = asyncio.run(
-            self._jentic.load_execution_info(
-                workflow_uuids=[tool.id] if tool.type == "workflow" else [],
-                operation_uuids=[tool.id] if tool.type == "operation" else [],
-                api_name=tool.api_name,
-            )
-        )
+        response = asyncio.run(self._jentic.load(LoadRequest(ids=[tool.id])))
 
         # Find a specific result matching the tool we are looking for
-        result = (results.get('workflows', {}).get(tool.id) or
-                  results.get('operations', {}).get(tool.id))
+        result = response.tool_info[tool.id]
         if result is None:
             raise ToolNotFoundError("Requested tool could not be loaded", tool)
-        return JenticTool(result)
+        return JenticTool(result.model_dump(exclude_none=False))
 
 
     def execute(self, tool: ToolBase, parameters: Dict[str, Any]) -> Any:
@@ -134,14 +109,11 @@ class JenticClient(JustInTimeToolingBase):
         if not isinstance(tool, JenticTool):
             raise ValueError(f"Expected JenticTool, got {type(tool)}")
 
-        logger.info("tool_execute", tool_id=tool.id, tool_type=tool.type, param_count=len(parameters))
+        logger.info("tool_execute", tool_id=tool.id, param_count=len(parameters))
 
         try:
             # Call jentic execute API directly
-            if tool.type == "workflow":
-                result = asyncio.run(self._jentic.execute_workflow(tool.id, parameters))
-            else:
-                result = asyncio.run(self._jentic.execute_operation(tool.id, parameters))
+            result = asyncio.run(self._jentic.execute(ExecutionRequest(id=tool.id, inputs=parameters)))
 
             # The result object from the SDK has a 'status' and 'outputs'.
             # A failure in the underlying tool execution is not an exception, but a
