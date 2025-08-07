@@ -2,7 +2,6 @@
 Thin wrapper around jentic-sdk for centralized auth, retries, and logging.
 """
 import asyncio
-import os
 import json
 from typing import Any, Dict, List, Optional
 
@@ -11,7 +10,6 @@ from jentic.lib.models import SearchRequest, LoadRequest, ExecutionRequest
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolNotFoundError, ToolExecutionError
 
-# Use structlog for consistent logging
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -24,7 +22,7 @@ class JenticTool(ToolBase):
         Initialize JenticTool from jentic API results.
 
         Args:
-            result: Raw result from jentic search or load API
+            schema: Raw result from jentic search or load API as plain dict
         """
         # Initialize from search result
         if schema is None:
@@ -62,7 +60,6 @@ class JenticTool(ToolBase):
         return self._parameters
 
 
-
 class JenticClient(JustInTimeToolingBase):
     """
     Centralized adapter over jentic-sdk that exposes search, load, and execute.
@@ -74,10 +71,7 @@ class JenticClient(JustInTimeToolingBase):
         """
         Initialize Jentic client.
 
-        Args:
-            api_key: Jentic API key. If None, reads from JENTIC_API_KEY environment variable.
         """
-        self.api_key = api_key or os.getenv("JENTIC_API_KEY")
         self._jentic = Jentic()
 
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
@@ -88,9 +82,7 @@ class JenticClient(JustInTimeToolingBase):
 
         # Call jentic search API directly
         response = asyncio.run(
-            self._jentic.search(
-                SearchRequest(query=query, limit=top_k, filter_by_credentials=False)
-            )
+            self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=False))
         ).model_dump(exclude_none=False)
 
         results = response.get('results')
