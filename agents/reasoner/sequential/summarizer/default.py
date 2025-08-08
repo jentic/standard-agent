@@ -50,6 +50,9 @@ SUMMARIZE_RESULT_PROMPT = textwrap.dedent("""
     <missing_api_keys>
     If the execution log shows a tool call failed for lack of credentials (look for Tool Unauthorized: in the Execution Log):
 
+    Only include the following section when you cannot produce a sufficient, reliable answer (e.g., you would otherwise return "ERROR: insufficient data for a reliable answer.").
+    If you can synthesize a complete answer that satisfies the goal, omit this section entirely.
+
     Return an additional short block that starts with  
     `Agent attempted tools that require configuration:`  ← only once, even if several tools failed
 
