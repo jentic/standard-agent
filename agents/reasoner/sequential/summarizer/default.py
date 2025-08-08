@@ -46,6 +46,25 @@ SUMMARIZE_RESULT_PROMPT = textwrap.dedent("""
     - Do not reveal internal monologue or technical failures
     - Present results as if from a helpful expert assistant
     </constraints>
+    
+    <missing_api_keys>
+    If the execution log shows a tool call failed for lack of credentials (look for Tool Unauthorized: in the Execution Log):
+
+    Only include the following section when you cannot produce a sufficient, reliable answer (e.g., you would otherwise return "ERROR: insufficient data for a reliable answer.").
+    If you can synthesize a complete answer that satisfies the goal, omit this section entirely.
+
+    Return an additional short block that starts with  
+    `Agent attempted tools that require configuration:`  ← only once, even if several tools failed
+
+    **FOR EACH TOOL** the agent detected and attempted but could not complete due to missing configuration, include a separate block for each tool:
+    • **Tool attempted** – the tool that was attempted, including api_name and api_vendor
+    • **How to enable** – brief steps with official link (if known) to obtain credentials or connect the account
+    • **Action step** – suggest configuring the required API credentials for this tool and then retrying the goal
+
+    Wording guidance:
+    - Keep tone helpful and proactive, focusing on enabling the tool.
+    - No extra commentary—just clear, actionable instructions.
+    </missing_api_keys>
 
     <output_format>
     Clear, user-friendly response using markdown formatting (headings, lists, bold text as appropriate)

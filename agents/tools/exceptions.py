@@ -21,6 +21,8 @@ class ToolError(Exception):
 class ToolNotFoundError(ToolError):
     """The specified tool ID is not recognized."""
 
-
 class ToolExecutionError(ToolError):
     """A tool fails to execute for any reason."""
+
+class ToolCredentialsMissingError(ToolExecutionError):
+    """A tool fails to execute because of missing credentials"""

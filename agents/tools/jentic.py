@@ -3,12 +3,13 @@ Thin wrapper around jentic-sdk for centralized auth, retries, and logging.
 """
 import asyncio
 import json
+from http import HTTPStatus
 from typing import Any, Dict, List, Optional
 
 from jentic import Jentic
 from jentic.lib.models import SearchRequest, LoadRequest, ExecutionRequest
 from agents.tools.base import JustInTimeToolingBase, ToolBase
-from agents.tools.exceptions import ToolNotFoundError, ToolExecutionError
+from agents.tools.exceptions import ToolError, ToolNotFoundError, ToolExecutionError, ToolCredentialsMissingError
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -119,9 +120,14 @@ class JenticClient(JustInTimeToolingBase):
             # A failure in the underlying tool execution is not an exception, but a
             # result with a non-success status.
             if not result.success:
-                raise ToolNotFoundError(str(result.error), tool)
+                if result.status_code == HTTPStatus.UNAUTHORIZED:
+                    raise ToolCredentialsMissingError(result.error, tool)
+
+                raise ToolExecutionError(result.error, tool)
             return result.output
 
+        except ToolError:
+            raise
         except Exception as exc:
-            # Re-raise as a ToolExecutionError so the reasoner can reflect.
+            # Normalize any unexpected error as ToolExecutionError so the reasoner can handle it.
             raise ToolExecutionError(str(exc), tool) from exc

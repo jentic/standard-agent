@@ -10,7 +10,7 @@ from agents.reasoner.base import BaseReasoner
 from agents.reasoner.base import ReasoningResult
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
-from agents.tools.exceptions import ToolError
+from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
 from agents.reasoner.sequential.exceptions import ReasoningError
 
 if TYPE_CHECKING:
@@ -100,6 +100,8 @@ class SequentialReasoner(BaseReasoner):
                 self.execute_step(step, state)
                 iterations += 1
             except (ReasoningError, ToolError) as exc:
+                if isinstance(exc, ToolCredentialsMissingError):
+                    state.history.append(f"Tool Unauthorized: {str(exc)}")
                 if self.reflect:
                     self.reflect(exc, step, state)
                 else:
