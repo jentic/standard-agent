@@ -214,7 +214,7 @@ class ReWOOExecuteStep(ExecuteStep):
 
         except KeyError as e:
             missing_key = e.args[0]
-            raise MissingInputError(f"Required memory key '{missing_key}' not found for step: {step.text}") from e
+            raise MissingInputError(f"Required memory key '{missing_key}' not found for step: {step.text}", missing_key=missing_key) from e
 
         # Classify plan step as reasoning or tool call
         step_type_response = self.llm.prompt(

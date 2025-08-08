@@ -11,7 +11,7 @@ from agents.reasoner.base import ReasoningResult
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
-from agents.reasoner.sequential.exceptions import ReasoningError
+from agents.reasoner.sequential.exceptions import ReasoningError, MissingInputError
 
 if TYPE_CHECKING:
     from agents.reasoner.sequential.planners.base import Plan
@@ -102,6 +102,12 @@ class SequentialReasoner(BaseReasoner):
             except (ReasoningError, ToolError) as exc:
                 if isinstance(exc, ToolCredentialsMissingError):
                     state.history.append(f"Tool Unauthorized: {str(exc)}")
+
+                # If a downstream step lacks its required input, immediately terminate loop and summarize
+                if isinstance(exc, MissingInputError):
+                    state.history.append(f"Stopping: missing dependency '{getattr(exc, "missing_key", None)}' for step '{StepStatus.FAILED}'. Proceeding to final answer.")
+                    break
+
                 if self.reflect:
                     self.reflect(exc, step, state)
                 else:
