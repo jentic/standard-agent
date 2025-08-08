@@ -1,4 +1,4 @@
-"""CLI utility functions for user interaction."""
+"""CLI utility functions for user interaction (examples-only helpers)."""
 import sys
 
 
@@ -9,11 +9,11 @@ def read_user_goal(prompt: str = "🤖 Enter your goal: ") -> str:
         line = sys.stdin.readline()
         if not line:  # EOF
             raise KeyboardInterrupt
-        
+
         goal = line.strip()
         if goal.lower() in {"bye", "quit", "exit", "q"}:
             raise KeyboardInterrupt
-            
+
         return goal
     except (EOFError, KeyboardInterrupt):
         raise
@@ -23,7 +23,7 @@ def print_result(result) -> None:
     """Print the reasoning result to stdout."""
     if result.success:
         print(f"✅ **Answer:** {result.final_answer}")
-        
+
         if result.tool_calls:
             print(f"\n📋 **Used {len(result.tool_calls)} tool(s) in {result.iterations} iteration(s):**")
             for i, call in enumerate(result.tool_calls, 1):
@@ -33,3 +33,5 @@ def print_result(result) -> None:
         print(f"❌ **Failed:** {result.final_answer}")
         if result.error_message:
             print(f"   Error: {result.error_message}")
+
+

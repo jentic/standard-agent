@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 
-##############################################
-#                                            #
-#         HELLO WORLD REASONER               #
-#                                            #
-##############################################
-
 import os
+import sys
 from dotenv import load_dotenv
+
+# Ensure project root is on sys.path so local imports work when running from examples/
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 from agents.prebuilt import ReWOOAgent
-from utils.cli import read_user_goal, print_result
+from _cli_helpers import read_user_goal, print_result
 
 from utils.logger import get_logger, init_logger
 logger = get_logger(__name__)
 
 
 def main() -> None:
-    init_logger("config.json")
-    load_dotenv()
+    # Use absolute paths so this script is robust to the current working directory
+    config_path = os.path.join(PROJECT_ROOT, "config.json")
+    init_logger(config_path)
+    load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
     agent = ReWOOAgent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
     # Or assemble your own agent as follows:
