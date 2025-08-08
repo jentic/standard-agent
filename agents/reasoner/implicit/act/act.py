@@ -12,6 +12,8 @@ from agents.reasoner.implicit.act.base import Act
 if TYPE_CHECKING:
     from agents.reasoner.implicit.reasoner import ImplicitState
 
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 TOOL_SELECTION_PROMPT = dedent(
     """
@@ -139,6 +141,7 @@ class JustInTimeAct(Act):
 
         # 1) Search tools
         candidates: list[ToolBase] = self.tools.search(step_text, top_k=self.top_k)
+        logger.info("tool_search", query=step_text, top_k=self.top_k, candidate_count=len(candidates))
         tools_json = "\n".join([t.get_summary() for t in candidates])
 
         # 2) Select tool id via LLM
@@ -152,6 +155,7 @@ class JustInTimeAct(Act):
 
         # 3) Load full tool
         tool = self.tools.load(tool)
+        logger.info("tool_selected", tool_id=tool.id)
 
         # 4) Generate params
         schema = tool.get_parameters() or {}
@@ -167,9 +171,11 @@ class JustInTimeAct(Act):
             max_retries=2,
         )
         params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
+        logger.info("params_generated", tool_id=tool.id, keys=list(params.keys()))
 
         # 5) Execute
         observation = self.tools.execute(tool, params)
+        logger.info("tool_executed", tool_id=tool.id)
         return tool.id, params, observation
 
     def _compose_step_text(self, state: "ImplicitState") -> str:
