@@ -8,10 +8,9 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
 from collections.abc import MutableMapping
 
-from .policy import DecidePolicy, LLMBackedReACTPolicy, ReACTPolicy
+from .policy import DecidePolicy, ReACTPolicy
 from .think import Think, LLMThink
 from .act import Act, JustInTimeAct
-from .stop import StopCondition, SimpleStopCondition
 from .summarizer import Summarizer, DefaultImplicitSummarizer
 
 
@@ -47,10 +46,9 @@ class ImplicitReasoner(BaseReasoner):
         llm: BaseLLM,
         tools: JustInTimeToolingBase,
         memory: MutableMapping,
-        decide: DecidePolicy | None = None,
         think: Think | None = None,
         act: Act | None = None,
-        stop: StopCondition | None = None,
+        decide: DecidePolicy | None = None,
         summarize: Summarizer | None = None,
         max_turns: int = DEFAULT_MAX_TURNS,
     ) -> None:
@@ -58,8 +56,7 @@ class ImplicitReasoner(BaseReasoner):
         self.max_turns = max_turns
         self.decide = decide or ReACTPolicy(llm=llm)
         self.think = think or LLMThink(llm=llm)
-        self.act = act or JustInTimeAct(tools=tools)
-        self.stop = stop or SimpleStopCondition()
+        self.act = act or JustInTimeAct(llm=llm, tools=tools)
         self.summarize = summarize or DefaultImplicitSummarizer(llm=llm)
 
     # ---------- core loop -----------------------------------------
@@ -78,18 +75,18 @@ class ImplicitReasoner(BaseReasoner):
             turn = Turn()
             if decision == "REASON":
                 turn.thought = self.think(state, self.memory)
+                # Loop-level halt: Thought can signal final answer via 'FINAL:'
+                if turn.thought and turn.thought.strip().upper().startswith("FINAL:"):
+                    state.final_answer = turn.thought.split(":", 1)[1].strip()
+                    state.is_complete = True
+                    state.turns.append(turn)
+                    break
             else:  # TOOL
                 tool_id, params, observation = self.act(state, self.memory)
                 turn.action = {"tool_id": tool_id, "params": params}
                 turn.observation = observation
 
             state.turns.append(turn)
-
-            maybe_answer = self.stop(state, self.memory)
-            if maybe_answer is not None:
-                state.final_answer = maybe_answer
-                state.is_complete = True
-                break
 
         # Synthesize final answer if not provided by stop_condition
         final_answer = state.final_answer or self.summarize(state)
