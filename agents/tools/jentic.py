@@ -96,7 +96,6 @@ class JenticClient(JustInTimeToolingBase):
         # Call jentic load API directly
         response = asyncio.run(self._jentic.load(LoadRequest(ids=[tool.id])))
 
-
         # Find a specific result matching the tool we are looking for
         result = response.tool_info[tool.id]
         if result is None:
