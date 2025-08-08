@@ -34,7 +34,7 @@ make install
 source .venv/bin/activate
 
 # Run the agent
-python main.py
+python examples/cli_api_agent.py
 ```
 ### Configuration
 
@@ -63,11 +63,11 @@ We provide two ways to use the agent framework: a quick-start method using a pre
 This is the fastest way to get started. The `ReWOOAgent` class provides a `StandardAgent` instance that is already configured with a reasoner, LLM, tools, and memory.
 
 ```python
-# main.py
+# examples/cli_api_agent.py
 import os
 from dotenv import load_dotenv
 from agents.prebuilt import ReWOOAgent
-from utils.cli import read_user_goal, print_result
+from examples._cli_helpers import read_user_goal, print_result
 
 # Load API keys from .env file
 load_dotenv()
@@ -116,7 +116,7 @@ from agents.reasoner.sequential.executors.rewoo import ReWOOExecuteStep
 from agents.reasoner.sequential.reflectors.rewoo import ReWOOReflect
 from agents.reasoner.sequential.summarizer.default import DefaultSummarizeResult
 
-from utils.cli import read_user_goal, print_result
+from examples._cli_helpers import read_user_goal, print_result
 
 load_dotenv()
 
@@ -196,11 +196,13 @@ The key insight is that each component follows well-defined interfaces (`BaseLLM
 │   ├── goal_preprocessor/          # [OPTIONAL] Goal preprocessor
 │
 ├── utils/
-│   ├── cli.py                      # Command-line interface helpers
 │   └── logger.py                   # Logging configuration
 │
+├── examples/
+│   ├── cli_api_agent.py            # Example CLI script
+│   └── _cli_helpers.py             # Example-only cli helpers
+│
 ├── tests/                          # Unit and integration tests
-├── main.py                         # Main entry point for running the agent
 ├── Makefile                        # Commands for installation, testing, etc.
 ├── requirements.txt                # Project dependencies
 └── config.json                     # Agent configuration file
