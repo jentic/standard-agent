@@ -198,9 +198,7 @@ The key insight is that each component follows well-defined interfaces (`BaseLLM
 ├── utils/
 │   └── logger.py                   # Logging configuration
 │
-├── examples/
-│   ├── cli_api_agent.py            # Example CLI script
-│   └── _cli_helpers.py             # Example-only cli helpers
+├── examples/                       # Runnable scripts and helper snippets
 │
 ├── tests/                          # Unit and integration tests
 ├── Makefile                        # Commands for installation, testing, etc.
