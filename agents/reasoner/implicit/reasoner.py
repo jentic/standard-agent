@@ -14,8 +14,6 @@ from .act import Act, JustInTimeAct
 from .summarizer import Summarizer, DefaultImplicitSummarizer
 
 
-
-
 @dataclass
 class Turn:
     thought: Optional[str] = None
