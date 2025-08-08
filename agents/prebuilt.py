@@ -1,7 +1,7 @@
 from agents.standard_agent import StandardAgent
 from agents.tools.jentic import JenticClient
 from agents.memory.dict_memory import DictMemory
-from agents.reasoner.prebuilt import ReWOOReasoner
+from agents.reasoner.prebuilt import ReWOOReasoner, ReACTReasoner
 from agents.llm.litellm import LiteLLM
 from agents.goal_preprocessor.conversational import ConversationalGoalPreprocessor
 
@@ -41,4 +41,23 @@ class ReWOOAgent(StandardAgent):
             memory=memory,
             reasoner=reasoner,
             goal_preprocessor=goal_processor,
+        )
+
+
+class ReACTAgent(StandardAgent):
+    """A pre-configured StandardAgent that uses the ReACT implicit reasoner."""
+
+    def __init__(self, *, model: str | None = None, max_turns: int = 20):
+        llm = LiteLLM(model=model or "claude-sonnet-4")
+        tools = JenticClient()
+        memory = DictMemory()
+
+        reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=max_turns)
+
+
+        super().__init__(
+            llm=llm,
+            tools=tools,
+            memory=memory,
+            reasoner=reasoner
         )
