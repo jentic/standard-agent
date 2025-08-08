@@ -133,11 +133,6 @@ PARAMETER_GENERATION_PROMPT = dedent(
 class JustInTimeAct(Act):
     """Selects a tool via LLM and executes it via JustInTimeToolingBase."""
 
-    def __init__(self, *, llm: BaseLLM, tools: JustInTimeToolingBase, top_k: int = 15) -> None:
-        self.llm = llm
-        self.tools = tools
-        self.top_k = top_k
-
     def __call__(self, state: ImplicitState, memory: MutableMapping) -> Tuple[str, Dict[str, Any], Any]:
         step_text = self._compose_step_text(state)
 
