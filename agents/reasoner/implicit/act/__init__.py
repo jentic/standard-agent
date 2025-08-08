@@ -1,9 +1,9 @@
 from .base import Act
-from .act import JITActPlaceholder
+from .act import JustInTimeAct
 
 __all__ = [
     "Act",
-    "JITActPlaceholder",
+    "JustInTimeAct",
 ]
 
 

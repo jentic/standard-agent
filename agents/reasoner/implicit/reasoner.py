@@ -8,9 +8,9 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
 from collections.abc import MutableMapping
 
-from .policy import DecidePolicy, SimpleDecidePolicy
+from .policy import DecidePolicy, LLMBackedReACTPolicy
 from .think import Think, LLMThink
-from .act import Act, JITActPlaceholder
+from .act import Act, JustInTimeAct
 from .stop import StopCondition, SimpleStopCondition
 from .summarizer import Summarizer, DefaultImplicitSummarizer
 
@@ -56,10 +56,9 @@ class ImplicitReasoner(BaseReasoner):
     ) -> None:
         super().__init__(llm=llm, tools=tools, memory=memory)
         self.max_turns = max_turns
-        # Provide small, readable defaults; users can swap any piece.
-        self.decide = decide or SimpleDecidePolicy()
+        self.decide = decide or LLMBackedReACTPolicy(llm=llm)
         self.think = think or LLMThink(llm=llm)
-        self.act = act or JITActPlaceholder(tools=tools)
+        self.act = act or JustInTimeAct(tools=tools)
         self.stop = stop or SimpleStopCondition()
         self.summarize = summarize or DefaultImplicitSummarizer(llm=llm)
 

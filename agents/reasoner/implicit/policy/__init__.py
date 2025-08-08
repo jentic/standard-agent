@@ -1,9 +1,9 @@
 from .base import DecidePolicy
-from .policy import SimpleDecidePolicy
+from .react import ReACTPolicy
 
 __all__ = [
     "DecidePolicy",
-    "SimpleDecidePolicy",
+    "ReACTPolicy"
 ]
 
 

@@ -8,7 +8,7 @@ from agents.reasoner.implicit.reasoner import ImplicitState
 from agents.reasoner.implicit.act import Act
 
 
-class JITActPlaceholder(Act):
+class JustInTimeAct(Act):
     def __init__(self, *, tools: JustInTimeToolingBase) -> None:
         self.tools = tools
 
