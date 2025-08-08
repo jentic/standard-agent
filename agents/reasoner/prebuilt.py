@@ -8,6 +8,11 @@ from .sequential.executors.rewoo import ReWOOExecuteStep
 from .sequential.summarizer.default import DefaultSummarizeResult
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
+from agents.reasoner.implicit.reasoner import ImplicitReasoner
+from agents.reasoner.implicit.policy import ReACTPolicy
+from agents.reasoner.implicit.think import Think
+from agents.reasoner.implicit.act import JustInTimeAct
+from agents.reasoner.implicit.summarizer import DefaultImplicitSummarizer
 
 
 class ReWOOReasoner(SequentialReasoner):
@@ -34,4 +39,26 @@ class ReWOOReasoner(SequentialReasoner):
             execute_step=ReWOOExecuteStep(llm=llm, tools=tools, memory=memory),
             reflect=ReWOOReflect(llm=llm, tools=tools, memory=memory, max_retries=max_retries),
             summarize_result=DefaultSummarizeResult(llm=llm),
+        )
+
+
+class ReACTReasoner(ImplicitReasoner):
+    """Pre-wired ImplicitReasoner configured for ReACT-style operation."""
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        tools: JustInTimeToolingBase,
+        memory: MutableMapping,
+        max_turns: int = 20,
+    ) -> None:
+        super().__init__(
+            llm=llm,
+            tools=tools,
+            memory=memory,
+            decide=ReACTPolicy(llm=llm),
+            think=Think(llm=llm),
+            act=JustInTimeAct(llm=llm, tools=tools),
+            summarize=DefaultImplicitSummarizer(llm=llm),
+            max_turns=max_turns,
         )
