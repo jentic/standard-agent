@@ -105,9 +105,13 @@ class SequentialReasoner(BaseReasoner):
 
                 # If a downstream step lacks its required input, immediately terminate loop and summarize
                 if isinstance(exc, MissingInputError):
-                    state.history.append(f"Stopping: missing dependency '{getattr(exc, "missing_key", None)}' for step '{StepStatus.FAILED}'. Proceeding to final answer.")
+                    state.history.append( f"Stopping: missing dependency '{getattr(exc, "missing_key", None)}' for step '{step.text}'. Proceeding to final answer.")
                     break
 
+                # 2) Credentials missing: allow reflection for the failing step (to try alternate tools), but avoid cascading retries later
+                #    We do NOT prune here; we rely on the MissingInputError gate above to stop if no outputs are produced.
+
+                # Otherwise, allow reflection to attempt recovery
                 if self.reflect:
                     self.reflect(exc, step, state)
                 else:
