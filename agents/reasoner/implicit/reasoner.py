@@ -86,7 +86,10 @@ class ImplicitReasoner(BaseReasoner):
 
             state.turns.append(turn)
 
-        # Synthesize final answer if not provided by stop_condition
+        if not state.is_complete and not state.final_answer:
+            state.final_answer = "ERROR: reasoning stopped after reaching the maximum number of steps."
+
+        # Synthesize final answer if not already provided
         final_answer = state.final_answer or self.summarize(state)
         success = state.is_complete or bool(final_answer)
         return ReasoningResult(final_answer=final_answer, iterations=len(state.turns), success=success)
