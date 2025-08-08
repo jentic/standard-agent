@@ -3,6 +3,7 @@ Thin wrapper around jentic-sdk for centralized auth, retries, and logging.
 """
 import asyncio
 import json
+from http import HTTPStatus
 from typing import Any, Dict, List, Optional
 
 from jentic import Jentic
@@ -120,9 +121,10 @@ class JenticClient(JustInTimeToolingBase):
             # A failure in the underlying tool execution is not an exception, but a
             # result with a non-success status.
             if not result.success:
-                if 'No matching credentials found for' in str(result.error):
-                    raise ToolCredentialsMissingError(str(result.error), tool)
-                raise ToolExecutionError(str(result.error), tool)
+                if result.status_code == HTTPStatus.UNAUTHORIZED:
+                    raise ToolCredentialsMissingError(result.error, tool)
+
+                raise ToolExecutionError(result.error, tool)
             return result.output
 
         except ToolError:
