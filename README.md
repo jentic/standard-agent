@@ -5,8 +5,6 @@
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-40c463.svg)](CODE_OF_CONDUCT.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 
-A **modular framework** for building AI agents that can plan, act, and **autonomously recover from failures**.  
-It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool platform out of the box, but every layer is swappable
 
 - [Quick Start](#quick-start)
 - [Usage Examples](#usage-examples)
@@ -16,6 +14,12 @@ It ships with a ready-to-use *ReWOO* reasoning stack and the Jentic tool platfor
 - [Roadmap](#roadmap)
 
 > **Join our community!** Connect with contributors and users on [Discord](https://discord.gg/yrxmDZWMqB) to discuss ideas, ask questions, and collaborate on the Standard Agent repository.
+
+## Architecture Overview
+
+Standard Agent is a simple, modular framework for building AI agents—with a composable core and plug‑in components.
+
+![Standard Agent architecture](docs/assets/standard_agent_architecture.png)
 
 
 ## Quick Start
