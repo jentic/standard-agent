@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import List
 from textwrap import dedent
 
-from agents.reasoner.implicit.reasoner import ImplicitState
-from agents.reasoner.implicit.summarizer import Summarizer
+from typing import TYPE_CHECKING
+from agents.reasoner.implicit.summarizer.base import Summarizer
+if TYPE_CHECKING:
+    from agents.reasoner.implicit.reasoner import ImplicitState
 
 SUMMARY_PROMPT = dedent(
     """
@@ -35,7 +37,7 @@ SUMMARY_PROMPT = dedent(
 
 
 class DefaultImplicitSummarizer(Summarizer):
-    def __call__(self, state: ImplicitState) -> str:
+    def __call__(self, state: "ImplicitState") -> str:
         # If loop already set a final answer, just return it
         if state.final_answer:
             return state.final_answer

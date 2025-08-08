@@ -6,7 +6,7 @@ from typing import List
 
 from agents.llm.base_llm import BaseLLM
 from agents.reasoner.implicit.reasoner import ImplicitState
-from .base import DecidePolicy
+from agents.reasoner.implicit.policy.base import DecidePolicy
 
 
 POLICY_PROMPT = dedent(

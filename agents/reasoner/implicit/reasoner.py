@@ -8,10 +8,10 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
 from collections.abc import MutableMapping
 
-from .policy import DecidePolicy, ReACTPolicy
-from .think import Think, LLMThink
-from .act import Act, JustInTimeAct
-from .summarizer import Summarizer, DefaultImplicitSummarizer
+from agents.reasoner.implicit.policy.base import DecidePolicy
+from agents.reasoner.implicit.think.base  import Think
+from agents.reasoner.implicit.act.base  import Act
+from agents.reasoner.implicit.summarizer.base  import Summarizer
 
 
 @dataclass
@@ -52,10 +52,10 @@ class ImplicitReasoner(BaseReasoner):
     ) -> None:
         super().__init__(llm=llm, tools=tools, memory=memory)
         self.max_turns = max_turns
-        self.decide = decide or ReACTPolicy(llm=llm)
-        self.think = think or LLMThink(llm=llm)
-        self.act = act or JustInTimeAct(llm=llm, tools=tools)
-        self.summarize = summarize or DefaultImplicitSummarizer(llm=llm)
+        self.decide = decide
+        self.think = think
+        self.act = act
+        self.summarize = summarize
 
     # ---------- core loop -----------------------------------------
     def run(self, goal: str) -> ReasoningResult:

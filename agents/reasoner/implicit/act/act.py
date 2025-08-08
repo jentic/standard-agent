@@ -5,11 +5,12 @@ from collections.abc import MutableMapping
 from textwrap import dedent
 from typing import Any, Dict, Tuple
 
-from agents.llm.base_llm import BaseLLM
 from agents.reasoner.sequential.exceptions import ToolSelectionError
-from agents.tools.base import JustInTimeToolingBase, ToolBase
-from agents.reasoner.implicit.reasoner import ImplicitState
-from agents.reasoner.implicit.act import Act
+from agents.tools.base import ToolBase
+from typing import TYPE_CHECKING
+from agents.reasoner.implicit.act.base import Act
+if TYPE_CHECKING:
+    from agents.reasoner.implicit.reasoner import ImplicitState
 
 
 TOOL_SELECTION_PROMPT = dedent(
@@ -94,7 +95,7 @@ PARAMETER_GENERATION_PROMPT = dedent(
     <input>
     STEP: {step}
     DATA: {data}
-    SCHEMA: {tool_schema}
+    SCHEMA: {schema}
     ALLOWED_KEYS: {allowed_keys}
     </input>
 
@@ -133,7 +134,7 @@ PARAMETER_GENERATION_PROMPT = dedent(
 class JustInTimeAct(Act):
     """Selects a tool via LLM and executes it via JustInTimeToolingBase."""
 
-    def __call__(self, state: ImplicitState, memory: MutableMapping) -> Tuple[str, Dict[str, Any], Any]:
+    def __call__(self, state: "ImplicitState", memory: MutableMapping) -> Tuple[str, Dict[str, Any], Any]:
         step_text = self._compose_step_text(state)
 
         # 1) Search tools
@@ -171,13 +172,13 @@ class JustInTimeAct(Act):
         observation = self.tools.execute(tool, params)
         return tool.id, params, observation
 
-    def _compose_step_text(self, state: ImplicitState) -> str:
+    def _compose_step_text(self, state: "ImplicitState") -> str:
         for t in reversed(state.turns):
             if t.thought:
                 return t.thought
         return state.goal
 
-    def _gather_data(self, state: ImplicitState) -> Dict[str, Any]:
+    def _gather_data(self, state: "ImplicitState") -> Dict[str, Any]:
         last_thought = None
         last_observation = None
         for t in reversed(state.turns):

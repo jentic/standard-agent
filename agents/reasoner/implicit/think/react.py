@@ -5,7 +5,7 @@ from typing import List
 from textwrap import dedent
 
 from agents.reasoner.implicit.reasoner import ImplicitState
-from agents.reasoner.implicit.think import Think
+from agents.reasoner.implicit.think.base import Think
 
 
 THINK_PROMPT = dedent(
@@ -43,7 +43,7 @@ class ReACTThink(Think):
     def __init__(self, *, llm) -> None:
         super().__init__(llm=llm)
 
-    def __call__(self, state: ImplicitState, memory: MutableMapping) -> str:
+    def __call__(self, state: "ImplicitState", memory: MutableMapping) -> str:
         lines: List[str] = [f"Goal: {state.goal}"]
         for t in state.turns[-6:]:
             if t.thought:

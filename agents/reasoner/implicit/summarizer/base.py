@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from agents.reasoner.implicit.reasoner import ImplicitState
+from typing import TYPE_CHECKING
 from agents.llm.base_llm import BaseLLM
+if TYPE_CHECKING:
+    from agents.reasoner.implicit.reasoner import ImplicitState
 
 
 class Summarizer(ABC):
@@ -11,5 +13,5 @@ class Summarizer(ABC):
         self.llm = llm
 
     @abstractmethod
-    def __call__(self, state: ImplicitState) -> str:
+    def __call__(self, state: "ImplicitState") -> str:
         ...

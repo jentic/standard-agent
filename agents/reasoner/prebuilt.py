@@ -8,11 +8,12 @@ from .sequential.executors.rewoo import ReWOOExecuteStep
 from .sequential.summarizer.default import DefaultSummarizeResult
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
+
 from agents.reasoner.implicit.reasoner import ImplicitReasoner
-from agents.reasoner.implicit.policy import ReACTPolicy
-from agents.reasoner.implicit.think import Think
-from agents.reasoner.implicit.act import JustInTimeAct
-from agents.reasoner.implicit.summarizer import DefaultImplicitSummarizer
+from agents.reasoner.implicit.policy.react import ReACTPolicy
+from agents.reasoner.implicit.think.react import ReACTThink
+from agents.reasoner.implicit.act.act import JustInTimeAct
+from agents.reasoner.implicit.summarizer.summarize import DefaultImplicitSummarizer
 
 
 class ReWOOReasoner(SequentialReasoner):
@@ -57,7 +58,7 @@ class ReACTReasoner(ImplicitReasoner):
             tools=tools,
             memory=memory,
             decide=ReACTPolicy(llm=llm),
-            think=Think(llm=llm),
+            think=ReACTThink(llm=llm),
             act=JustInTimeAct(llm=llm, tools=tools),
             summarize=DefaultImplicitSummarizer(llm=llm),
             max_turns=max_turns,
