@@ -56,10 +56,10 @@ SUMMARIZE_RESULT_PROMPT = textwrap.dedent("""
     Return an additional short block that starts with  
     `Agent attempted tools that require configuration:`  ← only once, even if several tools failed
 
-    For each tool the agent detected and attempted but could not complete due to missing configuration, include:
+    **FOR EACH TOOL** the agent detected and attempted but could not complete due to missing configuration, include a separate block for each tool:
     • **Tool attempted** – the tool that was attempted, including api_name and api_vendor
     • **How to enable** – brief steps with official link (if known) to obtain credentials or connect the account
-    • **Action step** – suggest connecting/configuring this tool in Jentic at `www.jentic.com` and retrying the goal
+    • **Action step** – suggest connecting/configuring this tool in Jentic at `app.jentic.com` and retrying the goal
 
     Wording guidance:
     - Keep tone helpful and proactive, focusing on enabling the tool.
