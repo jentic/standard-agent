@@ -17,7 +17,14 @@ class ReasoningError(Exception):
 
 
 class MissingInputError(ReasoningError, KeyError):
-    """A required memory key is absent."""
+    """A required memory key by a step is absent.
+
+    Contains the specific missing memory key to allow upstream dependency pruning.
+    """
+
+    def __init__(self, message: str, missing_key: str | None = None):
+        super().__init__(message)
+        self.missing_key = missing_key
 
 
 class ToolSelectionError(ReasoningError):
