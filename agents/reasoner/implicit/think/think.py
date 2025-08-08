@@ -1,22 +1,14 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from typing import List
 
-from agents.llm.base_llm import BaseLLM
 from agents.reasoner.implicit.reasoner import ImplicitState
-
-
-class Think(ABC):
-    @abstractmethod
-    def __call__(self, state: ImplicitState, memory: MutableMapping) -> str:
-        ...
+from agents.reasoner.implicit.think import Think
 
 
 class LLMThink(Think):
-    def __init__(self, *, llm: BaseLLM) -> None:
-        self.llm = llm
+
 
     def __call__(self, state: ImplicitState, memory: MutableMapping) -> str:
         lines: List[str] = [f"Goal: {state.goal}"]

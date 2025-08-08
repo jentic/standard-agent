@@ -8,12 +8,14 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
 from collections.abc import MutableMapping
 
-from .state import ImplicitState, Turn
 from .policy import DecidePolicy, SimpleDecidePolicy
 from .think import Think, LLMThink
 from .act import Act, JITActPlaceholder
 from .stop import StopCondition, SimpleStopCondition
-from .summarize import Summarizer, DefaultImplicitSummarizer
+from .summarizer import Summarizer, DefaultImplicitSummarizer
+
+
+
 
 @dataclass
 class Turn:
@@ -28,8 +30,6 @@ class ImplicitState:
     turns: List[Turn] = field(default_factory=list)
     is_complete: bool = False
     final_answer: Optional[str] = None
-
-
 
 
 class ImplicitReasoner(BaseReasoner):

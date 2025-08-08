@@ -3,13 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from agents.reasoner.implicit.reasoner import ImplicitState
-
-
-class DecidePolicy(ABC):
-    @abstractmethod
-    def __call__(self, state: ImplicitState, memory: MutableMapping) -> str:
-        """Return one of: "REASON" | "TOOL" | "HALT"."""
-        ...
+from agents.reasoner.implicit.policy import DecidePolicy
 
 
 class SimpleDecidePolicy(DecidePolicy):

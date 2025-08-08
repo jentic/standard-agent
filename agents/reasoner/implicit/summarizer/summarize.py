@@ -3,19 +3,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List
 
-from agents.llm.base_llm import BaseLLM
 from agents.reasoner.implicit.reasoner import ImplicitState
-
-
-class Summarizer(ABC):
-    @abstractmethod
-    def __call__(self, state: ImplicitState) -> str:
-        ...
-
+from agents.reasoner.implicit.summarizer import Summarizer
 
 class DefaultImplicitSummarizer(Summarizer):
-    def __init__(self, *, llm: BaseLLM) -> None:
-        self.llm = llm
+
 
     def __call__(self, state: ImplicitState) -> str:
         lines: List[str] = [f"Goal: {state.goal}"]
