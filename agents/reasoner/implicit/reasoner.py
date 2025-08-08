@@ -8,7 +8,7 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
 from collections.abc import MutableMapping
 
-from .policy import DecidePolicy, LLMBackedReACTPolicy
+from .policy import DecidePolicy, LLMBackedReACTPolicy, ReACTPolicy
 from .think import Think, LLMThink
 from .act import Act, JustInTimeAct
 from .stop import StopCondition, SimpleStopCondition
@@ -56,7 +56,7 @@ class ImplicitReasoner(BaseReasoner):
     ) -> None:
         super().__init__(llm=llm, tools=tools, memory=memory)
         self.max_turns = max_turns
-        self.decide = decide or LLMBackedReACTPolicy(llm=llm)
+        self.decide = decide or ReACTPolicy(llm=llm)
         self.think = think or LLMThink(llm=llm)
         self.act = act or JustInTimeAct(tools=tools)
         self.stop = stop or SimpleStopCondition()
