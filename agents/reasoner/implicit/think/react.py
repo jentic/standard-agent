@@ -6,8 +6,11 @@ from textwrap import dedent
 
 from agents.reasoner.implicit.reasoner import ImplicitState
 from agents.reasoner.implicit.models import ReasonNode, ReasonKind
+from agents.reasoner.implicit.exceptions import ThinkFormatError
 from agents.reasoner.implicit.think.base import Think
 
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 THINK_PROMPT = dedent(
     """
@@ -67,11 +70,10 @@ class ReACTThink(Think):
             text = ((obj or {}).get("text") or "").strip()
             if kind in {"FINAL", "ACTION", "THOUGHT"} and text:
                 return ReasonNode(kind=ReasonKind[kind], text=text)
-            # Fallback: if malformed but we got some text, treat as THOUGHT without making another LLM call
-            if text:
-                return ReasonNode(kind=ReasonKind.THOUGHT, text=text)
-            # Last resort: minimal safe thought
-            return ReasonNode(kind=ReasonKind.THOUGHT, text="Continuing reasoning to determine next step.")
+            else:
+                logger.error("Invalid think output", kind=kind, text_present=bool(text))
+                raise ThinkFormatError(f"Invalid think output: kind='{kind}', text_present={bool(text)}")
+
         except Exception:
             # No second LLM call; avoid hidden retries
             return ReasonNode(kind=ReasonKind.THOUGHT, text="Continuing reasoning to determine next step.")
