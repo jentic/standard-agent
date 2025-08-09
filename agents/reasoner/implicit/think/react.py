@@ -38,7 +38,7 @@ THINK_PROMPT = dedent(
     </instructions>
 
     <output_format>
-    {"kind": "THOUGHT|ACTION|FINAL", "text": "..."}
+    {{"kind": "THOUGHT|ACTION|FINAL", "text": "..."}}
     </output_format>
     """
 ).strip()
@@ -63,8 +63,6 @@ class ReACTThink(Think):
 
         try:
             obj = self.llm.prompt_to_json(prompt, max_retries=0)
-            print("Rishi")
-            print(obj)
             kind = ((obj or {}).get("kind") or "").strip().upper()
             text = ((obj or {}).get("text") or "").strip()
             if kind in {"FINAL", "ACTION", "THOUGHT"} and text:
