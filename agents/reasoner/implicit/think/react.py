@@ -12,7 +12,10 @@ THINK_PROMPT = dedent(
     """
     <role>
     You are the Reasoning Engine within an agent. Your job is to think step-by-step to progress the goal.
-    You do not call tools here; you only produce the next Thought or, if sufficient, the final answer.
+    You do not call tools here; you produce either:
+    - a next Thought (analysis), or
+    - an ACTION: {{json}} when the next move requires a tool, or
+    - FINAL: <answer> when sufficient.
     </role>
 
     <goal>
@@ -24,16 +27,23 @@ THINK_PROMPT = dedent(
     </transcript>
 
     <instructions>
-    1. If the transcript clearly contains enough information to answer the goal, output a final answer.
-    2. Otherwise, produce the single next Thought that advances the plan toward an actionable step.
-    3. Be specific and testable (what to verify or clarify next), but do NOT mention tool names or parameters.
-    4. Do not repeat prior Thoughts verbatim; build on the latest Observation if present.
+    1. If sufficient for a user-facing answer, start your output with EXACTLY 'FINAL: ' then the answer.
+    2. If a single tool action is the correct next move, output EXACTLY one line: 'ACTION: {{json}}'
+       The JSON must be a single object with these keys:
+       - domain: string (e.g., "nytimes", "discord", "slack", "gmail")
+       - intent: string (e.g., "search_articles", "send_message")
+       - inputs_ref: optional string name of data to send (e.g., "summary")
+       - args: optional object of human-level arguments (example: channel_id = "123")
+       Do not include API parameters; keep it provider-agnostic.
+    3. Otherwise, output a single Thought (no prefix) that advances toward an actionable step. Be specific and build on the latest Observation if present.
+    4. Do not repeat prior Thoughts verbatim.
     </instructions>
 
     <output_format>
-    - If final: start with EXACTLY 'FINAL: ' followed by the answer
-    - Else: a single concise sentence describing the next Thought
-    - No markdown, no code fences, no additional labels
+    - FINAL: <answer>
+    - ACTION: {{json}}
+    - <Thought sentence>
+    - No markdown, no code fences, no extra labels
     </output_format>
     """
 ).strip()

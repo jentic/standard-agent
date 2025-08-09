@@ -20,6 +20,7 @@ POLICY_PROMPT = dedent(
     - An Action should be preceded by a Thought explaining why
     - After an Observation, prefer REASON to process it
     - If the latest Thought starts with 'FINAL:', choose HALT
+    - If the latest line starts with 'ACTION:', choose TOOL
     </rules>
 
     <transcript>
@@ -55,6 +56,13 @@ class ReACTPolicy(DecidePolicy):
             if t.observation is not None:
                 lines.append(f"Observation: {t.observation}")
         transcript = "\n".join(lines)
+
+        # Fast path: if the latest thought contains a line starting with ACTION:, choose TOOL
+        last = state.turns[-1] if state.turns else None
+        if last and last.thought:
+            for line in last.thought.splitlines():
+                if line.strip().upper().startswith("ACTION:"):
+                    return "TOOL"
 
         prompt = POLICY_PROMPT.format(transcript=transcript)
 
