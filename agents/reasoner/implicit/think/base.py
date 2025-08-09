@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from agents.llm.base_llm import BaseLLM
+from agents.reasoner.implicit.models import ReasonNode
 
 class Think(ABC):
 
@@ -10,5 +11,5 @@ class Think(ABC):
         self.llm = llm
 
     @abstractmethod
-    def __call__(self, state: "ImplicitState", memory: MutableMapping):
+    def __call__(self, state: "ImplicitState", memory: MutableMapping) -> ReasonNode:
         ...
