@@ -12,7 +12,7 @@ from agents.tools.base import JustInTimeToolingBase
 from agents.reasoner.implicit.reasoner import ImplicitReasoner
 from agents.reasoner.implicit.policy.react import ReACTPolicy
 from agents.reasoner.implicit.think.react import ReACTThink
-from agents.reasoner.implicit.act.act import JustInTimeAct
+from agents.reasoner.implicit.act.jit_act import JustInTimeAct
 from agents.reasoner.implicit.summarizer.summarize import DefaultImplicitSummarizer
 
 

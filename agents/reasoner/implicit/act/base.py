@@ -4,9 +4,6 @@ from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from typing import Any, Dict, Tuple
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from agents.reasoner.implicit.reasoner import ImplicitState
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
 
