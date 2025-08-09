@@ -33,9 +33,18 @@ class ImplicitState:
     turns: List[Turn] = field(default_factory=list)
     is_complete: bool = False
     final_answer: Optional[str] = None
-    # Cached for O(1) access by components (e.g., Act)
-    last_thought: Optional[ReasonNode] = None
-    last_observation: Optional[Any] = None
+
+    def get_reasoning_transcript(self) -> List[str]:
+        lines: List[str] = [f"Goal: {self.goal}"]
+        for t in self.turns:
+            if t.thought:
+                lines.append(f"{t.thought.kind.name}: {t.thought.text}")
+            if t.action:
+                tool = t.action.get("tool_id") if isinstance(t.action, dict) else str(t.action)
+                lines.append(f"ACTION_EXECUTED: tool_id={tool}")
+            if t.observation is not None:
+                lines.append(f"OBSERVATION: {str(t.observation)}")
+        return "\n".join(lines) if lines else lines
 
 
 class ImplicitReasoner(BaseReasoner):
@@ -86,7 +95,6 @@ class ImplicitReasoner(BaseReasoner):
             if decision == Decision.REASON:
                 node = self.think(state)
                 turn.thought = node
-                state.last_thought = node
                 if node.kind == ReasonKind.FINAL:
                     state.final_answer = node.text
                     state.is_complete = True
@@ -99,7 +107,6 @@ class ImplicitReasoner(BaseReasoner):
                 tool_id, params, observation = self.act(state)
                 turn.action = {"tool_id": tool_id, "params": params}
                 turn.observation = observation
-                state.last_observation = observation
                 obs_preview = str(observation)
                 if len(obs_preview) > 200:
                     obs_preview = obs_preview[:200] + "..."

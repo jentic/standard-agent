@@ -42,16 +42,7 @@ class DefaultImplicitSummarizer(Summarizer):
         if state.final_answer:
             return state.final_answer
 
-        lines: List[str] = [f"Goal: {state.goal}"]
-        for i, t in enumerate(state.turns, 1):
-            if t.thought:
-                lines.append(f"Thought {i}: {t.thought}")
-            if t.action:
-                lines.append(f"Action {i}: {t.action}")
-            if t.observation is not None:
-                lines.append(f"Observation {i}: {t.observation}")
-
-        prompt = SUMMARY_PROMPT.format(transcript="\n".join(lines))
+        prompt = SUMMARY_PROMPT.format(transcript=state.get_reasoning_transcript())
         reply = self.llm.prompt(prompt)
         return reply or "ERROR: insufficient data for a reliable answer."
 

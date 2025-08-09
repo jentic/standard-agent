@@ -51,17 +51,7 @@ class ReACTThink(Think):
         super().__init__(llm=llm)
 
     def __call__(self, state: "ImplicitState"):
-        lines: List[str] = [f"Goal: {state.goal}"]
-        for t in state.turns:
-            if t.thought:
-                lines.append(f"{t.thought.kind.name}: {t.thought.text}")
-            if t.action:
-                tool = t.action.get("tool_id") if isinstance(t.action, dict) else str(t.action)
-                lines.append(f"ACTION_EXECUTED: tool_id={tool}")
-            if t.observation is not None:
-                lines.append(f"OBSERVATION: {str(t.observation)}")
-
-        prompt = THINK_PROMPT.format(transcript="\n".join(lines))
+        prompt = THINK_PROMPT.format(transcript=state.get_reasoning_transcript())
 
         try:
             obj = self.llm.prompt_to_json(prompt, max_retries=0)

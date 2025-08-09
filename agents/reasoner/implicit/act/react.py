@@ -180,17 +180,7 @@ class ReACTAct(Act):
         schema = tool.get_parameters() or {}
         allowed_keys = ",".join(schema.keys()) if isinstance(schema, dict) else ""
 
-        # Build full reasoning trace (goal + all turns) as plain strings
-        trace_lines: list[str] = [f"Goal: {state.goal}"]
-        for t in state.turns:
-            if t.thought is not None:
-                trace_lines.append(f"Thought: {t.thought}")
-            if t.action is not None:
-                trace_lines.append(f"Action: {t.action}")
-            if t.observation is not None:
-                trace_lines.append(f"Observation: {t.observation}")
-
-        data: Dict[str, Any] = {"trace": "\n".join(trace_lines),}
+        data: Dict[str, Any] = {"trace": state.get_reasoning_transcript(),}
 
         params_raw = self.llm.prompt_to_json(
             PARAMETER_GENERATION_PROMPT.format(
