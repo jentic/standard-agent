@@ -10,7 +10,7 @@ from agents.reasoner.implicit.exceptions import ActionNodeMissingError
 from agents.tools.base import ToolBase
 from typing import TYPE_CHECKING
 from agents.reasoner.implicit.act.base import Act
-from agents.reasoner.implicit.models import Action as ActionNode
+from agents.reasoner.implicit.models import ReasonNode, ReasonKind
 if TYPE_CHECKING:
     from agents.reasoner.implicit.reasoner import ImplicitState
 
@@ -145,13 +145,13 @@ class ReACTAct(Act):
     def __call__(self, state: "ImplicitState", memory: MutableMapping) -> Tuple[str, Dict[str, Any], Any]:
         # Require last thought to be an Action node
         last = state.turns[-1] if state.turns else None
-        if not last or not isinstance(last.thought, ActionNode):
+        if not last or not isinstance(last.thought, ReasonNode) or last.thought.kind != ReasonKind.ACTION:
             raise ActionNodeMissingError("Act called without an Action node")
-        action_node: ActionNode = last.thought
+        action_node: ReasonNode = last.thought
         query = action_node.text
 
         tool = self._select_and_load_tool(query)
-        params = self._generate_params(tool, state, action_node, query)
+        params = self._generate_params(tool, state, query)
         observation = self.tools.execute(tool, params)
         return tool.id, params, observation
 
@@ -175,7 +175,6 @@ class ReACTAct(Act):
         self,
         tool,
         state: "ImplicitState",
-        action: ActionNode | None,
         step_text: str,
     ) -> Dict[str, Any]:
         schema = tool.get_parameters() or {}
@@ -203,7 +202,7 @@ class ReACTAct(Act):
             max_retries=2,
         )
         params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
-        logger.info("params_generated", tool_id=tool.id, keys=list(params.keys()))
+        logger.info("params_generated", tool_id=tool.id, params=params)
         return params
 
 
