@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+from agents.reasoner.implicit.reasoner import ImplicitState, Decision, ReasonNode, ReasonKind
+from agents.reasoner.implicit.policy.base import DecidePolicy
+
+class ReACTPolicy(DecidePolicy):
+    """Deterministic rule-based policy for ReACT-style agents.
+
+    Rules:
+    - If latest node kind == FINAL → HALT
+    - If latest node kind == ACTION → TOOL
+    - Else → REASON
+    """
+
+
+    def __call__(self, state: ImplicitState) -> Decision:
+
+        last = state.turns[-1] if state.turns else None
+        if last and isinstance(last.thought, ReasonNode):
+            if last.thought.kind == ReasonKind.FINAL:
+                return Decision.HALT
+            if last.thought.kind == ReasonKind.ACTION:
+                return Decision.TOOL
+
+        return Decision.REASON
+
+
