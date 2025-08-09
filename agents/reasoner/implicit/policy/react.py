@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import MutableMapping
-
 from agents.reasoner.implicit.reasoner import ImplicitState
 from agents.reasoner.implicit.models import ReasonNode, ReasonKind
 from agents.reasoner.implicit.reasoner import Decision

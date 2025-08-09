@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import MutableMapping
 from agents.reasoner.implicit.policy.decision import Decision
 
 
