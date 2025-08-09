@@ -1,5 +1,7 @@
 ## Implicit (ReACT-style) Reasoner
 
+![Implicit Reasoner Architecture](../../../docs/assets/implicit_reasoner_architecture.png)
+
 This module provides a composable, readable implementation of an implicit (ReACT-style) agent. It is designed for OSS users to plug in their own components while keeping the orchestration loop simple and clear.
 
 ### What “Implicit” means
