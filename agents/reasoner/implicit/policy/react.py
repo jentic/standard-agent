@@ -17,7 +17,7 @@ class ReACTPolicy(DecidePolicy):
     """
 
 
-    def __call__(self, state: ImplicitState, memory: MutableMapping) -> Decision:
+    def __call__(self, state: ImplicitState) -> Decision:
 
         last = state.turns[-1] if state.turns else None
         if last and isinstance(last.thought, ReasonNode):

@@ -142,7 +142,7 @@ class ReACTAct(Act):
     No blind retries. If selection fails, surface an error so the next turn can REASON.
     """
 
-    def __call__(self, state: "ImplicitState", memory: MutableMapping) -> Tuple[str, Dict[str, Any], Any]:
+    def __call__(self, state: "ImplicitState") -> Tuple[str, Dict[str, Any], Any]:
         # Require last thought to be an Action node
         last = state.turns[-1] if state.turns else None
         if not last or not isinstance(last.thought, ReasonNode) or last.thought.kind != ReasonKind.ACTION:

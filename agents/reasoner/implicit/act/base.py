@@ -14,6 +14,6 @@ class Act(ABC):
         self.top_k = top_k
 
     @abstractmethod
-    def __call__(self, state: "ImplicitState", memory: MutableMapping) -> Tuple[str, Dict[str, Any], Any]:
+    def __call__(self, state: "ImplicitState") -> Tuple[str, Dict[str, Any], Any]:
         """Return (tool_id, params, observation)."""
         ...

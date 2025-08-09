@@ -32,5 +32,5 @@ class DecidePolicy(ABC):
     """
 
     @abstractmethod
-    def __call__(self, state: "ImplicitState", memory: MutableMapping) -> Decision:
+    def __call__(self, state: "ImplicitState") -> Decision:
         ...

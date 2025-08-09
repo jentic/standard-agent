@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from enum import Enum
 
 from agents.reasoner.base import BaseReasoner, ReasoningResult
 from agents.llm.base_llm import BaseLLM
@@ -75,7 +74,7 @@ class ImplicitReasoner(BaseReasoner):
             if state.is_complete:
                 break
 
-            decision = self.decide(state, self.memory)
+            decision = self.decide(state)
 
             logger.info("policy_decision", decision=decision.value, turns=len(state.turns))
             if decision == Decision.HALT:
@@ -85,7 +84,7 @@ class ImplicitReasoner(BaseReasoner):
 
             turn = Turn()
             if decision == Decision.REASON:
-                node = self.think(state, self.memory)
+                node = self.think(state)
                 turn.thought = node
                 state.last_thought = node
                 if node.kind == ReasonKind.FINAL:
@@ -96,8 +95,8 @@ class ImplicitReasoner(BaseReasoner):
                     break
                 preview = node.text
                 logger.info("thought_generated", thought=str(preview)[:200] + ("..." if preview and len(str(preview)) > 200 else ""))
-            else:  # TOOL
-                tool_id, params, observation = self.act(state, self.memory)
+            else:
+                tool_id, params, observation = self.act(state)
                 turn.action = {"tool_id": tool_id, "params": params}
                 turn.observation = observation
                 state.last_observation = observation

@@ -51,7 +51,7 @@ class ReACTThink(Think):
     def __init__(self, *, llm) -> None:
         super().__init__(llm=llm)
 
-    def __call__(self, state: "ImplicitState", memory: MutableMapping):
+    def __call__(self, state: "ImplicitState"):
         lines: List[str] = [f"Goal: {state.goal}"]
         for t in state.turns:
             if t.thought:
