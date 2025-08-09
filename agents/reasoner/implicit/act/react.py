@@ -6,9 +6,11 @@ from textwrap import dedent
 from typing import Any, Dict, Tuple
 
 from agents.reasoner.sequential.exceptions import ToolSelectionError
+from agents.reasoner.implicit.exceptions import ActionNodeMissingError
 from agents.tools.base import ToolBase
 from typing import TYPE_CHECKING
 from agents.reasoner.implicit.act.base import Act
+from agents.reasoner.implicit.models import Action as ActionNode
 if TYPE_CHECKING:
     from agents.reasoner.implicit.reasoner import ImplicitState
 
@@ -141,38 +143,18 @@ class ReACTAct(Act):
     """
 
     def __call__(self, state: "ImplicitState", memory: MutableMapping) -> Tuple[str, Dict[str, Any], Any]:
-        original_text = self._compose_step_text(state)
-        action_obj = self._parse_action(original_text)
-        query = self._compose_query(original_text, action_obj)
+        # Require last thought to be an Action node
+        last = state.turns[-1] if state.turns else None
+        if not last or not isinstance(last.thought, ActionNode):
+            raise ActionNodeMissingError("Act called without an Action node")
+        action_node: ActionNode = last.thought
+        query = action_node.text
 
         tool = self._select_and_load_tool(query)
-        params = self._generate_params(tool, state, action_obj, query)
-        observation = self._execute_tool(tool, params)
+        params = self._generate_params(tool, state, action_node, query)
+        observation = self.tools.execute(tool, params)
         return tool.id, params, observation
 
-    # ---------- helpers -------------------------------------------------
-    def _parse_action(self, text: str) -> Dict[str, Any] | None:
-        if "ACTION:" not in text.upper():
-            return None
-        for line in text.splitlines():
-            if line.strip().upper().startswith("ACTION:"):
-                raw = line.split(":", 1)[1].strip()
-                try:
-                    obj = json.loads(raw)
-                    return obj if isinstance(obj, dict) else None
-                except Exception:
-                    return None
-        return None
-
-    def _compose_query(self, text: str, action: Dict[str, Any] | None) -> str:
-        if action and action.get("domain") and action.get("intent"):
-            return f"{action['domain']} {action['intent']}"
-        # Fallback to a concise, single-line step (last ACTION line or the thought itself)
-        if action is None and "ACTION:" in text.upper():
-            for line in text.splitlines():
-                if line.strip().upper().startswith("ACTION:"):
-                    return line.split(":", 1)[1].strip()
-        return text.strip()
 
     def _select_and_load_tool(self, query: str):
         candidates: list[ToolBase] = self.tools.search(query, top_k=self.top_k)
@@ -187,27 +169,29 @@ class ReACTAct(Act):
         if tool is None:
             raise ToolSelectionError(f"Selected tool id '{tool_id}' not in candidate list")
 
-        full_tool = self.tools.load(tool)
-        logger.info("tool_selected", tool_id=full_tool.id)
-        return full_tool
+        return self.tools.load(tool)
 
     def _generate_params(
         self,
         tool,
         state: "ImplicitState",
-        action: Dict[str, Any] | None,
+        action: ActionNode | None,
         step_text: str,
     ) -> Dict[str, Any]:
         schema = tool.get_parameters() or {}
         allowed_keys = ",".join(schema.keys()) if isinstance(schema, dict) else ""
 
-        data = self._gather_data(state)
-        if isinstance(action, dict) and action.get("inputs_ref"):
-            ref = action["inputs_ref"]
-            for t in reversed(state.turns):
-                if t.observation is not None and ref.lower() in ("summary",):
-                    data[ref] = t.observation
-                    break
+        # Build full reasoning trace (goal + all turns) as plain strings
+        trace_lines: list[str] = [f"Goal: {state.goal}"]
+        for t in state.turns:
+            if t.thought is not None:
+                trace_lines.append(f"Thought: {t.thought}")
+            if t.action is not None:
+                trace_lines.append(f"Action: {t.action}")
+            if t.observation is not None:
+                trace_lines.append(f"Observation: {t.observation}")
+
+        data: Dict[str, Any] = {"trace": "\n".join(trace_lines),}
 
         params_raw = self.llm.prompt_to_json(
             PARAMETER_GENERATION_PROMPT.format(
@@ -219,34 +203,7 @@ class ReACTAct(Act):
             max_retries=2,
         )
         params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
-        logger.info("params_generated", tool_id=tool.id, keys=params)
+        logger.info("params_generated", tool_id=tool.id, keys=list(params.keys()))
         return params
-
-    def _execute_tool(self, tool, params: Dict[str, Any]):
-        observation = self.tools.execute(tool, params)
-        logger.info("tool_executed", tool_id=tool.id)
-        return observation
-
-    def _compose_step_text(self, state: "ImplicitState") -> str:
-        for t in reversed(state.turns):
-            if t.thought:
-                return t.thought
-        return state.goal
-
-    def _gather_data(self, state: "ImplicitState") -> Dict[str, Any]:
-        last_thought = None
-        last_observation = None
-        for t in reversed(state.turns):
-            if last_observation is None and t.observation is not None:
-                last_observation = t.observation
-            if last_thought is None and t.thought:
-                last_thought = t.thought
-            if last_thought and last_observation is not None:
-                break
-        return {
-            "goal": state.goal,
-            "last_thought": last_thought,
-            "last_observation": last_observation,
-        }
 
 
