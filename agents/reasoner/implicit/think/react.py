@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import List
 from textwrap import dedent
 
 from agents.reasoner.implicit.reasoner import ImplicitState
-from agents.reasoner.implicit.models import ReasonNode, ReasonKind
+from agents.reasoner.implicit.reasoner import ReasonNode, ReasonKind
 from agents.reasoner.implicit.exceptions import ThinkFormatError
 from agents.reasoner.implicit.think.base import Think
 

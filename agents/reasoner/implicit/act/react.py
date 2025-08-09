@@ -7,11 +7,8 @@ from typing import Any, Dict, Tuple
 from agents.reasoner.sequential.exceptions import ToolSelectionError
 from agents.reasoner.implicit.exceptions import ActionNodeMissingError
 from agents.tools.base import ToolBase
-from typing import TYPE_CHECKING
 from agents.reasoner.implicit.act.base import Act
-from agents.reasoner.implicit.models import ReasonNode, ReasonKind
-if TYPE_CHECKING:
-    from agents.reasoner.implicit.reasoner import ImplicitState
+from agents.reasoner.implicit.reasoner import ReasonNode, ReasonKind, ImplicitState
 
 from utils.logger import get_logger
 logger = get_logger(__name__)

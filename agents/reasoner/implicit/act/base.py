@@ -5,6 +5,7 @@ from typing import Any, Dict, Tuple
 
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
+from agents.reasoner.implicit.reasoner import ImplicitState
 
 class Act(ABC):
     def __init__(self, *, llm: BaseLLM, tools: JustInTimeToolingBase, top_k: int = 15) -> None:
@@ -13,6 +14,6 @@ class Act(ABC):
         self.top_k = top_k
 
     @abstractmethod
-    def __call__(self, state: "ImplicitState") -> Tuple[str, Dict[str, Any], Any]:
+    def __call__(self, state: ImplicitState) -> Tuple[str, Dict[str, Any], Any]:
         """Return (tool_id, params, observation)."""
         ...

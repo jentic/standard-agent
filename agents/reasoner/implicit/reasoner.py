@@ -1,26 +1,43 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from enum import Enum
+from collections.abc import MutableMapping
 
 from agents.reasoner.base import BaseReasoner, ReasoningResult
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase
-from collections.abc import MutableMapping
-
-from agents.reasoner.implicit.policy.base import DecidePolicy
-from agents.reasoner.implicit.think.base import Think
-from agents.reasoner.implicit.act.base import Act
-from agents.reasoner.implicit.summarizer.base import Summarizer
-from agents.reasoner.implicit.models import ReasonNode, ReasonKind
-from agents.reasoner.implicit.policy.decision import Decision
 from agents.reasoner.sequential.exceptions import ToolSelectionError
 from agents.tools.exceptions import ToolExecutionError
+
+if TYPE_CHECKING:
+    from agents.reasoner.implicit.policy.base import DecidePolicy
+    from agents.reasoner.implicit.think.base import Think
+    from agents.reasoner.implicit.act.base import Act
+    from agents.reasoner.implicit.summarizer.base import Summarizer
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
  
+class Decision(Enum):
+    REASON = "REASON"
+    TOOL = "TOOL"
+    HALT = "HALT"
+
+
+class ReasonKind(Enum):
+    THOUGHT = "THOUGHT"
+    ACTION = "ACTION"
+    FINAL = "FINAL"
+
+
+@dataclass
+class ReasonNode:
+    kind: ReasonKind
+    text: str
+
 
 @dataclass
 class Turn:

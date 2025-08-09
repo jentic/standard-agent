@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from agents.llm.base_llm import BaseLLM
-from agents.reasoner.implicit.models import ReasonNode
+from agents.reasoner.implicit.reasoner import ReasonNode, ImplicitState
 
 class Think(ABC):
 
@@ -10,5 +10,5 @@ class Think(ABC):
         self.llm = llm
 
     @abstractmethod
-    def __call__(self, state: "ImplicitState") -> ReasonNode:
+    def __call__(self, state: ImplicitState) -> ReasonNode:
         ...

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from agents.reasoner.implicit.policy.decision import Decision
+from agents.reasoner.implicit.reasoner import Decision
 
 
 class DecidePolicy(ABC):
@@ -24,5 +24,5 @@ class DecidePolicy(ABC):
     """
 
     @abstractmethod
-    def __call__(self, state: "ImplicitState") -> Decision:
+    def __call__(self, state: "ImplicitState") -> "Decision":
         ...
