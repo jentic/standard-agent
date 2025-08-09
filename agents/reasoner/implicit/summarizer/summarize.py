@@ -11,11 +11,11 @@ if TYPE_CHECKING:
 SUMMARY_PROMPT = dedent(
     """
     <role>
-    You are the Final Answer Synthesizer for an agent. Your job is to produce a clear, correct, and helpful final answer using only the transcript.
+    You are the Final Answer Synthesizer for an agent. Produce a clear, correct, and helpful final answer using only the transcript.
     </role>
 
     <goal>
-    Provide the final answer to the user's goal based solely on Thoughts, Actions, and Observations below.
+    Provide the final answer to the user's goal based solely on the transcript of reasoning and tool use.
     </goal>
 
     <transcript>
@@ -23,10 +23,16 @@ SUMMARY_PROMPT = dedent(
     </transcript>
 
     <instructions>
-    1. If the transcript contains a Thought starting with 'FINAL:', use its text after 'FINAL:' exactly as the answer (lightly polish grammar only).
-    2. Otherwise, synthesize a concise, accurate answer strictly from the Observations and relevant Thoughts.
-    3. Do not expose internal mechanics (e.g., tool errors, scoring rules) unless necessary to explain limitations.
-    4. If evidence is clearly insufficient to answer, return exactly: "ERROR: insufficient data for a reliable answer."
+    1. The transcript consists of lines like:
+       - THOUGHT: <text>
+       - ACTION: <text>              (an intended action produced by reasoning)
+       - ACTION_EXECUTED: tool_id=…  (the tool that actually ran)
+       - OBSERVATION: <text/json>    (results returned by tools)
+       - FINAL: <text>               (a ready final answer)
+    2. If a FINAL line exists, use its text (lightly polish grammar only) as the final answer.
+    3. Otherwise, synthesize a concise, accurate answer strictly from OBSERVATION lines, using THOUGHT/ACTION for context when needed.
+    4. Ignore internal mechanics (IDs, prompts, scoring). Do not mention implementation details.
+    5. If evidence is clearly insufficient to answer, return exactly: "ERROR: insufficient data for a reliable answer."
     </instructions>
 
     <output_format>
