@@ -5,21 +5,19 @@ from typing import List
 from textwrap import dedent
 
 from agents.reasoner.implicit.reasoner import ImplicitState
+from agents.reasoner.implicit.models import ReasonNode, ReasonKind
 from agents.reasoner.implicit.think.base import Think
 
 
 THINK_PROMPT = dedent(
     """
     <role>
-    You are the Reasoning Engine within an agent. Your job is to think step-by-step to progress the goal.
-    You do not call tools here; you produce either:
-    - a next Thought (analysis), or
-    - an ACTION: {{json}} when the next move requires a tool, or
-    - FINAL: <answer> when sufficient.
+    You are the Reasoning Engine within an agent. Decide the immediate next step to progress the goal.
+    Return exactly ONE JSON object with fields: kind and text.
     </role>
 
     <goal>
-    Achieve the user's goal using only the information in the transcript below.
+    Achieve the user's goal using only the transcript below.
     </goal>
 
     <transcript>
@@ -27,23 +25,20 @@ THINK_PROMPT = dedent(
     </transcript>
 
     <instructions>
-    1. If sufficient for a user-facing answer, start your output with EXACTLY 'FINAL: ' then the answer.
-    2. If a single tool action is the correct next move, output EXACTLY one line: 'ACTION: {{json}}'
-       The JSON must be a single object with these keys:
-       - domain: string (e.g., "nytimes", "discord", "slack", "gmail")
-       - intent: string (e.g., "search_articles", "send_message")
-       - inputs_ref: optional string name of data to send (e.g., "summary")
-       - args: optional object of human-level arguments (example: channel_id = "123")
-       Do not include API parameters; keep it provider-agnostic.
-    3. Otherwise, output a single Thought (no prefix) that advances toward an actionable step. Be specific and build on the latest Observation if present.
-    4. Do not repeat prior Thoughts verbatim.
+    1. kind MUST be one of: "THOUGHT", "ACTION", "FINAL".
+       - If kind == "FINAL":
+         • text = the final user-facing answer. Concise, factual, no internal details.
+       - If kind == "ACTION":
+         • text = a single, clear, executable instruction in plain language (e.g., "send hi to discord channel 1234", "search nytimes for articles about Artificial Intelligence").
+         • Only include ONE action; no multi-step plans.
+       - If kind == "THOUGHT":
+         • text = a brief reasoning step describing what to figure out next; no tool names or API parameters.
+    2. Be specific and build on the latest Observation if present. Do not repeat earlier Thoughts verbatim.
+    3. Output ONLY the JSON object. No markdown, no commentary.
     </instructions>
 
     <output_format>
-    - FINAL: <answer>
-    - ACTION: {{json}}
-    - <Thought sentence>
-    - No markdown, no code fences, no extra labels
+    {"kind": "THOUGHT|ACTION|FINAL", "text": "..."}
     </output_format>
     """
 ).strip()
@@ -53,18 +48,34 @@ class ReACTThink(Think):
     def __init__(self, *, llm) -> None:
         super().__init__(llm=llm)
 
-    def __call__(self, state: "ImplicitState", memory: MutableMapping) -> str:
+    def __call__(self, state: "ImplicitState", memory: MutableMapping):
         lines: List[str] = [f"Goal: {state.goal}"]
-        for t in state.turns[-6:]:
+        for t in state.turns:
             if t.thought:
-                lines.append(f"Thought: {t.thought}")
+                lines.append(f"{t.thought.kind.name}: {t.thought.text}")
             if t.action:
                 tool = t.action.get("tool_id") if isinstance(t.action, dict) else str(t.action)
-                lines.append(f"Action: tool_id={tool}")
+                lines.append(f"ACTION_EXECUTED: tool_id={tool}")
             if t.observation is not None:
-                lines.append(f"Observation: {str(t.observation)}")
+                lines.append(f"OBSERVATION: {str(t.observation)}")
 
         prompt = THINK_PROMPT.format(transcript="\n".join(lines))
-        return self.llm.prompt(prompt)
+
+        try:
+            obj = self.llm.prompt_to_json(prompt, max_retries=0)
+            print("Rishi")
+            print(obj)
+            kind = ((obj or {}).get("kind") or "").strip().upper()
+            text = ((obj or {}).get("text") or "").strip()
+            if kind in {"FINAL", "ACTION", "THOUGHT"} and text:
+                return ReasonNode(kind=ReasonKind[kind], text=text)
+            # Fallback: if malformed but we got some text, treat as THOUGHT without making another LLM call
+            if text:
+                return ReasonNode(kind=ReasonKind.THOUGHT, text=text)
+            # Last resort: minimal safe thought
+            return ReasonNode(kind=ReasonKind.THOUGHT, text="Continuing reasoning to determine next step.")
+        except Exception:
+            # No second LLM call; avoid hidden retries
+            return ReasonNode(kind=ReasonKind.THOUGHT, text="Continuing reasoning to determine next step.")
 
 
