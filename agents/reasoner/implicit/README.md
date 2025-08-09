@@ -29,6 +29,8 @@ This module provides a composable, readable implementation of an implicit (ReACT
 - Policy (DecidePolicy)
   - Input: ImplicitState
   - Output: Decision (REASON | TOOL | HALT)
+  - Why separate from Think? Think generates the next step; Policy arbitrates how the loop proceeds (REASON vs TOOL vs HALT). This keeps execution gating (cost/safety/latency) swappable without changing Think.
+
 
 - Summarizer
   - Input: ImplicitState
