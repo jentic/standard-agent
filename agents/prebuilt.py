@@ -53,11 +53,12 @@ class ReACTAgent(StandardAgent):
         memory = DictMemory()
 
         reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=max_turns)
-
+        goal_processor = ConversationalGoalPreprocessor(llm=llm)
 
         super().__init__(
             llm=llm,
             tools=tools,
             memory=memory,
-            reasoner=reasoner
+            reasoner=reasoner,
+            goal_preprocessor=goal_processor
         )

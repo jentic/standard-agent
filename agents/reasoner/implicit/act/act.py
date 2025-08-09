@@ -171,7 +171,7 @@ class JustInTimeAct(Act):
             max_retries=2,
         )
         params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
-        logger.info("params_generated", tool_id=tool.id, keys=list(params.keys()))
+        logger.info("params_generated", tool_id=tool.id, keys=params)
 
         # 5) Execute
         observation = self.tools.execute(tool, params)

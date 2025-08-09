@@ -52,8 +52,7 @@ class ReACTThink(Think):
                 tool = t.action.get("tool_id") if isinstance(t.action, dict) else str(t.action)
                 lines.append(f"Action: tool_id={tool}")
             if t.observation is not None:
-                obs = str(t.observation)
-                lines.append(f"Observation: {obs[:500] + ('…' if len(obs) > 500 else '')}")
+                lines.append(f"Observation: {str(t.observation)}")
 
         prompt = THINK_PROMPT.format(transcript="\n".join(lines))
         return self.llm.prompt(prompt)

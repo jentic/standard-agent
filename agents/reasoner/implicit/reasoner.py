@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 @dataclass
 class Turn:
     thought: Optional[str] = None
-    action: Optional[Dict[str, Any]] = None  # {"tool_id": str, "params": dict}
+    action: Optional[Dict[str, Any]] = None
     observation: Optional[Any] = None
 
 
@@ -59,7 +59,6 @@ class ImplicitReasoner(BaseReasoner):
         self.act = act
         self.summarize = summarize
 
-    # ---------- core loop -----------------------------------------
     def run(self, goal: str) -> ReasoningResult:
         state = ImplicitState(goal=goal)
         logger.info("implicit_run_start", goal=goal, max_turns=self.max_turns)
@@ -93,12 +92,7 @@ class ImplicitReasoner(BaseReasoner):
                 obs_preview = str(observation)
                 if len(obs_preview) > 200:
                     obs_preview = obs_preview[:200] + "..."
-                logger.info(
-                    "tool_executed",
-                    tool_id=tool_id,
-                    param_count=len(params) if isinstance(params, dict) else None,
-                    observation_preview=obs_preview,
-                )
+                logger.info("tool_executed", tool_id=tool_id, param_count=len(params) if isinstance(params, dict) else None, observation_preview=obs_preview,)
 
             state.turns.append(turn)
 
