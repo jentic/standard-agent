@@ -14,6 +14,8 @@ from agents.reasoner.implicit.act.base import Act
 from agents.reasoner.implicit.summarizer.base import Summarizer
 from agents.reasoner.implicit.models import ReasonNode, ReasonKind
 from agents.reasoner.implicit.policy.decision import Decision
+from agents.reasoner.sequential.exceptions import ToolSelectionError
+from agents.tools.exceptions import ToolExecutionError
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -104,13 +106,23 @@ class ImplicitReasoner(BaseReasoner):
                 preview = node.text
                 logger.info("thought_generated", thought=str(preview)[:200] + ("..." if preview and len(str(preview)) > 200 else ""))
             else:
-                tool_id, params, observation = self.act(state)
-                turn.action = {"tool_id": tool_id, "params": params}
-                turn.observation = observation
-                obs_preview = str(observation)
-                if len(obs_preview) > 200:
-                    obs_preview = obs_preview[:200] + "..."
-                logger.info("tool_executed", tool_id=tool_id, param_count=len(params) if isinstance(params, dict) else None, observation_preview=obs_preview,)
+                try:
+                    tool_id, params, observation = self.act(state)
+                    turn.action = {"tool_id": tool_id, "params": params}
+                    turn.observation = observation
+                    obs_preview = str(observation)
+                    if len(obs_preview) > 200:
+                        obs_preview = obs_preview[:200] + "..."
+                    logger.info("tool_executed", tool_id=tool_id, param_count=len(params) if isinstance(params, dict) else None, observation_preview=obs_preview,)
+                except ToolSelectionError as exc:
+                    turn.observation = f"ERROR: ToolSelectionError: {str(exc)}"
+                    logger.warning("tool_selection_failed", error=str(exc))
+                except ToolExecutionError as exc:
+                    turn.observation = f"ERROR: ToolExecutionError: {str(exc)}"
+                    logger.error("tool_execution_failed", error=str(exc))
+                except Exception as exc:
+                    turn.observation = f"ERROR: UnexpectedError: {str(exc)}"
+                    logger.error("tool_unexpected_error", error=str(exc), exc_info=True)
 
             state.turns.append(turn)
 
