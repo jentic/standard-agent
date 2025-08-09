@@ -11,13 +11,6 @@ class DecidePolicy(ABC):
     - Given the current implicit state and memory, decide one of the modes:
       REASON (think again), TOOL (execute an external tool), or HALT (stop).
 
-    Why a standalone component
-    - Separation of concerns: the reasoner loop remains a simple orchestrator;
-      switching logic lives here and can evolve independently.
-    - Composability: downstream users can swap policies without touching the core
-      loop to inject domain rules, safety checks, or cost/latency preferences.
-    - Testability: decision strategies can be unit-tested in isolation.
-
     Typical strategies (non-exhaustive)
     - Rule-based (default): if latest node is FINAL → HALT; if ACTION → TOOL; else → REASON.
     - Safety/compliance gate: block TOOL for risky actions; force REASON to reassess.
