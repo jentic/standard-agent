@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from enum import Enum
 
 from agents.reasoner.base import BaseReasoner, ReasoningResult
 from agents.llm.base_llm import BaseLLM
@@ -9,16 +10,20 @@ from agents.tools.base import JustInTimeToolingBase
 from collections.abc import MutableMapping
 
 from agents.reasoner.implicit.policy.base import DecidePolicy
-from agents.reasoner.implicit.think.base  import Think
-from agents.reasoner.implicit.act.base  import Act
-from agents.reasoner.implicit.summarizer.base  import Summarizer
+from agents.reasoner.implicit.think.base import Think
+from agents.reasoner.implicit.act.base import Act
+from agents.reasoner.implicit.summarizer.base import Summarizer
+from agents.reasoner.implicit.models import ReasonNode, ReasonKind
+from agents.reasoner.implicit.policy.decision import Decision
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
+ 
+
 @dataclass
 class Turn:
-    thought: Optional[str] = None
+    thought: Optional[ReasonNode] = None
     action: Optional[Dict[str, Any]] = None
     observation: Optional[Any] = None
 
@@ -29,6 +34,9 @@ class ImplicitState:
     turns: List[Turn] = field(default_factory=list)
     is_complete: bool = False
     final_answer: Optional[str] = None
+    # Cached for O(1) access by components (e.g., Act)
+    last_thought: Optional[ReasonNode] = None
+    last_observation: Optional[Any] = None
 
 
 class ImplicitReasoner(BaseReasoner):
@@ -68,27 +76,31 @@ class ImplicitReasoner(BaseReasoner):
                 break
 
             decision = self.decide(state, self.memory)
-            logger.info("policy_decision", decision=decision, turns=len(state.turns))
-            if decision == "HALT":
+
+            logger.info("policy_decision", decision=decision.value, turns=len(state.turns))
+            if decision == Decision.HALT:
                 state.is_complete = True
                 logger.info("reasoning_complete", reason="policy_halt", turns=len(state.turns))
                 break
 
             turn = Turn()
-            if decision == "REASON":
-                turn.thought = self.think(state, self.memory)
-                # Loop-level halt: Thought can signal final answer via 'FINAL:'
-                if turn.thought and turn.thought.strip().upper().startswith("FINAL:"):
-                    state.final_answer = turn.thought.split(":", 1)[1].strip()
+            if decision == Decision.REASON:
+                node = self.think(state, self.memory)
+                turn.thought = node
+                state.last_thought = node
+                if node.kind == ReasonKind.FINAL:
+                    state.final_answer = node.text
                     state.is_complete = True
                     state.turns.append(turn)
                     logger.info("reasoning_complete", reason="final_thought", turns=len(state.turns))
                     break
-                logger.info("thought_generated", thought=turn.thought[:200] + ("..." if turn.thought and len(turn.thought) > 200 else ""))
+                preview = node.text
+                logger.info("thought_generated", thought=str(preview)[:200] + ("..." if preview and len(str(preview)) > 200 else ""))
             else:  # TOOL
                 tool_id, params, observation = self.act(state, self.memory)
                 turn.action = {"tool_id": tool_id, "params": params}
                 turn.observation = observation
+                state.last_observation = observation
                 obs_preview = str(observation)
                 if len(obs_preview) > 200:
                     obs_preview = obs_preview[:200] + "..."

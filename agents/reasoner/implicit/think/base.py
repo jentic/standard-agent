@@ -10,5 +10,5 @@ class Think(ABC):
         self.llm = llm
 
     @abstractmethod
-    def __call__(self, state: "ImplicitState", memory: MutableMapping) -> str:
+    def __call__(self, state: "ImplicitState", memory: MutableMapping):
         ...

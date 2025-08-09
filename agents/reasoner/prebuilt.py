@@ -12,7 +12,7 @@ from agents.tools.base import JustInTimeToolingBase
 from agents.reasoner.implicit.reasoner import ImplicitReasoner
 from agents.reasoner.implicit.policy.react import ReACTPolicy
 from agents.reasoner.implicit.think.react import ReACTThink
-from agents.reasoner.implicit.act.jit_act import JustInTimeAct
+from agents.reasoner.implicit.act.react import ReACTAct
 from agents.reasoner.implicit.summarizer.summarize import DefaultImplicitSummarizer
 
 
@@ -57,9 +57,9 @@ class ReACTReasoner(ImplicitReasoner):
             llm=llm,
             tools=tools,
             memory=memory,
-            decide=ReACTPolicy(llm=llm),
+            decide=ReACTPolicy(),
             think=ReACTThink(llm=llm),
-            act=JustInTimeAct(llm=llm, tools=tools),
+            act=ReACTAct(llm=llm, tools=tools),
             summarize=DefaultImplicitSummarizer(llm=llm),
             max_turns=max_turns,
         )

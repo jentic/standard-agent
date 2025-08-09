@@ -4,7 +4,7 @@ from collections.abc import MutableMapping
 
 from agents.reasoner.implicit.reasoner import ImplicitState
 from agents.reasoner.implicit.models import ReasonNode, ReasonKind
-from agents.reasoner.implicit.policy.decision import Decision
+from agents.reasoner.implicit.reasoner import Decision
 from agents.reasoner.implicit.policy.base import DecidePolicy
 
 class ReACTPolicy(DecidePolicy):

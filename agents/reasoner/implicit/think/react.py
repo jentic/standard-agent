@@ -74,8 +74,7 @@ class ReACTThink(Think):
                 logger.error("Invalid think output", kind=kind, text_present=bool(text))
                 raise ThinkFormatError(f"Invalid think output: kind='{kind}', text_present={bool(text)}")
 
-        except Exception:
-            # No second LLM call; avoid hidden retries
+        except Exception as e:
             return ReasonNode(kind=ReasonKind.THOUGHT, text="Continuing reasoning to determine next step.")
 
 
