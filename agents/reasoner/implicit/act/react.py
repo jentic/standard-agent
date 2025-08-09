@@ -133,75 +133,82 @@ PARAMETER_GENERATION_PROMPT = dedent(
 ).strip()
 
 
-class JustInTimeAct(Act):
-    """Selects a tool via LLM and executes it via JustInTimeToolingBase."""
+class ReACTAct(Act):
+    """Selects a tool via LLM and executes it via JustInTimeToolingBase.
+
+    Simplicity first: single-pass selection driven by structured ACTION JSON.
+    No blind retries. If selection fails, surface an error so the next turn can REASON.
+    """
 
     def __call__(self, state: "ImplicitState", memory: MutableMapping) -> Tuple[str, Dict[str, Any], Any]:
-        step_text = self._compose_step_text(state)
-        # If the latest thought contains ACTION: on any line, extract that line
-        if "ACTION:" in step_text.upper():
-            for line in step_text.splitlines():
-                if line.strip().upper().startswith("ACTION:"):
-                    raw = line.split(":", 1)[1].strip()
-                    # If ACTION is JSON, parse it and compose a platform-aware selection query
-                    try:
-                        action_obj = json.loads(raw)
-                    except Exception:
-                        action_obj = None
-                    if isinstance(action_obj, dict):
-                        domain = action_obj.get("domain")
-                        intent = action_obj.get("intent")
-                        # Construct a tighter query for search
-                        if domain and intent:
-                            step_text = f"{domain} {intent}"
-                        else:
-                            step_text = raw
-                        self._last_action = action_obj
-                    else:
-                        step_text = raw
-                    break
+        original_text = self._compose_step_text(state)
+        action_obj = self._parse_action(original_text)
+        query = self._compose_query(original_text, action_obj)
 
-        # 1) Search tools
-        candidates: list[ToolBase] = self.tools.search(step_text, top_k=self.top_k)
-        logger.info("tool_search", query=step_text, top_k=self.top_k, candidate_count=len(candidates))
+        tool = self._select_and_load_tool(query)
+        params = self._generate_params(tool, state, action_obj, query)
+        observation = self._execute_tool(tool, params)
+        return tool.id, params, observation
+
+    # ---------- helpers -------------------------------------------------
+    def _parse_action(self, text: str) -> Dict[str, Any] | None:
+        if "ACTION:" not in text.upper():
+            return None
+        for line in text.splitlines():
+            if line.strip().upper().startswith("ACTION:"):
+                raw = line.split(":", 1)[1].strip()
+                try:
+                    obj = json.loads(raw)
+                    return obj if isinstance(obj, dict) else None
+                except Exception:
+                    return None
+        return None
+
+    def _compose_query(self, text: str, action: Dict[str, Any] | None) -> str:
+        if action and action.get("domain") and action.get("intent"):
+            return f"{action['domain']} {action['intent']}"
+        # Fallback to a concise, single-line step (last ACTION line or the thought itself)
+        if action is None and "ACTION:" in text.upper():
+            for line in text.splitlines():
+                if line.strip().upper().startswith("ACTION:"):
+                    return line.split(":", 1)[1].strip()
+        return text.strip()
+
+    def _select_and_load_tool(self, query: str):
+        candidates: list[ToolBase] = self.tools.search(query, top_k=self.top_k)
+        logger.info("tool_search", query=query, top_k=self.top_k, candidate_count=len(candidates))
         tools_json = "\n".join([t.get_summary() for t in candidates])
 
-        # 2) Select tool id via LLM
-        tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(step=step_text, tools_json=tools_json)).strip()
+        tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(step=query, tools_json=tools_json)).strip()
         if tool_id == "none" or not tool_id:
-            # Retry with domain-aware query if available
-            action_obj = getattr(self, "_last_action", None)
-            domain = action_obj.get("domain") if isinstance(action_obj, dict) else None
-            intent = action_obj.get("intent") if isinstance(action_obj, dict) else None
-            if domain and intent:
-                retry_query = f"{domain} {intent}"
-                candidates = self.tools.search(retry_query, top_k=self.top_k)
-                logger.info("tool_search_retry", query=retry_query, candidate_count=len(candidates))
-                tools_json = "\n".join([t.get_summary() for t in candidates])
-                tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(step=retry_query, tools_json=tools_json)).strip()
-            if tool_id == "none" or not tool_id:
-                raise ToolSelectionError(f"No suitable tool selected for step: {step_text}")
+            raise ToolSelectionError(f"No suitable tool selected for step: {query}")
 
         tool = next((t for t in candidates if t.id == tool_id), None)
         if tool is None:
             raise ToolSelectionError(f"Selected tool id '{tool_id}' not in candidate list")
 
-        # 3) Load full tool
-        tool = self.tools.load(tool)
-        logger.info("tool_selected", tool_id=tool.id)
+        full_tool = self.tools.load(tool)
+        logger.info("tool_selected", tool_id=full_tool.id)
+        return full_tool
 
-        # 4) Generate params
+    def _generate_params(
+        self,
+        tool,
+        state: "ImplicitState",
+        action: Dict[str, Any] | None,
+        step_text: str,
+    ) -> Dict[str, Any]:
         schema = tool.get_parameters() or {}
         allowed_keys = ",".join(schema.keys()) if isinstance(schema, dict) else ""
+
         data = self._gather_data(state)
-        # If ACTION referenced a named input (e.g., summary), attach it when available in state
-        action_obj = getattr(self, "_last_action", None)
-        if isinstance(action_obj, dict) and action_obj.get("inputs_ref"):
-            ref = action_obj["inputs_ref"]
+        if isinstance(action, dict) and action.get("inputs_ref"):
+            ref = action["inputs_ref"]
             for t in reversed(state.turns):
                 if t.observation is not None and ref.lower() in ("summary",):
                     data[ref] = t.observation
                     break
+
         params_raw = self.llm.prompt_to_json(
             PARAMETER_GENERATION_PROMPT.format(
                 step=step_text,
@@ -213,11 +220,12 @@ class JustInTimeAct(Act):
         )
         params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
         logger.info("params_generated", tool_id=tool.id, keys=params)
+        return params
 
-        # 5) Execute
+    def _execute_tool(self, tool, params: Dict[str, Any]):
         observation = self.tools.execute(tool, params)
         logger.info("tool_executed", tool_id=tool.id)
-        return tool.id, params, observation
+        return observation
 
     def _compose_step_text(self, state: "ImplicitState") -> str:
         for t in reversed(state.turns):
