@@ -162,6 +162,7 @@ class ReACTAct(Act):
         tools_json = "\n".join([t.get_summary() for t in candidates])
 
         tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(step=query, tools_json=tools_json)).strip()
+        logger.info("tool selected", tool_id=tool_id)
         if tool_id == "none" or not tool_id:
             raise ToolSelectionError(f"No suitable tool selected for step: {query}")
 
