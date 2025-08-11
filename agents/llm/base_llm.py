@@ -48,10 +48,9 @@ class BaseLLM(ABC):
     • Returns *content* (str) of the assistant reply.
     • Implementations SHOULD be stateless; auth + model name given at init.
 
-    Configuration contract:
-    - A model identifier is required. It can be passed to the constructor
-      via `model` or provided through the `LLM_MODEL` environment variable.
-      If neither is set, a `ValueError` is raised during initialization.
+    Raises
+    ------
+    ValueError : If neither `model` is passed nor `LLM_MODEL` is set in .env during initialization.
     """
 
     # Shared regex pattern for extracting JSON from markdown code fences
