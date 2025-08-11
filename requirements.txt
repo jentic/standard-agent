@@ -3,7 +3,7 @@ jentic>=0.9.1
 openai>=1.0
 pydantic>=2.0
 python-dotenv>=1.0.0
-litellm
+litellm>=1.74.3
 google-generativeai
 structlog
 
