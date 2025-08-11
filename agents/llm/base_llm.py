@@ -47,12 +47,24 @@ class BaseLLM(ABC):
     • Accepts a list[dict] *messages* like the OpenAI Chat format.
     • Returns *content* (str) of the assistant reply.
     • Implementations SHOULD be stateless; auth + model name given at init.
+
+    Configuration contract:
+    - A model identifier is required. It can be passed to the constructor
+      via `model` or provided through the `LLM_MODEL` environment variable.
+      If neither is set, a `ValueError` is raised during initialization.
     """
 
     # Shared regex pattern for extracting JSON from markdown code fences
     _fence_pattern = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
 
-    def __init__(self, *, temperature: float | None = None) -> None:
+    def __init__(self, model: str | None = None, *, temperature: float | None = None) -> None:
+        # Resolve and validate model name
+        resolved_model = model or os.getenv("LLM_MODEL")
+        if not resolved_model:
+            logger.error( "llm_model_missing", msg="No LLM model configured in .env")
+            raise ValueError( "Missing LLM model. Provide model='your-model' when constructing the LLM or set LLM_MODEL in the environment.")
+
+        self.model: str = resolved_model
         self.temperature: float = self._load_env_temperature() if temperature is None else temperature
 
     @staticmethod
