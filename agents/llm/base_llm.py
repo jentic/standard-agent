@@ -57,7 +57,6 @@ class BaseLLM(ABC):
     _fence_pattern = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
 
     def __init__(self, model: str | None = None, *, temperature: float | None = None) -> None:
-        # Resolve and validate model name
         resolved_model = model or os.getenv("LLM_MODEL")
         if not resolved_model:
             logger.error( "llm_model_missing", msg="No LLM model configured in .env")
