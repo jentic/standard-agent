@@ -11,22 +11,27 @@ class LiteLLM(BaseLLM):
 
     def __init__(
         self,
-        model: str = "gpt-4o",
-        temperature: float = 0.2,
+        model: str = "claude-sonnet-4",
+        temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> None:
+        super().__init__(temperature=temperature)
         self.model = model
-        self.temperature = temperature
         self.max_tokens = max_tokens
 
     def completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
         # Merge default parameters with provided kwargs
-        completion_kwargs = {
+        effective_temperature = kwargs.get("temperature", self.temperature)
+        effective_max_tokens = kwargs.get("max_tokens", self.max_tokens)
+
+        completion_kwargs: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "temperature": kwargs.get("temperature", self.temperature),
-            "max_tokens": kwargs.get("max_tokens", self.max_tokens),
         }
+        if effective_temperature is not None:
+            completion_kwargs["temperature"] = effective_temperature
+        if effective_max_tokens is not None:
+            completion_kwargs["max_tokens"] = effective_max_tokens
 
         # Add any additional kwargs (like response_format)
         for key, value in kwargs.items():

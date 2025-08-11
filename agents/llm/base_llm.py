@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from abc import ABC, abstractmethod
+import os
 from textwrap import dedent
 from typing import List, Dict, Any
 
@@ -50,6 +51,20 @@ class BaseLLM(ABC):
 
     # Shared regex pattern for extracting JSON from markdown code fences
     _fence_pattern = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
+
+    def __init__(self, *, temperature: float | None = None) -> None:
+        self.temperature: float = self._load_env_temperature() if temperature is None else temperature
+
+    @staticmethod
+    def _load_env_temperature() -> float | None:
+        env_temp = os.getenv("LLM_TEMPERATURE")
+        if env_temp is None:
+            return None
+        try:
+            return float(env_temp)
+        except ValueError:
+            logger.warning("invalid_env_temperature", value=env_temp)
+            return None
 
     @abstractmethod
     def completion(self, messages: List[Dict[str, str]], **kwargs) -> str: ...
