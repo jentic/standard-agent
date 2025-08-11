@@ -12,3 +12,6 @@ pytest>=8.0
 pytest-mock
 ruff            # fast linter/formatter
 mypy
+ 
+# integrations
+discord.py>=2.3.2
