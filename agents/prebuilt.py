@@ -23,8 +23,7 @@ class ReWOOAgent(StandardAgent):
         Initialize the ReWOO agent with pre-configured components.
 
         Args:
-            model: The language model to use. If not provided, `LiteLLM` will
-                   read `LLM_MODEL` from the environment and raise if missing.
+            model: The language model to use.
             max_retries: Maximum number of retries for the ReWOO reflector
         """
         # Initialize the core services
