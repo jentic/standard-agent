@@ -2,6 +2,7 @@
 Thin wrapper around jentic-sdk for centralized auth, retries, and logging.
 """
 import asyncio
+import os
 import json
 from http import HTTPStatus
 from typing import Any, Dict, List, Optional
@@ -68,19 +69,23 @@ class JenticClient(JustInTimeToolingBase):
     requires the Jentic SDK to be installed.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, *, filter_by_credentials: Optional[bool] = None):
         """
         Initialize Jentic client.
         """
         self._jentic = Jentic()
+        if filter_by_credentials is None:
+            filter_by_credentials_env_val = os.getenv("JENTIC_FILTER_BY_CREDENTIALS", "false").strip().lower()
+            filter_by_credentials = filter_by_credentials_env_val == "true"
+        self._filter_by_credentials = bool(filter_by_credentials)
 
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
         """
         Search for workflows and operations matching a query.
         """
-        logger.info("tool_search", query=query, top_k=top_k)
+        logger.info("tool_search", query=query, top_k=top_k, filter_by_credentials=self._filter_by_credentials)
 
-        response = asyncio.run(self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=False)))
+        response = asyncio.run(self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=self._filter_by_credentials,)))
         return [JenticTool(result.model_dump(exclude_none=False)) for result in response.results] if response.results else []
 
 
