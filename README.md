@@ -10,14 +10,14 @@
 - [Usage Examples](#usage-examples)
 - [Project Layout](#project-layout)
 - [Core Runtime Objects](#core-runtime-objects)
-- [Extending the Framework](#extending-the-framework)
+- [Extending the Library](#extending-the-library)
 - [Roadmap](#roadmap)
 
 > **Join our community!** Connect with contributors and users on [Discord](https://discord.gg/yrxmDZWMqB) to discuss ideas, ask questions, and collaborate on the Standard Agent repository.
 
 ## Architecture Overview
 
-Standard Agent is a simple, modular framework for building AI agents—with a composable core and plug‑in components.
+Standard Agent is a simple, modular library for building AI agents—with a composable core and plug‑in components.
 
 ![Standard Agent architecture](docs/assets/standard_agent_architecture.png)
 
@@ -60,7 +60,7 @@ See [.env.example](./.env.example) for the complete configuration template with 
 
 ### Usage Examples
 
-We provide two ways to use the agent framework: a quick-start method using a pre-built agent, and a more advanced method that shows how to build an agent from scratch.
+We provide two ways to use the agent library: a quick-start method using a pre-built agent, and a more advanced method that shows how to build an agent from scratch.
 
 #### 1. Quick Start: Running a Pre-built Agent
 
@@ -237,9 +237,9 @@ The `SequentialReasoner` is the default reasoning engine. It follows a classic *
 
 This design allows you to customize the reasoning process by mixing and matching different implementations for each stage.
 
-### Extending the Framework
+### Extending the Library
 
-The framework is designed to be modular. Here are some common extension points:
+The library is designed to be modular. Here are some common extension points:
 
 | Need                               | How to Implement                                                                                                                                                                     |
 |------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
