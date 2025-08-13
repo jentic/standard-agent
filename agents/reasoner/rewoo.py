@@ -308,35 +308,6 @@ _REFLECTION_ALTERNATIVES_SECTION = dedent(
     """
 ).strip()
 
-_SUMMARIZE_PROMPT = dedent(
-    """
-    <role>
-    You are the Final Answer Synthesizer for autonomous agents. Transform raw execution logs into clear, user-friendly responses.
-    </role>
-
-    <goal>
-    Generate a comprehensive final answer based on the execution log that directly addresses the user's original goal.
-    </goal>
-
-    <input>
-    User's Goal: {goal}
-    Execution Log: {history}
-    </input>
-
-    <instructions>
-    1. Review the execution log to understand actions taken
-    2. If insufficient data, respond with: "ERROR: insufficient data for a reliable answer."
-    3. If sufficient, synthesize a concise answer using only information from the log
-    4. Avoid internal implementation details
-    </instructions>
-
-    <output_format>
-    Clear, user-friendly response in plain text.
-    </output_format>
-    """
-).strip()
-
-
 # ----------------------------- Data structures -------------------------
 
 
@@ -413,14 +384,10 @@ class ReWOOReasoner(BaseReasoner):
 
                 self._reflect(exc, step, state)
 
-        final_answer = self._summarize(state)
-        success = state.is_complete and not state.plan or bool(final_answer)
-        return ReasoningResult(
-            final_answer=final_answer,
-            iterations=iterations,
-            tool_calls=[],
-            success=success,
-        )
+        # Return transcript only; agent-level summarizer will synthesize final answer
+        transcript = "\n".join(state.history)
+        success = not state.plan
+        return ReasoningResult(final_answer="", iterations=iterations, tool_calls=[], success=success, transcript=transcript)
 
     # ----------------------------- Internals ---------------------------
 
@@ -626,21 +593,5 @@ class ReWOOReasoner(BaseReasoner):
         if params is not None:
             suggestion["params"] = params
         self.memory[f"rewoo_reflector_suggestion:{new_step.text}"] = suggestion
-
-    def _summarize(self, state: ReasonerState) -> str:
-        prompt = _SUMMARIZE_PROMPT.format(goal=state.goal, history="\n".join(state.history))
-        try:
-            reply = self.llm.prompt(prompt)
-            logger.info("summary_generated", goal=state.goal, result_length=len(reply) if reply else 0)
-            if not reply:
-                raise ValueError("LLM returned empty content")
-            state.is_complete = True
-            return reply
-        except Exception as exc:
-            logger.error("summarization_failed", goal=state.goal, error=str(exc), exc_info=True)
-            if state.history:
-                state.is_complete = True
-                return state.history[-1]
-            return "No definitive answer was produced."
 
 
