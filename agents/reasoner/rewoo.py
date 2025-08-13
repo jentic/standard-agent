@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from textwrap import dedent
 from typing import Any, Deque, Dict, List, Optional
+from copy import deepcopy
 
 from agents.reasoner.base import BaseReasoner, ReasoningResult
 from agents.llm.base_llm import BaseLLM
@@ -495,7 +496,7 @@ class ReWOOReasoner(BaseReasoner):
             )
         )
 
-        if "reasoning" in (step_type_response or "").lower():
+        if "reasoning" in step_type_response.lower():
             step.result = self.llm.prompt(
                 _REASONING_STEP_PROMPT.format(step_text=step.text, available_data=json.dumps(inputs, ensure_ascii=False))
             )
@@ -505,16 +506,12 @@ class ReWOOReasoner(BaseReasoner):
             step.result = self.tools.execute(tool, params)
 
         step.status = StepStatus.DONE
-        self._remember(step, state)
-        state.history.append(f"Executed step: {step.text} -> {step.result}")
-        logger.info(
-            "step_executed",
-            step_text=step.text,
-            step_type=step_type_response,
-            result=str(step.result)[:100] if step.result is not None else None,
-        )
+        self._remember_step_output(step, state)
 
-    def _remember(self, step: Step, state: ReasonerState) -> None:
+        state.history.append(f"Executed step: {step.text} -> {step.result}")
+        logger.info("step_executed", step_text=step.text, step_type=step_type_response, result=str(step.result)[:100] if step.result is not None else None)
+
+    def _remember_step_output(self, step: Step, state: ReasonerState) -> None:
         if step.output_key:
             self.memory[step.output_key] = step.result
             state.history.append(f"remembered {step.output_key} : {step.result}")
@@ -542,10 +539,10 @@ class ReWOOReasoner(BaseReasoner):
 
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
         suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
-        if suggestion and suggestion.get("action") == "retry_params" and "params" in suggestion:
-            logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion.get("params"))
+        if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
+            logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
             param_schema = tool.get_parameters() or {}
-            return {k: v for k, v in suggestion.get("params", {}).items() if k in param_schema}
+            return {k: v for k, v in suggestion["params"].items() if k in param_schema}
 
         try:
             param_schema = tool.get_parameters() or {}
@@ -555,7 +552,7 @@ class ReWOOReasoner(BaseReasoner):
                 step_inputs=json.dumps(inputs, ensure_ascii=False),
                 allowed_keys=",".join(param_schema.keys()),
             )
-            params_raw = self.llm.prompt_to_json(prompt, max_retries=2)
+            params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
             return {k: v for k, v in (params_raw or {}).items() if k in param_schema}
         except (json.JSONDecodeError, TypeError, ValueError) as e:
             raise ParameterGenerationError(
@@ -603,23 +600,20 @@ class ReWOOReasoner(BaseReasoner):
             )
             return
 
-        new_step = Step(
-            text=step.text,
-            status=StepStatus.PENDING,
-            result=None,
-            output_key=step.output_key,
-            input_keys=list(step.input_keys),
-            error=None,
-            retry_count=step.retry_count + 1,
-        )
+        # Prepare a new step object to add to the plan.
+        new_step = deepcopy(step)
+        new_step.retry_count += 1
+        new_step.status = StepStatus.PENDING
 
         if action == "rephrase_step":
             new_step.text = str((decision or {}).get("step", new_step.text))
             logger.info("reflection_rephrase", original_step=step.text, new_step=new_step.text)
+
         elif action == "change_tool":
             new_tool_id = (decision or {}).get("tool_id")
             self._save_reflector_suggestion(new_step, "change_tool", new_tool_id)
             logger.info("reflection_change_tool", step_text=new_step.text, new_tool_id=new_tool_id)
+
         elif action == "retry_params":
             params = (decision or {}).get("params", {})
             self._save_reflector_suggestion(new_step, "retry_params", failed_tool_id, params)
