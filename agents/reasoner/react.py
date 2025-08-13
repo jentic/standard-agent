@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from enum import Enum
 from textwrap import dedent
 from typing import Any, Dict, List, Optional, Tuple
 from collections.abc import MutableMapping
@@ -160,70 +158,38 @@ _SUMMARY_PROMPT = dedent(
 ).strip()
 
 
-# ----------------------------- Data structures -------------------------
+# ----------------------------- State model -----------------------------
 
 
-class Decision(Enum):
-    REASON = "REASON"
-    TOOL = "TOOL"
-    HALT = "HALT"
+class ReactState:
+    def __init__(self, goal: str):
+        self.goal: str = goal
+        self.final_answer: Optional[str] = None
+        self.complete: bool = False
+        self.lines: List[str] = [f"Goal: {goal}"]
+        self.last_kind: Optional[str] = None  # "THOUGHT" | "ACTION" | "FINAL"
+        self.last_text: Optional[str] = None
+
+    def append_thought(self, kind: str, text: str) -> None:
+        self.last_kind = kind
+        self.last_text = text
+        self.lines.append(f"{kind}: {text}")
+
+    def append_action(self, tool_id: str, observation: Any) -> None:
+        self.lines.append(f"ACTION_EXECUTED: tool_id={tool_id}")
+        self.lines.append(f"OBSERVATION: {str(observation)}")
+        # After an action executes, clear last_kind to allow policy to REASON next
+        self.last_kind = None
+        self.last_text = None
+
+    def transcript(self) -> str:
+        return "\n".join(self.lines)
 
 
-class Kind(Enum):
-    THOUGHT = "THOUGHT"
-    ACTION = "ACTION"
-    FINAL = "FINAL"
+# ----------------------------- Local exception -------------------------
 
 
-@dataclass
-class Node:
-    kind: Kind
-    text: str
-
-
-@dataclass
-class Turn:
-    thought: Optional[Node] = None
-    action: Optional[Dict[str, Any]] = None
-    observation: Optional[Any] = None
-
-
-@dataclass
-class ImplicitState:
-    goal: str
-    turns: List[Turn]
-    is_complete: bool = False
-    final_answer: Optional[str] = None
-
-    def get_reasoning_transcript(self) -> str:
-        lines: List[str] = [f"Goal: {self.goal}"]
-        for t in self.turns:
-            if t.thought:
-                lines.append(f"{t.thought.kind.name}: {t.thought.text}")
-            if t.action:
-                tool = t.action.get("tool_id") if isinstance(t.action, dict) else str(t.action)
-                lines.append(f"ACTION_EXECUTED: tool_id={tool}")
-            if t.observation is not None:
-                lines.append(f"OBSERVATION: {str(t.observation)}")
-        return "\n".join(lines)
-
-
-# ----------------------------- Local exceptions ------------------------
-
-
-class ImplicitReasoningError(Exception):
-    """Raised when an error occurs during Implicit Reasoning."""
-
-
-class ActionNodeMissingError(ImplicitReasoningError):
-    """Raised when the Act component is invoked without a preceding Action node."""
-
-
-class ThinkFormatError(ImplicitReasoningError):
-    """Raised when the Think component returns an invalid or unparsable output."""
-
-
-class ToolSelectionError(ImplicitReasoningError):
+class ToolSelectionError(Exception):
     """A suitable tool could not be selected from candidates."""
 
 
@@ -247,32 +213,31 @@ class ReACTReasoner(BaseReasoner):
         self.top_k = top_k
 
     def run(self, goal: str) -> ReasoningResult:
-        state = ImplicitState(goal=goal, turns=[])
+        state = ReactState(goal=goal)
         logger.info("implicit_run_start", goal=goal, max_turns=self.max_turns)
 
         for _ in range(self.max_turns):
-            if state.is_complete:
+            if state.complete:
                 break
 
             decision = self._decide(state)
-            logger.info("policy_decision", decision=decision.value, turns=len(state.turns))
+            logger.info("policy_decision", decision=decision, turns=len(state.lines))
 
-            if decision == Decision.HALT:
-                state.is_complete = True
-                logger.info("reasoning_complete", reason="policy_halt", turns=len(state.turns))
+            if decision == "HALT":
+                state.complete = True
+                logger.info("reasoning_complete", reason="policy_halt", turns=len(state.lines))
                 break
 
-            turn = Turn()
-            if decision == Decision.REASON:
+            if decision == "REASON":
                 node = self._think(state)
-                turn.thought = node
-                if node.kind == Kind.FINAL:
-                    state.final_answer = node.text
-                    state.is_complete = True
-                    state.turns.append(turn)
-                    logger.info("reasoning_complete", reason="final_thought", turns=len(state.turns))
+                kind, text = node
+                state.append_thought(kind, text)
+                if kind == "FINAL":
+                    state.final_answer = text
+                    state.complete = True
+                    logger.info("reasoning_complete", reason="final_thought", turns=len(state.lines))
                     break
-                preview = node.text
+                preview = text
                 logger.info(
                     "thought_generated",
                     thought=str(preview)[:200] + ("..." if preview and len(str(preview)) > 200 else ""),
@@ -280,8 +245,7 @@ class ReACTReasoner(BaseReasoner):
             else:
                 try:
                     tool_id, params, observation = self._act(state)
-                    turn.action = {"tool_id": tool_id, "params": params}
-                    turn.observation = observation
+                    state.append_action(tool_id, observation)
                     obs_preview = str(observation)
                     if len(obs_preview) > 200:
                         obs_preview = obs_preview[:200] + "..."
@@ -292,56 +256,50 @@ class ReACTReasoner(BaseReasoner):
                         observation_preview=obs_preview,
                     )
                 except ToolSelectionError as exc:
-                    turn.observation = f"ERROR: ToolSelectionError: {str(exc)}"
+                    state.lines.append(f"OBSERVATION: ERROR: ToolSelectionError: {str(exc)}")
                     logger.warning("tool_selection_failed", error=str(exc))
                 except ToolExecutionError as exc:
-                    turn.observation = f"ERROR: ToolExecutionError: {str(exc)}"
+                    state.lines.append(f"OBSERVATION: ERROR: ToolExecutionError: {str(exc)}")
                     logger.error("tool_execution_failed", error=str(exc))
                 except Exception as exc:
-                    turn.observation = f"ERROR: UnexpectedError: {str(exc)}"
+                    state.lines.append(f"OBSERVATION: ERROR: UnexpectedError: {str(exc)}")
                     logger.error("tool_unexpected_error", error=str(exc), exc_info=True)
 
-            state.turns.append(turn)
-
-        if not state.is_complete and not state.final_answer:
+        if not state.complete and not state.final_answer:
             state.final_answer = "ERROR: reasoning stopped after reaching the maximum number of steps."
-            logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(state.turns))
+            logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(state.lines))
 
         final_answer = state.final_answer or self._summarize(state)
-        success = state.is_complete or bool(final_answer)
-        return ReasoningResult(final_answer=final_answer, iterations=len(state.turns), success=success)
+        success = state.complete or bool(final_answer)
+        return ReasoningResult(final_answer=final_answer, iterations=len(state.lines), success=success)
 
     # ----------------------------- Internals ---------------------------
 
-    def _decide(self, state: ImplicitState) -> Decision:
+    def _decide(self, state: ReactState) -> str:
         """ReACT policy: FINAL -> HALT; ACTION -> TOOL; else REASON."""
-        last = state.turns[-1] if state.turns else None
-        if last and isinstance(last.thought, Node):
-            if last.thought.kind == Kind.FINAL:
-                return Decision.HALT
-            if last.thought.kind == Kind.ACTION:
-                return Decision.TOOL
-        return Decision.REASON
+        if state.last_kind == "FINAL":
+            return "HALT"
+        if state.last_kind == "ACTION":
+            return "TOOL"
+        return "REASON"
 
-    def _think(self, state: ImplicitState) -> Node:
-        prompt = _THINK_PROMPT.format(transcript=state.get_reasoning_transcript())
+    def _think(self, state: ReactState) -> Tuple[str, str]:
+        prompt = _THINK_PROMPT.format(transcript=state.transcript())
         try:
             obj = self.llm.prompt_to_json(prompt, max_retries=0) or {}
             kind_raw = (obj.get("kind") or "").strip().upper()
             text = (obj.get("text") or "").strip()
             if kind_raw in {"FINAL", "ACTION", "THOUGHT"} and text:
-                return Node(kind=Kind[kind_raw], text=text)
+                return kind_raw, text
             logger.error("Invalid think output", kind=kind_raw, text_present=bool(text))
-            raise ThinkFormatError(f"Invalid think output: kind='{kind_raw}', text_present={bool(text)}")
         except Exception:
-            return Node(kind=Kind.THOUGHT, text="Continuing reasoning to determine next step.")
+            pass
+        return "THOUGHT", "Continuing reasoning to determine next step."
 
-    def _act(self, state: ImplicitState) -> Tuple[str, Dict[str, Any], Any]:
-        last = state.turns[-1] if state.turns else None
-        if not last or not isinstance(last.thought, Node) or last.thought.kind != Kind.ACTION:
-            raise ActionNodeMissingError("Act called without an Action node")
-        action_node: Node = last.thought
-        query = action_node.text
+    def _act(self, state: ReactState) -> Tuple[str, Dict[str, Any], Any]:
+        if state.last_kind != "ACTION" or not state.last_text:
+            raise ToolSelectionError("Act called without an Action node")
+        query = state.last_text
 
         tool = self._select_and_load_tool(query)
         params = self._generate_params(tool, state, query)
@@ -368,10 +326,10 @@ class ReACTReasoner(BaseReasoner):
 
         return self.tools.load(tool)
 
-    def _generate_params(self, tool: ToolBase, state: ImplicitState, step_text: str) -> Dict[str, Any]:
+    def _generate_params(self, tool: ToolBase, state: ReactState, step_text: str) -> Dict[str, Any]:
         schema = tool.get_parameters() or {}
         allowed_keys = ",".join(schema.keys()) if isinstance(schema, dict) else ""
-        data: Dict[str, Any] = {"trace": state.get_reasoning_transcript()}
+        data: Dict[str, Any] = {"trace": state.transcript()}
 
         params_raw = self.llm.prompt_to_json(
             _PARAMETER_GENERATION_PROMPT.format(
@@ -386,10 +344,10 @@ class ReACTReasoner(BaseReasoner):
         logger.info("params_generated", tool_id=tool.id, params=params)
         return params
 
-    def _summarize(self, state: ImplicitState) -> str:
+    def _summarize(self, state: ReactState) -> str:
         if state.final_answer:
             return state.final_answer
-        prompt = _SUMMARY_PROMPT.format(transcript=state.get_reasoning_transcript())
+        prompt = _SUMMARY_PROMPT.format(transcript=state.transcript())
         reply = self.llm.prompt(prompt)
         return reply or "ERROR: insufficient data for a reliable answer."
 
