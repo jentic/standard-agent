@@ -59,15 +59,7 @@ class AgentManager:
         agent = self._agents.get(channel_id)
         if agent:
             return agent
-        memory = DictMemory()
-        reasoner = ReWOOReasoner(llm=self._llm, tools=self._tools, memory=memory, max_retries=2)
-        agent = StandardAgent(
-            llm=self._llm,
-            tools=self._tools,
-            memory=memory,
-            reasoner=reasoner,
-            conversation_history_window=5,
-        )
+        agent = ReWOOAgent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
         self._agents[channel_id] = agent
         return agent
 

@@ -29,7 +29,10 @@ PLAN_GENERATION_PROMPT = dedent("""
        where the parentheses are literal.
     4. `output:` key is mandatory when the step's result is needed later; exactly one **snake_case** identifier.
     5. `input:` is optional; if present, list comma-separated **snake_case** keys produced by earlier steps.
-    6. Do **not** mention specific external tool names.
+    6. If the goal explicitly states to use a specific tool or vendor, mention it in appropriate steps.
+    7. Do **not** mention specific external tool names unless explicitly specified in the goal.
+    </output_format>
+    
 
     <self_check>
     After drafting, silently verify — regenerate the list if any check fails:

@@ -192,6 +192,7 @@ PARAMETER_GENERATION_PROMPT = dedent("""
     - Extract actual data values from MEMORY, never placeholder text
     - For messaging APIs: format as readable text with titles and links
     - Required parameters take priority over optional ones
+    - if 'fq' in allowed keys, ignore 'fq', do not generate params for 'fq'
     </constraints>
 
     <output_format>
@@ -229,9 +230,14 @@ class ReWOOExecuteStep(ExecuteStep):
                 step_text=step.text, available_data=json.dumps(inputs, ensure_ascii=False)
             ))
         else:
+            print('*' * 100)
             tool =  self._select_tool(step)
+            print('Selected tool: ', tool)
             params = self._generate_params(step, tool, inputs)
+            print('Generated params: ', params)
             step.result = self.tools.execute(tool, params)
+            print('Tool result: ', step.result)
+            print('*' * 100)
 
         step.status = StepStatus.DONE
         self._remember(step, state)
