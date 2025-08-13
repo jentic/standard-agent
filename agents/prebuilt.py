@@ -1,7 +1,7 @@
 from agents.standard_agent import StandardAgent
 from agents.tools.jentic import JenticClient
 from agents.memory.dict_memory import DictMemory
-from agents.reasoner.prebuilt import ReWOOReasoner
+from agents.reasoner.rewoo import ReWOOReasoner
 from agents.llm.litellm import LiteLLM
 from agents.goal_preprocessor.conversational import ConversationalGoalPreprocessor
 
