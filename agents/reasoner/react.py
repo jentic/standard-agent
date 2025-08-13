@@ -33,20 +33,20 @@ _THINK_PROMPT = dedent(
     </transcript>
 
     <instructions>
-    1. kind MUST be one of: "THOUGHT", "ACTION", "FINAL".
-       - If kind == "FINAL":
+    1. kind MUST be one of: "THINK", "ACT", "STOP".
+       - If kind == "STOP":
          • text = the final user-facing answer. Concise, factual, no internal details.
-       - If kind == "ACTION":
+       - If kind == "ACT":
          • text = a single, clear, executable instruction in plain language (e.g., "send hi to discord channel 1234", "search nytimes for articles about Artificial Intelligence").
          • Only include ONE action; no multi-step plans.
-       - If kind == "THOUGHT":
+       - If kind == "THINK":
          • text = a brief reasoning step describing what to figure out next; no tool names or API parameters.
-    2. Be specific and build on the latest Observation if present. Do not repeat earlier Thoughts verbatim.
+    2. Be specific and build on the latest Observation if present. Do not repeat earlier steps verbatim.
     3. Output ONLY the JSON object. No markdown, no commentary.
     </instructions>
 
     <output_format>
-    {{"kind": "THOUGHT|ACTION|FINAL", "text": "..."}}
+    {{"kind": "THINK|ACT|STOP", "text": "..."}}
     </output_format>
     """
 ).strip()
@@ -167,20 +167,17 @@ class ReactState:
         self.final_answer: Optional[str] = None
         self.complete: bool = False
         self.lines: List[str] = [f"Goal: {goal}"]
-        self.last_kind: Optional[str] = None  # "THOUGHT" | "ACTION" | "FINAL"
-        self.last_text: Optional[str] = None
+        # No cached last step fields; loop branches directly on returned step_type
 
-    def append_thought(self, kind: str, text: str) -> None:
-        self.last_kind = kind
-        self.last_text = text
-        self.lines.append(f"{kind}: {text}")
+    def record_step(self, step_type: str, text: str) -> str:
+        label = (step_type or "").upper()
+        self.lines.append(f"{label}: {text}")
+        return label
 
     def append_action(self, tool_id: str, observation: Any) -> None:
-        self.lines.append(f"ACTION_EXECUTED: tool_id={tool_id}")
+        self.lines.append(f"ACT_EXECUTED: tool_id={tool_id}")
         self.lines.append(f"OBSERVATION: {str(observation)}")
-        # After an action executes, clear last_kind to allow policy to REASON next
-        self.last_kind = None
-        self.last_text = None
+        # No policy cache to reset; branching is driven by the next _think() output
 
     def transcript(self) -> str:
         return "\n".join(self.lines)
@@ -214,47 +211,30 @@ class ReACTReasoner(BaseReasoner):
 
     def run(self, goal: str) -> ReasoningResult:
         state = ReactState(goal=goal)
-        logger.info("implicit_run_start", goal=goal, max_turns=self.max_turns)
+        logger.info("ReACT reasoner started", goal=goal, max_turns=self.max_turns)
 
         for _ in range(self.max_turns):
             if state.complete:
                 break
 
-            decision = self._decide(state)
-            logger.info("policy_decision", decision=decision, turns=len(state.lines))
+            # Always THINK first, then ACT if requested, STOP if final
+            step_type_raw, step_text = self._think(state)
+            step_type = state.record_step(step_type_raw, step_text)
 
-            if decision == "HALT":
+            if step_type == "STOP":
+                state.final_answer = step_text
                 state.complete = True
-                logger.info("reasoning_complete", reason="policy_halt", turns=len(state.lines))
+                logger.info("reasoning_complete", reason="final_thought", turns=len(state.lines))
                 break
 
-            if decision == "REASON":
-                node = self._think(state)
-                kind, text = node
-                state.append_thought(kind, text)
-                if kind == "FINAL":
-                    state.final_answer = text
-                    state.complete = True
-                    logger.info("reasoning_complete", reason="final_thought", turns=len(state.lines))
-                    break
-                preview = text
-                logger.info(
-                    "thought_generated",
-                    thought=str(preview)[:200] + ("..." if preview and len(str(preview)) > 200 else ""),
-                )
-            else:
+            if step_type == "ACT":
                 try:
-                    tool_id, params, observation = self._act(state)
+                    tool_id, params, observation = self._act(state, step_text)
                     state.append_action(tool_id, observation)
                     obs_preview = str(observation)
                     if len(obs_preview) > 200:
                         obs_preview = obs_preview[:200] + "..."
-                    logger.info(
-                        "tool_executed",
-                        tool_id=tool_id,
-                        param_count=len(params) if isinstance(params, dict) else None,
-                        observation_preview=obs_preview,
-                    )
+                    logger.info("tool_executed",tool_id=tool_id, params=params if isinstance(params, dict) else None, observation_preview=obs_preview)
                 except ToolSelectionError as exc:
                     state.lines.append(f"OBSERVATION: ERROR: ToolSelectionError: {str(exc)}")
                     logger.warning("tool_selection_failed", error=str(exc))
@@ -264,42 +244,37 @@ class ReACTReasoner(BaseReasoner):
                 except Exception as exc:
                     state.lines.append(f"OBSERVATION: ERROR: UnexpectedError: {str(exc)}")
                     logger.error("tool_unexpected_error", error=str(exc), exc_info=True)
+            else:
+                # step_type == THINK, just proceed to next iteration
+                logger.info("thought_generated", thought=str(step_text)[:200] + ("..." if step_text and len(str(step_text)) > 200 else ""))
 
         if not state.complete and not state.final_answer:
-            state.final_answer = "ERROR: reasoning stopped after reaching the maximum number of steps."
             logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(state.lines))
 
-        final_answer = state.final_answer or self._summarize(state)
-        success = state.complete or bool(final_answer)
-        return ReasoningResult(final_answer=final_answer, iterations=len(state.lines), success=success)
-
-    # ----------------------------- Internals ---------------------------
-
-    def _decide(self, state: ReactState) -> str:
-        """ReACT policy: FINAL -> HALT; ACTION -> TOOL; else REASON."""
-        if state.last_kind == "FINAL":
-            return "HALT"
-        if state.last_kind == "ACTION":
-            return "TOOL"
-        return "REASON"
+        # Do not synthesize here; agent-level summarizer will create final answer
+        transcript = "\n".join(state.lines)
+        success = state.complete
+        return ReasoningResult(final_answer=state.final_answer or "", iterations=len(state.lines), success=success, transcript=transcript)
 
     def _think(self, state: ReactState) -> Tuple[str, str]:
         prompt = _THINK_PROMPT.format(transcript=state.transcript())
         try:
             obj = self.llm.prompt_to_json(prompt, max_retries=0) or {}
-            kind_raw = (obj.get("kind") or "").strip().upper()
+            step_type_raw = (obj.get("kind") or "").strip().upper()
             text = (obj.get("text") or "").strip()
-            if kind_raw in {"FINAL", "ACTION", "THOUGHT"} and text:
-                return kind_raw, text
-            logger.error("Invalid think output", kind=kind_raw, text_present=bool(text))
+            legacy_to_new = {"THOUGHT": "THINK", "ACTION": "ACT", "FINAL": "STOP"}
+            if step_type_raw in {"THINK", "ACT", "STOP"} and text:
+                return step_type_raw, text
+            mapped = legacy_to_new.get(step_type_raw)
+            if mapped and text:
+                return mapped, text
+            logger.error("Invalid think output", kind=step_type_raw, text_present=bool(text))
         except Exception:
             pass
-        return "THOUGHT", "Continuing reasoning to determine next step."
+        return "THINK", "Continuing reasoning to determine next step."
 
-    def _act(self, state: ReactState) -> Tuple[str, Dict[str, Any], Any]:
-        if state.last_kind != "ACTION" or not state.last_text:
-            raise ToolSelectionError("Act called without an Action node")
-        query = state.last_text
+    def _act(self, state: ReactState, action_text: str) -> Tuple[str, Dict[str, Any], Any]:
+        query = action_text
 
         tool = self._select_and_load_tool(query)
         params = self._generate_params(tool, state, query)
