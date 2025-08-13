@@ -125,64 +125,6 @@ _PARAMETER_GENERATION_PROMPT = dedent(
     """
 ).strip()
 
-_SUMMARY_PROMPT = dedent(
-    """
-    <role>
-    You are the Final Answer Synthesizer for an agent. Produce a clear, correct, and helpful final answer using only the transcript.
-    </role>
-
-    <goal>
-    Provide the final answer to the user's goal based solely on the transcript of reasoning and tool use.
-    </goal>
-
-    <transcript>
-    {transcript}
-    </transcript>
-
-    <instructions>
-    1. The transcript consists of lines like:
-       - THOUGHT: <text>
-       - ACTION: <text>
-       - ACTION_EXECUTED: tool_id=…
-       - OBSERVATION: <text/json>
-       - FINAL: <text>
-    2. If a FINAL line exists, use its text (polish grammar only).
-    3. Otherwise, synthesize a concise answer from OBSERVATION lines; use THOUGHT/ACTION for context.
-    4. If evidence is insufficient, return exactly: "ERROR: insufficient data for a reliable answer."
-    </instructions>
-
-    <output_format>
-    A short, user-facing answer in plain text.
-    </output_format>
-    """
-).strip()
-
-
-# ----------------------------- State model -----------------------------
-
-
-class ReactState:
-    def __init__(self, goal: str):
-        self.goal: str = goal
-        self.final_answer: Optional[str] = None
-        self.complete: bool = False
-        self.lines: List[str] = [f"Goal: {goal}"]
-        # No cached last step fields; loop branches directly on returned step_type
-
-    def record_step(self, step_type: str, text: str) -> str:
-        label = (step_type or "").upper()
-        self.lines.append(f"{label}: {text}")
-        return label
-
-    def append_action(self, tool_id: str, observation: Any) -> None:
-        self.lines.append(f"ACT_EXECUTED: tool_id={tool_id}")
-        self.lines.append(f"OBSERVATION: {str(observation)}")
-        # No policy cache to reset; branching is driven by the next _think() output
-
-    def transcript(self) -> str:
-        return "\n".join(self.lines)
-
-
 # ----------------------------- Local exception -------------------------
 
 
@@ -210,54 +152,57 @@ class ReACTReasoner(BaseReasoner):
         self.top_k = top_k
 
     def run(self, goal: str) -> ReasoningResult:
-        state = ReactState(goal=goal)
         logger.info("ReACT reasoner started", goal=goal, max_turns=self.max_turns)
 
+        lines: List[str] = [f"Goal: {goal}"]
+        final_answer: Optional[str] = None
+        complete: bool = False
+
         for _ in range(self.max_turns):
-            if state.complete:
+            if complete:
                 break
 
-            # Always THINK first, then ACT if requested, STOP if final
-            step_type_raw, step_text = self._think(state)
-            step_type = state.record_step(step_type_raw, step_text)
+            transcript = "\n".join(lines)
+            step_type, step_text = self._think(transcript)
+            label = (step_type or "").upper()
+            lines.append(f"{label}: {step_text}")
 
-            if step_type == "STOP":
-                state.final_answer = step_text
-                state.complete = True
-                logger.info("reasoning_complete", reason="final_thought", turns=len(state.lines))
+            if label == "STOP":
+                final_answer = step_text
+                complete = True
+                logger.info("reasoning_complete", reason="final_thought", turns=len(lines))
                 break
 
-            if step_type == "ACT":
+            if label == "ACT":
                 try:
-                    tool_id, params, observation = self._act(state, step_text)
-                    state.append_action(tool_id, observation)
+                    tool_id, params, observation = self._act(step_text, transcript)
+                    lines.append(f"ACT_EXECUTED: tool_id={tool_id}")
+                    lines.append(f"OBSERVATION: {str(observation)}")
                     obs_preview = str(observation)
                     if len(obs_preview) > 200:
                         obs_preview = obs_preview[:200] + "..."
-                    logger.info("tool_executed",tool_id=tool_id, params=params if isinstance(params, dict) else None, observation_preview=obs_preview)
+                    logger.info("tool_executed", tool_id=tool_id, params=params if isinstance(params, dict) else None, observation_preview=obs_preview)
                 except ToolSelectionError as exc:
-                    state.lines.append(f"OBSERVATION: ERROR: ToolSelectionError: {str(exc)}")
+                    lines.append(f"OBSERVATION: ERROR: ToolSelectionError: {str(exc)}")
                     logger.warning("tool_selection_failed", error=str(exc))
                 except ToolExecutionError as exc:
-                    state.lines.append(f"OBSERVATION: ERROR: ToolExecutionError: {str(exc)}")
+                    lines.append(f"OBSERVATION: ERROR: ToolExecutionError: {str(exc)}")
                     logger.error("tool_execution_failed", error=str(exc))
                 except Exception as exc:
-                    state.lines.append(f"OBSERVATION: ERROR: UnexpectedError: {str(exc)}")
+                    lines.append(f"OBSERVATION: ERROR: UnexpectedError: {str(exc)}")
                     logger.error("tool_unexpected_error", error=str(exc), exc_info=True)
             else:
-                # step_type == THINK, just proceed to next iteration
                 logger.info("thought_generated", thought=str(step_text)[:200] + ("..." if step_text and len(str(step_text)) > 200 else ""))
 
-        if not state.complete and not state.final_answer:
-            logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(state.lines))
+        if not complete and not final_answer:
+            logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(lines))
 
-        # Do not synthesize here; agent-level summarizer will create final answer
-        transcript = "\n".join(state.lines)
-        success = state.complete
-        return ReasoningResult(final_answer=state.final_answer or "", iterations=len(state.lines), success=success, transcript=transcript)
+        transcript = "\n".join(lines)
+        success = complete
+        return ReasoningResult(final_answer=final_answer or "", iterations=len(lines), success=success, transcript=transcript)
 
-    def _think(self, state: ReactState) -> Tuple[str, str]:
-        prompt = _THINK_PROMPT.format(transcript=state.transcript())
+    def _think(self, transcript: str) -> Tuple[str, str]:
+        prompt = _THINK_PROMPT.format(transcript=transcript)
         try:
             obj = self.llm.prompt_to_json(prompt, max_retries=0) or {}
             step_type = (obj.get("step_type") or "").strip().upper()
@@ -269,11 +214,10 @@ class ReACTReasoner(BaseReasoner):
             logger.error("think_parse_failed", exc_info=True)
         return "THINK", "Continuing reasoning to determine next step."
 
-    def _act(self, state: ReactState, action_text: str) -> Tuple[str, Dict[str, Any], Any]:
+    def _act(self, action_text: str, transcript: str) -> Tuple[str, Dict[str, Any], Any]:
         query = action_text
-
         tool = self._select_and_load_tool(query)
-        params = self._generate_params(tool, state, query)
+        params = self._generate_params(tool, transcript, query)
         observation = self.tools.execute(tool, params)
         return tool.id, params, observation
 
@@ -297,10 +241,10 @@ class ReACTReasoner(BaseReasoner):
 
         return self.tools.load(tool)
 
-    def _generate_params(self, tool: ToolBase, state: ReactState, step_text: str) -> Dict[str, Any]:
+    def _generate_params(self, tool: ToolBase, transcript: str, step_text: str) -> Dict[str, Any]:
         schema = tool.get_parameters() or {}
         allowed_keys = ",".join(schema.keys()) if isinstance(schema, dict) else ""
-        data: Dict[str, Any] = {"trace": state.transcript()}
+        data: Dict[str, Any] = {"reasoning trace": transcript}
 
         params_raw = self.llm.prompt_to_json(
             _PARAMETER_GENERATION_PROMPT.format(
@@ -314,12 +258,5 @@ class ReACTReasoner(BaseReasoner):
         params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
         logger.info("params_generated", tool_id=tool.id, params=params)
         return params
-
-    def _summarize(self, state: ReactState) -> str:
-        if state.final_answer:
-            return state.final_answer
-        prompt = _SUMMARY_PROMPT.format(transcript=state.transcript())
-        reply = self.llm.prompt(prompt)
-        return reply or "ERROR: insufficient data for a reliable answer."
 
 
