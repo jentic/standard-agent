@@ -21,7 +21,7 @@ _THINK_PROMPT = dedent(
     """
     <role>
     You are the Reasoning Engine within an agent. Decide the immediate next step to progress the goal.
-    Return exactly ONE JSON object with fields: kind and text.
+    Return exactly ONE JSON object with fields: step_type and text.
     </role>
 
     <goal>
@@ -33,20 +33,20 @@ _THINK_PROMPT = dedent(
     </transcript>
 
     <instructions>
-    1. kind MUST be one of: "THINK", "ACT", "STOP".
-       - If kind == "STOP":
+    1. step_type MUST be one of: "THINK", "ACT", "STOP".
+       - If step_type == "STOP":
          • text = the final user-facing answer. Concise, factual, no internal details.
-       - If kind == "ACT":
+       - If step_type == "ACT":
          • text = a single, clear, executable instruction in plain language (e.g., "send hi to discord channel 1234", "search nytimes for articles about Artificial Intelligence").
          • Only include ONE action; no multi-step plans.
-       - If kind == "THINK":
+       - If step_type == "THINK":
          • text = a brief reasoning step describing what to figure out next; no tool names or API parameters.
     2. Be specific and build on the latest Observation if present. Do not repeat earlier steps verbatim.
     3. Output ONLY the JSON object. No markdown, no commentary.
     </instructions>
 
     <output_format>
-    {{"kind": "THINK|ACT|STOP", "text": "..."}}
+    {{"step_type": "THINK|ACT|STOP", "text": "..."}}
     </output_format>
     """
 ).strip()
@@ -260,17 +260,13 @@ class ReACTReasoner(BaseReasoner):
         prompt = _THINK_PROMPT.format(transcript=state.transcript())
         try:
             obj = self.llm.prompt_to_json(prompt, max_retries=0) or {}
-            step_type_raw = (obj.get("kind") or "").strip().upper()
+            step_type = (obj.get("step_type") or "").strip().upper()
             text = (obj.get("text") or "").strip()
-            legacy_to_new = {"THOUGHT": "THINK", "ACTION": "ACT", "FINAL": "STOP"}
-            if step_type_raw in {"THINK", "ACT", "STOP"} and text:
-                return step_type_raw, text
-            mapped = legacy_to_new.get(step_type_raw)
-            if mapped and text:
-                return mapped, text
-            logger.error("Invalid think output", kind=step_type_raw, text_present=bool(text))
+            if step_type in {"THINK", "ACT", "STOP"} and text:
+                return step_type, text
+            logger.error("Invalid think output", step_type=step_type, text_present=bool(text))
         except Exception:
-            pass
+            logger.error("think_parse_failed", exc_info=True)
         return "THINK", "Continuing reasoning to determine next step."
 
     def _act(self, state: ReactState, action_text: str) -> Tuple[str, Dict[str, Any], Any]:
