@@ -105,7 +105,7 @@ class SequentialReasoner(BaseReasoner):
 
                 # If a downstream step lacks its required input, immediately terminate loop and summarize
                 if isinstance(exc, MissingInputError):
-                    state.history.append( f"Stopping: missing dependency '{getattr(exc, "missing_key", None)}' for step '{step.text}'. Proceeding to final answer.")
+                    state.history.append( f"Stopping: missing dependency '{getattr(exc, 'missing_key', None)}' for step '{step.text}'. Proceeding to final answer.")
                     break
 
                 if self.reflect:
