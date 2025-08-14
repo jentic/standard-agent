@@ -1,22 +1,35 @@
-from __future__ import annotations
+plan: |
+  <role>
+  You are a world-class planning assistant operating within the Agent ecosystem.
+  You specialize in transforming high-level user goals into structured, step-by-step plans that can be executed by API-integrated agents.
+  </role>
 
-import json
-from textwrap import dedent
+  <goal>
+  Decompose the user goal below into a markdown bullet-list plan.
+  </goal>
 
-from agents.reasoner.sequential.reasoner import StepStatus
-from agents.reasoner.sequential.executors.base import ExecuteStep
-from agents.reasoner.sequential.exceptions import (
-    ParameterGenerationError,
-    ToolSelectionError,
-    MissingInputError
-)
-from agents.tools.jentic import JenticTool
-from utils.logger import get_logger, trace_method
-logger = get_logger(__name__)
+  <output_format>
+  1. Return only the fenced list (triple back-ticks) — no prose before or after.
+  2. Each bullet should be on its own line, starting with "- ".
+  3. Each bullet = <verb> <object> … followed, in this order, by (input: key_a, key_b) (output: key_c) where the parentheses are literal.
+  4. output: key is mandatory when the step's result is needed later; exactly one snake_case identifier.
+  5. input: is optional; if present, list comma-separated snake_case keys produced by earlier steps.
+  6. Do not mention specific external tool names.
+  </output_format>
 
-### Prompts
-STEP_CLASSIFICATION_PROMPT = dedent("""
-    <role>
+  <self_check>
+  After drafting, silently verify — regenerate the list if any check fails:
+  • All output keys unique & snake_case.
+  • All input keys reference existing outputs.
+  • No tool names or extra prose outside the fenced block.
+  </self_check>
+
+  <real_goal>
+  Goal: {goal}
+  </real_goal>
+
+classify_step: |
+  <role>
     You are a Step Classifier within the Agent ecosystem. 
     Your sole purpose is to determine whether a given step requires external API/tool execution or can be completed through internal reasoning alone.
     </role>
@@ -47,11 +60,10 @@ STEP_CLASSIFICATION_PROMPT = dedent("""
     <output_format>
     Respond with ONLY one word: either "TOOL" or "REASONING"
     </output_format>
-""")
 
-REASONING_STEP_PROMPT = dedent("""
-    <role>
-    You are a Data Processor within the Agent ecosystem. 
+reason: |
+  <role>
+    You are a Reasoner within the Agent ecosystem. 
     Your mission is to perform precise data transformations and reasoning operations on available information.
     You specialize in content analysis, data extraction, and logical processing to support agent workflows.
 
@@ -83,10 +95,9 @@ REASONING_STEP_PROMPT = dedent("""
     - For simple text results (summaries, values): Raw text only
     - No introductory phrases or explanations
     </output_format>
-""")
 
-TOOL_SELECTION_PROMPT = dedent("""
-    <role>
+tool_select: |
+  <role>
    You are an expert orchestrator working within the Agent API ecosystem.
    Your job is to select the best tool to execute a specific plan step, using a list of available tools. 
    Each tool may vary in API domain, supported actions, and required parameters. 
@@ -141,10 +152,9 @@ TOOL_SELECTION_PROMPT = dedent("""
    Respond with a **single line** that contains exactly the selected tool's `id` — no quotes, backticks, or leading/trailing whitespace.
    **No additional text or formatting** should be included.
    </output_format>
-""")
 
-PARAMETER_GENERATION_PROMPT = dedent("""
-    <role>
+param_gen: |
+  <role>
     You are a Parameter Builder within the Agent ecosystem. 
     Your mission is to enable seamless API execution by generating precise parameters from step context and memory data. 
     You specialize in data extraction, content formatting, and parameter mapping to ensure successful tool execution.
@@ -197,106 +207,63 @@ PARAMETER_GENERATION_PROMPT = dedent("""
     <output_format>
     Valid JSON object starting with {{ and ending with }}
     </output_format>
-""")
+
+reflect: |
+  <role>
+    You are a Self-Healing Engine operating within the Agent ecosystem. Your mission is to enable resilient agentic applications by diagnosing step failures and proposing precise corrective actions. You specialize in error analysis, parameter adjustment, and workflow recovery to maintain system reliability.
+
+    Your core responsibilities:
+    - Analyze step failures and identify root causes
+    - Propose targeted fixes for parameter or tool issues
+    - Maintain workflow continuity through intelligent recovery
+    - Enable autonomous error resolution within the agent pipeline
+    </role>
+
+    <goal>
+    Analyze the failed step and propose a single, precise fix that will allow the workflow to continue successfully.
+    </goal>
+
+    <input>
+    Goal: {goal}
+    Failed Step: {step}
+    Failed Tool: {failed_tool_id}
+    Error: {error_type}: {error_message}
+    Tool Details: {tool_details}
+    </input>
+
+    <decision_guide>
+    • retry_params – The tool is appropriate, but its inputs were invalid or incomplete (e.g. wrong data type, missing field, ID not found). You can derive correct values from the goal or earlier outputs.
+    • change_tool   – The current tool clearly cannot accomplish the step (wrong capability, auth scope, or “function not available”), while another tool in the provided Alternative Tools list can.
+    • rephrase_step – Use only if the step text itself is ambiguous or misleading; rewriting it should enable a better tool/parameter selection on the next attempt.
+    • give_up – Choose this if
+        – The error indicates a *required* parameter and that parameter cannot be found in the goal, previous outputs, or memory; or
+        – Any other critical, non-inferable information is missing; 
+    </decision_guide>
+
+    <constraints>
+    - Use the decision guide to determine the correct action
+    - Output ONLY valid JSON - no explanation, markdown, or backticks and should be parsable using JSON.parse()
+    - Must start with '{{' and end with '}}'
+    - Choose one action: 'retry_params', 'change_tool', 'rephrase_step', or 'give_up'
+    - Provide all required fields for the chosen action
+    </constraints>
+    
+    <self_check>
+    After drafting, silently verify — all the constraints are met, if not, regenerate your answer
+    </self_check>
+
+    <output_format>
+    {{
+      "reasoning": "Brief explanation of why the step failed",
+      "action": "one of 'retry_params', 'change_tool', 'rephrase_step', or 'give_up'",
+      "tool_id": "(Required if action is 'change_tool') The ID of the new tool to use",
+      "params": "(Required if action is 'retry_params' or 'change_tool') Valid JSON object of parameters",
+      "step": "(Required if action is 'rephrase_step') The new, improved text for the step"
+    }}
+    </output_format>
+
+reflect_alternatives: |
+  Alternative Tools:
+  {alternative_tools}
 
 
-
-class ReWOOExecuteStep(ExecuteStep):
-    """Executes ReWOO steps (plan-first + reflection)."""
-
-    @trace_method
-    def __call__(self, step, state):
-        step.status = StepStatus.RUNNING
-
-        try:
-            # Gather inputs from memory
-            inputs = {key: self.memory[key] for key in step.input_keys}
-
-        except KeyError as e:
-            missing_key = e.args[0]
-            raise MissingInputError(f"Required memory key '{missing_key}' not found for step: {step.text}", missing_key=missing_key) from e
-
-        # Classify plan step as reasoning or tool call
-        step_type_response = self.llm.prompt(
-            STEP_CLASSIFICATION_PROMPT.format(
-                step_text=step.text,
-                keys_list=", ".join(self.memory.keys())
-            )
-        )
-
-        if "reasoning" in step_type_response.lower():
-            step.result = self.llm.prompt(REASONING_STEP_PROMPT.format(
-                step_text=step.text, available_data=json.dumps(inputs, ensure_ascii=False)
-            ))
-        else:
-            tool =  self._select_tool(step)
-            params = self._generate_params(step, tool, inputs)
-            step.result = self.tools.execute(tool, params)
-
-        step.status = StepStatus.DONE
-        self._remember(step, state)
-
-        # Always track step execution in history
-        state.history.append(f"Executed step: {step.text} -> {step.result}")
-        logger.info("step_executed", step_text=step.text, step_type=step_type_response, result=str(step.result)[:100] if step.result is not None else None)
-
-
-    def _remember(self, step, state):
-        if step.output_key:
-            # Remember the entire response if the plan expects an output
-            self.memory[step.output_key] = step.result
-            state.history.append(f"remembered {step.output_key} : {step.result}")
-
-    def _select_tool(self, step):
-        # Check rewoo reflector suggestion first
-        suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")
-        if suggestion and suggestion["action"] in ("change_tool", "retry_params"):
-            logger.info("using_reflector_suggested_tool", step_text=step.text, tool_id=suggestion["tool_id"])
-            
-            # If suggested action = change_tool, delete suggestion from memory
-            if suggestion["action"] == "change_tool":
-                del self.memory[f"rewoo_reflector_suggestion:{step.text}"]
-            
-            return self.tools.load(JenticTool({ "id": suggestion["tool_id"]}))
-
-        tools = self.tools.search(step.text, top_k=20)
-        tool_id = self.llm.prompt(TOOL_SELECTION_PROMPT.format(
-            step=step.text,
-            tools_json="\n".join([t.get_summary() for t in tools]),
-        ))
-        if tool_id == "none":
-            raise ToolSelectionError(f"No suitable tool was found for step: {step.text}")
-
-        tool =  next((tool for tool in tools if tool.id == tool_id), None)
-        if tool is None:
-            raise ToolSelectionError(f"Selected tool ID '{tool_id}' is invalid for step: {step.text}")
-        logger.info("tool_selected", step_text=step.text, tool=tool)
-
-        # Load and return the full tool details
-        return self.tools.load(tool)
-
-    def _generate_params(self, step, tool, inputs):
-        # Check rewoo reflector suggestion first
-        suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
-        if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
-            logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
-            param_schema = tool.get_parameters() or {}
-            return {k: v for k, v in suggestion["params"].items() if k in param_schema}
-
-        try:
-            param_schema = tool.get_parameters() or {}
-            prompt  = PARAMETER_GENERATION_PROMPT.format(
-                step=step.text,
-                tool_schema=json.dumps(param_schema, ensure_ascii=False),
-                step_inputs=json.dumps(inputs, ensure_ascii=False),
-                allowed_keys=",".join(param_schema.keys()),
-            )
-
-            params = self.llm.prompt_to_json(prompt, max_retries=2)
-            # dict comprehension to limit returned params to those defined in the schema.
-            return {k: v for k, v in params.items() if k in param_schema}
-
-        except (json.JSONDecodeError, TypeError, ValueError) as e:
-            raise ParameterGenerationError(
-                f"Failed to generate valid JSON parameters for step '{step.text}': {e}", tool
-            ) from e

@@ -17,6 +17,7 @@ class ReasoningResult:
     tool_calls: List[dict[str, Any]] = field(default_factory=list)
     success: bool = False
     error_message: str | None = None
+    transcript: str = ""
 
 
 class BaseReasoner(ABC):

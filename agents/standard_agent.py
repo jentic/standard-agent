@@ -16,6 +16,9 @@ from  agents.goal_preprocessor.base import BaseGoalPreprocessor
 
 from  uuid import uuid4
 from  enum import Enum
+from agents.prompts import load_prompts
+
+_PROMPTS = load_prompts("agent", required_prompts=["summarize"])
 
 class AgentState(str, Enum):
     READY               = "READY"
@@ -78,6 +81,8 @@ class StandardAgent:
 
         try:
             result = self.reasoner.run(goal)
+            result.final_answer = self.llm.prompt(_PROMPTS["summarize"].format(goal=goal, history=getattr(result, "transcript", "")))
+
             self.memory[f"result:{run_id}"] = result
             self.memory["conversation_history"].append({"goal": goal, "result": result.final_answer})
             self._state = AgentState.READY

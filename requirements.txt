@@ -6,6 +6,7 @@ python-dotenv>=1.0.0
 litellm>=1.74.3
 google-generativeai
 structlog
+pyyaml
 
 # dev / quality
 pytest>=8.0
