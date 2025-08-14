@@ -481,9 +481,7 @@ class ReWOOReasoner(BaseReasoner):
             params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
             return {k: v for k, v in (params_raw or {}).items() if k in param_schema}
         except (json.JSONDecodeError, TypeError, ValueError) as e:
-            raise ParameterGenerationError(
-                f"Failed to generate valid JSON parameters for step '{step.text}': {e}", tool
-            ) from e
+            raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step.text}': {e}", tool) from e
 
     def _reflect(self, error: Exception, step: Step, state: ReasonerState) -> None:
         logger.info("step_error_recovery", error_type=error.__class__.__name__, step_text=step.text, retry_count=step.retry_count)
