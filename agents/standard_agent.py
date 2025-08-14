@@ -144,11 +144,7 @@ class StandardAgent:
 
         try:
             result = self.reasoner.run(goal)
-            if not getattr(result, "final_answer", ""):
-                synthesized = self.llm.prompt(
-                    _SUMMARIZE_PROMPT.format(goal=goal, history=getattr(result, "transcript", ""))
-                )
-                result.final_answer = synthesized or result.final_answer or ""
+            result.final_answer = self.llm.prompt(_SUMMARIZE_PROMPT.format(goal=goal, history=getattr(result, "transcript", "")))
 
             self.memory[f"result:{run_id}"] = result
             self.memory["conversation_history"].append({"goal": goal, "result": result.final_answer})
