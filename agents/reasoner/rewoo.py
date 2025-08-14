@@ -327,10 +327,12 @@ class ReWOOReasoner(BaseReasoner):
         memory: MutableMapping,
         max_iterations: int = DEFAULT_MAX_ITER,
         max_retries: int = 2,
+        top_k: int = 15,
     ) -> None:
         super().__init__(llm=llm, tools=tools, memory=memory)
         self.max_iterations = max_iterations
         self.max_retries = max_retries
+        self.top_k = top_k
 
     def run(self, goal: str) -> ReasoningResult:
         state = ReasonerState(goal=goal)
@@ -362,7 +364,7 @@ class ReWOOReasoner(BaseReasoner):
 
         transcript = "\n".join(state.history)
         success = not state.plan
-        return ReasoningResult(final_answer="", iterations=iterations, tool_calls=[], success=success, transcript=transcript)
+        return ReasoningResult(iterations=iterations, success=success, transcript=transcript)
 
     def _plan(self, goal: str) -> Deque[Step]:
         generated_plan = (self.llm.prompt(_PLAN_PROMPT.format(goal=goal)) or "").strip("`").lstrip("markdown").strip()
@@ -420,9 +422,7 @@ class ReWOOReasoner(BaseReasoner):
             inputs = {key: self.memory[key] for key in step.input_keys}
         except KeyError as e:
             missing_key = e.args[0]
-            raise MissingInputError(
-                f"Required memory key '{missing_key}' not found for step: {step.text}", missing_key=missing_key
-            ) from e
+            raise MissingInputError(f"Required memory key '{missing_key}' not found for step: {step.text}", missing_key=missing_key) from e
 
         step_type_response = self.llm.prompt(_STEP_CLASSIFICATION_PROMPT.format(step_text=step.text,keys_list=", ".join(self.memory.keys())))
 
@@ -434,15 +434,13 @@ class ReWOOReasoner(BaseReasoner):
             step.result = self.tools.execute(tool, params)
 
         step.status = StepStatus.DONE
-        self._remember_step_output(step, state)
 
-        state.history.append(f"Executed step: {step.text} -> {step.result}")
-        logger.info("step_executed", step_text=step.text, step_type=step_type_response, result=str(step.result)[:100] if step.result is not None else None)
-
-    def _remember_step_output(self, step: Step, state: ReasonerState) -> None:
         if step.output_key:
             self.memory[step.output_key] = step.result
             state.history.append(f"remembered {step.output_key} : {step.result}")
+
+        state.history.append(f"Executed step: {step.text} -> {step.result}")
+        logger.info("step_executed", step_text=step.text, step_type=step_type_response, result=str(step.result)[:100] if step.result is not None else None)
 
     def _select_tool(self, step: Step) -> ToolBase:
         suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")
@@ -509,7 +507,7 @@ class ReWOOReasoner(BaseReasoner):
             tool_details=tool_details,
         )
 
-        alternatives = [t for t in self.tools.search(step.text, top_k=25) if t.id != failed_tool_id]
+        alternatives = [t for t in self.tools.search(step.text, top_k=self.top_k) if t.id != failed_tool_id]
         prompt += "\n" + _REFLECTION_ALTERNATIVES_SECTION.format(
             alternative_tools="\n".join([t.get_summary() for t in alternatives])
         )
