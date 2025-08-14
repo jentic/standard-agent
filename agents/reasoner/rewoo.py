@@ -15,11 +15,20 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.jentic import JenticTool
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
-from agents.reasoner.exceptions import (ReasoningError, MissingInputError, ToolSelectionError, ParameterGenerationError)
+from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError)
 
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+# ReWOO-specific exception for missing plan inputs
+class MissingInputError(ReasoningError, KeyError):
+    """A required memory key by a step is absent (ReWOO plan dataflow)."""
+
+    def __init__(self, message: str, missing_key: str | None = None):
+        super().__init__(message)
+        self.missing_key = missing_key
 
 
 # ----------------------------- Prompts ---------------------------------
