@@ -355,9 +355,7 @@ class ReWOOReasoner(BaseReasoner):
                     state.history.append(f"Tool Unauthorized: {str(exc)}")
 
                 if isinstance(exc, MissingInputError):
-                    state.history.append(
-                        f"Stopping: missing dependency '{getattr(exc, 'missing_key', None)}' for step '{step.text}'. Proceeding to final answer."
-                    )
+                    state.history.append(f"Stopping: missing dependency '{getattr(exc, 'missing_key', None)}' for step '{step.text}'. Proceeding to final answer.")
                     break
 
                 self._reflect(exc, step, state)
@@ -450,7 +448,7 @@ class ReWOOReasoner(BaseReasoner):
                 del self.memory[f"rewoo_reflector_suggestion:{step.text}"]
             return self.tools.load(JenticTool({"id": suggestion.get("tool_id")}))
 
-        tool_candidates = self.tools.search(step.text, top_k=20)
+        tool_candidates = self.tools.search(step.text, top_k=self.top_k)
         tool_id = self.llm.prompt(_TOOL_SELECTION_PROMPT.format(step=step.text, tools_json="\n".join([t.get_summary() for t in tool_candidates])))
 
         if tool_id == "none":

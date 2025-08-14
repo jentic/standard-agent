@@ -186,10 +186,10 @@ class ReACTReasoner(BaseReasoner):
 
             if step_type == "ACT":
                 try:
-                    tool_id, params, observation = self._act(step_text, "\n".join(reasoning_trace), failed_tool_ids)
-                    reasoning_trace.append(f"ACT_EXECUTED: tool_id={tool_id}")
+                    tool, params, observation = self._act(step_text, "\n".join(reasoning_trace), failed_tool_ids)
+                    reasoning_trace.append(f"ACT_EXECUTED: tool={tool.get_summary()}")
                     reasoning_trace.append(f"OBSERVATION: {str(observation)}")
-                    logger.info("tool_executed", tool_id=tool_id, params=params if isinstance(params, dict) else None, observation_preview=str(observation)[:200] + "..." if len(str(observation)) > 200 else observation)
+                    logger.info("tool_executed", tool_id=tool.id, params=params if isinstance(params, dict) else None, observation_preview=str(observation)[:200] + "..." if len(str(observation)) > 200 else observation)
                 except ToolCredentialsMissingError as exc:
                     tid = getattr(getattr(exc, "tool", None), "id", None)
                     if tid: failed_tool_ids.append(tid)
@@ -229,11 +229,11 @@ class ReACTReasoner(BaseReasoner):
             logger.error("think_parse_failed", error=str(e), exc_info=True)
         return "THINK", "Continuing reasoning to determine next step."
 
-    def _act(self, action_text: str, transcript: str, failed_tool_ids: List[str]) -> Tuple[str, Dict[str, Any], Any]:
+    def _act(self, action_text: str, transcript: str, failed_tool_ids: List[str]) -> Tuple[ToolBase, Dict[str, Any], Any]:
         tool = self._select_tool(action_text, failed_tool_ids)
         params = self._generate_params(tool, transcript, action_text)
         observation = self.tools.execute(tool, params)
-        return tool.id, params, observation
+        return tool, params, observation
 
     def _select_tool(self, action_text: str, failed_tool_ids: List[str]) -> ToolBase:
         tool_candidates = self.tools.search(action_text, top_k=self.top_k)
