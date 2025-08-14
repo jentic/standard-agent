@@ -116,14 +116,14 @@ class ReACTReasoner(BaseReasoner):
         if failed_tool_ids:
             failed_block = "\n".join(f"- {tid}" for tid in failed_tool_ids[-3:])
             prompt += f"\n\n<failed_tools>\n{failed_block}\n</failed_tools>\n"
-        chosen_id = self.llm.prompt(prompt).strip()
+        selected_tool_id = self.llm.prompt(prompt).strip()
 
-        if not chosen_id or chosen_id.lower() == "none":
+        if not selected_tool_id or selected_tool_id.lower() == "none":
             raise ToolSelectionError(f"No suitable tool selected for step: {action_text}")
 
-        selected_tool = next((t for t in tool_candidates if t.id == chosen_id), None)
+        selected_tool = next((t for t in tool_candidates if t.id == selected_tool_id), None)
         if selected_tool is None:
-            raise ToolSelectionError(f"Selected tool id '{chosen_id}' not in candidate list")
+            raise ToolSelectionError(f"Selected tool id '{selected_tool_id}' not in candidate list")
 
         return self.tools.load(selected_tool)
 
