@@ -316,7 +316,6 @@ class ReasonerState:
 
 # ----------------------------- Reasoner --------------------------------
 
-
 class ReWOOReasoner(BaseReasoner):
     DEFAULT_MAX_ITER = 20
 
@@ -361,54 +360,48 @@ class ReWOOReasoner(BaseReasoner):
 
                 self._reflect(exc, step, state)
 
-        # Return transcript only; agent-level summarizer will synthesize final answer
         transcript = "\n".join(state.history)
         success = not state.plan
         return ReasoningResult(final_answer="", iterations=iterations, tool_calls=[], success=success, transcript=transcript)
 
-
     def _plan(self, goal: str) -> Deque[Step]:
-        prompt = _PLAN_PROMPT.format(goal=goal)
-        response = self.llm.prompt(prompt)
-        logger.info("plan_generated", goal=goal, plan=response[:200] + ("..." if response and len(response) > 200 else ""))
-
-        content = (response or "").strip("`").lstrip("markdown").strip()
+        generated_plan = (self.llm.prompt(_PLAN_PROMPT.format(goal=goal)) or "").strip("`").lstrip("markdown").strip()
+        logger.info("plan_generated", goal=goal, plan=generated_plan)
 
         steps: Deque[Step] = deque()
-        available_outputs: set[str] = set()
+        produced_keys: set[str] = set()
 
-        bullet_pattern = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)(.*)$")
-        io_pattern = re.compile(r"\((input|output):\s*([^)]*)\)")
+        BULLET_RE = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)(.*)$")
+        IO_RE = re.compile(r"\((input|output):\s*([^)]*)\)")
 
-        for raw_line in content.splitlines():
-            if not raw_line.strip():
-                continue
-            match = bullet_pattern.match(raw_line)
+        for raw_line in filter(str.strip, generated_plan.splitlines()):
+            match = BULLET_RE.match(raw_line)
             if not match:
                 continue
             bullet = match.group(1).rstrip()
 
-            input_keys: list[str] = []
+            input_keys: List[str] = []
             output_key: Optional[str] = None
-            for io_match in io_pattern.finditer(bullet):
+
+            for io_match in IO_RE.finditer(bullet):
                 directive_type, keys_info = io_match.groups()
                 if directive_type == "input":
                     input_keys.extend(k.strip() for k in keys_info.split(',') if k.strip())
                 else:
-                    output_key = keys_info.strip()
+                    output_key = keys_info.strip() or None
 
             for key in input_keys:
-                if key not in available_outputs:
+                if key not in produced_keys:
                     logger.warning("invalid_input_key", key=key, step_text=bullet)
                     raise ValueError(f"Input key '{key}' used before being defined.")
 
             if output_key:
-                if output_key in available_outputs:
+                if output_key in produced_keys:
                     logger.warning("duplicate_output_key", key=output_key, step_text=bullet)
                     raise ValueError(f"Duplicate output key found: '{output_key}'")
-                available_outputs.add(output_key)
+                produced_keys.add(output_key)
 
-            cleaned_text = io_pattern.sub("", bullet).strip()
+            cleaned_text = IO_RE.sub("", bullet).strip()
             steps.append(Step(text=cleaned_text, output_key=output_key, input_keys=input_keys))
 
         if not steps:
@@ -431,17 +424,10 @@ class ReWOOReasoner(BaseReasoner):
                 f"Required memory key '{missing_key}' not found for step: {step.text}", missing_key=missing_key
             ) from e
 
-        step_type_response = self.llm.prompt(
-            _STEP_CLASSIFICATION_PROMPT.format(
-                step_text=step.text,
-                keys_list=", ".join(self.memory.keys()),
-            )
-        )
+        step_type_response = self.llm.prompt(_STEP_CLASSIFICATION_PROMPT.format(step_text=step.text,keys_list=", ".join(self.memory.keys())))
 
         if "reasoning" in step_type_response.lower():
-            step.result = self.llm.prompt(
-                _REASONING_STEP_PROMPT.format(step_text=step.text, available_data=json.dumps(inputs, ensure_ascii=False))
-            )
+            step.result = self.llm.prompt(_REASONING_STEP_PROMPT.format(step_text=step.text, available_data=json.dumps(inputs, ensure_ascii=False)))
         else:
             tool = self._select_tool(step)
             params = self._generate_params(step, tool, inputs)
@@ -466,18 +452,18 @@ class ReWOOReasoner(BaseReasoner):
                 del self.memory[f"rewoo_reflector_suggestion:{step.text}"]
             return self.tools.load(JenticTool({"id": suggestion.get("tool_id")}))
 
-        candidates = self.tools.search(step.text, top_k=20)
-        tool_id = self.llm.prompt(
-            _TOOL_SELECTION_PROMPT.format(step=step.text, tools_json="\n".join([t.get_summary() for t in candidates]))
-        )
+        tool_candidates = self.tools.search(step.text, top_k=20)
+        tool_id = self.llm.prompt(_TOOL_SELECTION_PROMPT.format(step=step.text, tools_json="\n".join([t.get_summary() for t in tool_candidates])))
+
         if tool_id == "none":
             raise ToolSelectionError(f"No suitable tool was found for step: {step.text}")
 
-        tool = next((t for t in candidates if t.id == tool_id), None)
-        if tool is None:
+        selected_tool = next((t for t in tool_candidates if t.id == tool_id), None)
+        if selected_tool is None:
             raise ToolSelectionError(f"Selected tool ID '{tool_id}' is invalid for step: {step.text}")
-        logger.info("tool_selected", step_text=step.text, tool=tool)
-        return self.tools.load(tool)
+        logger.info("tool_selected", step_text=step.text, tool=selected_tool)
+
+        return self.tools.load(selected_tool)
 
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
         suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
