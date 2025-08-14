@@ -226,6 +226,12 @@ class ReACTReasoner(BaseReasoner):
         return "THINK", "Continuing reasoning to determine next step."
 
     def _act(self, action_text: str, transcript: str) -> Tuple[str, Dict[str, Any], Any]:
+        tool = self._select_tool(action_text, transcript)
+        params = self._generate_params(tool, transcript, action_text)
+        observation = self.tools.execute(tool, params)
+        return tool.id, params, observation
+
+    def _select_tool(self, action_text: str, transcript: str) -> ToolBase:
         tool_candidates = self.tools.search(action_text, top_k=self.top_k)
         logger.info("tool_search", query=action_text, top_k=self.top_k, candidate_count=len(tool_candidates))
 
@@ -240,30 +246,7 @@ class ReACTReasoner(BaseReasoner):
         if selected_tool is None:
             raise ToolSelectionError(f"Selected tool id '{chosen_id}' not in candidate list")
 
-        tool = self.tools.load(selected_tool)
-        params = self._generate_params(tool, transcript, action_text)
-        observation = self.tools.execute(tool, params)
-        return tool.id, params, observation
-
-    def _select_and_load_tool(self, query: str) -> ToolBase:
-        candidates: List[ToolBase] = self.tools.search(query, top_k=self.top_k)
-        logger.info("tool_search", query=query, top_k=self.top_k, candidate_count=len(candidates))
-        tools_json = "\n".join([t.get_summary() for t in candidates])
-
-        tool_resp = self.llm.prompt(_TOOL_SELECTION_PROMPT.format(step=query, tools_json=tools_json)) or ""
-        resp = tool_resp.strip()
-
-        if resp.lower() == "none" or not resp:
-            raise ToolSelectionError(f"No suitable tool selected for step: {query}")
-
-        tool = next((t for t in candidates if t.id == resp), None)
-        if tool is None:
-            # Fallback: try containment if LLM returned extra tokens
-            tool = next((t for t in candidates if t.id in resp), None)
-        if tool is None:
-            raise ToolSelectionError(f"Selected tool id '{resp}' not in candidate list")
-
-        return self.tools.load(tool)
+        return self.tools.load(selected_tool)
 
     def _generate_params(self, tool: ToolBase, transcript: str, step_text: str) -> Dict[str, Any]:
         schema = tool.get_parameters() or {}
