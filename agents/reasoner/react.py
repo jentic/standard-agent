@@ -173,8 +173,7 @@ class ReACTReasoner(BaseReasoner):
             if complete:
                 break
 
-            reasoning_transcript = "\n".join(reasoning_trace)
-            step_type, step_text = self._think(reasoning_transcript)
+            step_type, step_text = self._think("\n".join(reasoning_trace))
             reasoning_trace.append(f"{step_type}: {step_text}")
 
             if step_type == "STOP":
@@ -188,28 +187,23 @@ class ReACTReasoner(BaseReasoner):
                     tool_id, params, observation = self._act(step_text, "\n".join(reasoning_trace))
                     reasoning_trace.append(f"ACT_EXECUTED: tool_id={tool_id}")
                     reasoning_trace.append(f"OBSERVATION: {str(observation)}")
-                    obs_preview = str(observation)
-                    if len(obs_preview) > 200:
-                        obs_preview = obs_preview[:200] + "..."
-                    logger.info("tool_executed", tool_id=tool_id, params=params if isinstance(params, dict) else None, observation_preview=obs_preview)
+                    logger.info("tool_executed", tool_id=tool_id, params=params if isinstance(params, dict) else None, observation_preview=str(observation)[:200] + "..." if len(str(observation)) > 200 else observation)
                 except ToolCredentialsMissingError as exc:
-                    err_tool_id = getattr(getattr(exc, "tool", None), "id", None)
-                    suffix = f" tool_id={err_tool_id}" if err_tool_id else ""
-                    reasoning_trace.append(f"Tool Unauthorized:{suffix} {str(exc)}")
+                    tid = getattr(getattr(exc, "tool", None), "id", None)
+                    reasoning_trace.append(f"Tool Unauthorized:{f' tool_id={tid}' if tid else ''} {exc}")
                     logger.warning("tool_unauthorized", error=str(exc))
                 except ToolSelectionError as exc:
                     reasoning_trace.append(f"OBSERVATION: ERROR: ToolSelectionError: {str(exc)}")
                     logger.warning("tool_selection_failed", error=str(exc))
                 except ToolExecutionError as exc:
-                    err_tool_id = getattr(getattr(exc, "tool", None), "id", None)
-                    suffix = f" tool_id={err_tool_id}" if err_tool_id else ""
-                    reasoning_trace.append(f"OBSERVATION: ERROR: ToolExecutionError:{suffix} {str(exc)}")
+                    tid = getattr(getattr(exc, "tool", None), "id", None)
+                    reasoning_trace.append(f"OBSERVATION: ERROR: ToolExecutionError:{f' tool_id={tid}' if tid else ''} {exc}")
                     logger.error("tool_execution_failed", error=str(exc))
                 except Exception as exc:
                     reasoning_trace.append(f"OBSERVATION: ERROR: UnexpectedError: {str(exc)}")
                     logger.error("tool_unexpected_error", error=str(exc), exc_info=True)
             else:
-                logger.info("thought_generated", thought=str(step_text)[:200] + ("..." if step_text and len(str(step_text)) > 200 else ""))
+                logger.info("thought_generated", thought=step_text)
 
         if not complete:
             logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(reasoning_trace))
@@ -219,16 +213,16 @@ class ReACTReasoner(BaseReasoner):
         return ReasoningResult(iterations=len(reasoning_trace), success=success, transcript=reasoning_transcript)
 
     def _think(self, transcript: str) -> Tuple[str, str]:
-        prompt = _THINK_PROMPT.format(transcript=transcript)
+        VALID_STEP_TYPES = {"THINK", "ACT", "STOP"}
         try:
-            obj = self.llm.prompt_to_json(prompt, max_retries=0) or {}
-            step_type = (obj.get("step_type") or "").strip().upper()
-            text = (obj.get("text") or "").strip()
-            if step_type in {"THINK", "ACT", "STOP"} and text:
-                return step_type.upper(), text
-            logger.error("Invalid think output", step_type=step_type, text_present=bool(text))
-        except Exception:
-            logger.error("think_parse_failed", exc_info=True)
+            think_response = self.llm.prompt_to_json(_THINK_PROMPT.format(transcript=transcript), max_retries=0)
+            step_type = think_response.get("step_type").strip().upper()
+            text = think_response.get("text").strip()
+            if step_type in VALID_STEP_TYPES and text:
+                return step_type, text
+            logger.error("think_invalid_output", step_type=step_type, text_present=bool(text))
+        except Exception as e:
+            logger.error("think_parse_failed", error=str(e), exc_info=True)
         return "THINK", "Continuing reasoning to determine next step."
 
     def _act(self, action_text: str, transcript: str) -> Tuple[str, Dict[str, Any], Any]:
