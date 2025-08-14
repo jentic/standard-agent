@@ -34,13 +34,9 @@ _THINK_PROMPT = dedent(
 
     <instructions>
     1. step_type MUST be one of: "THINK", "ACT", "STOP".
-       - If step_type == "STOP":
-         • text = the final user-facing answer. Concise, factual, no internal details.
-       - If step_type == "ACT":
-         • text = a single, clear, executable instruction in plain language (e.g., "send hi to discord channel 1234", "search nytimes for articles about Artificial Intelligence").
-         • Only include ONE action; no multi-step plans.
-       - If step_type == "THINK":
-         • text = a brief reasoning step describing what to figure out next; no tool names or API parameters.
+       - THINK: Use when you need to reason further, derive missing details, or plan the next step. The text should be a brief reasoning step; do NOT include tool names or API parameters.
+       - ACT: Use when the agent needs to interact with the external world via APIs/tools. The text will be used to SEARCH for a suitable tool and to inform parameter generation, so write a single, clear, plain‑English instruction optimized for tool search and inputs (include concrete facts like names, ids if known, dates, times, locations, amounts, recipients etc). Only ONE action; no multi‑step plans. Do NOT include API‑specific parameter keys or JSON—use natural language values instead (e.g., "send the top 3 articles to #sales" not "limit=3, channel_id=...").
+       - STOP: Use when the transcript already contains enough information to answer, or when the transcript shows you cannot proceed (e.g., repeated Unauthorized or missing irrecoverable inputs). The text must be the final user‑facing answer (concise, factual, no internal details).
     2. Be specific and build on the latest Observation if present. Do not repeat earlier steps verbatim.
     3. Error recovery policy:
        • If the latest lines include "OBSERVATION: ERROR:" (e.g., ToolExecutionError, Unauthorized, 5xx), do NOT output STOP on the first failure.
@@ -180,7 +176,6 @@ class ReACTReasoner(BaseReasoner):
         logger.info("ReACT reasoner started", goal=goal, max_turns=self.max_turns)
 
         reasoning_trace: List[str] = [f"Goal: {goal}"]
-        final_answer: Optional[str] = None
         complete: bool = False
 
         for _ in range(self.max_turns):
@@ -225,12 +220,12 @@ class ReACTReasoner(BaseReasoner):
             else:
                 logger.info("thought_generated", thought=str(step_text)[:200] + ("..." if step_text and len(str(step_text)) > 200 else ""))
 
-        if not complete and not final_answer:
+        if not complete:
             logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(reasoning_trace))
 
         reasoning_transcript = "\n".join(reasoning_trace)
         success = complete
-        return ReasoningResult(final_answer=final_answer or "", iterations=len(reasoning_trace), success=success, transcript=reasoning_transcript)
+        return ReasoningResult(iterations=len(reasoning_trace), success=success, transcript=reasoning_transcript)
 
     def _think(self, transcript: str) -> Tuple[str, str]:
         prompt = _THINK_PROMPT.format(transcript=transcript)
