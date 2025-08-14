@@ -54,6 +54,7 @@ class ReasonerState:
     plan: Deque[Step] = field(default_factory=deque)
     history: List[str] = field(default_factory=list)
     is_complete: bool = False
+    tool_calls: List[dict] = field(default_factory=list)
 
 
 class ReWOOReasoner(BaseReasoner):
@@ -102,7 +103,7 @@ class ReWOOReasoner(BaseReasoner):
 
         transcript = "\n".join(state.history)
         success = not state.plan
-        return ReasoningResult(iterations=iterations, success=success, transcript=transcript)
+        return ReasoningResult(iterations=iterations, success=success, transcript=transcript, tool_calls=state.tool_calls)
 
     def _plan(self, goal: str) -> Deque[Step]:
         generated_plan = (self.llm.prompt(_PROMPTS["plan"].format(goal=goal)) or "").strip("`").lstrip("markdown").strip()
@@ -170,6 +171,7 @@ class ReWOOReasoner(BaseReasoner):
             tool = self._select_tool(step)
             params = self._generate_params(step, tool, inputs)
             step.result = self.tools.execute(tool, params)
+            state.tool_calls.append({"tool_id": tool.id, "summary": tool.get_summary()})
 
         step.status = StepStatus.DONE
 

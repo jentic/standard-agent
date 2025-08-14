@@ -67,7 +67,7 @@ class ReACTAgent(StandardAgent):
             top_k: Number of tools to consider during selection
         """
         # Initialize the core services
-        llm = LiteLLM(model=model or "claude-sonnet-4")
+        llm = LiteLLM(model=model)
         tools = JenticClient()
         memory = DictMemory()
         reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=max_turns, top_k=top_k)

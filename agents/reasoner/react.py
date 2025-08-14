@@ -38,6 +38,7 @@ class ReACTReasoner(BaseReasoner):
         reasoning_trace: List[str] = [f"Goal: {goal}"]
         complete: bool = False
         failed_tool_ids: List[str] = []
+        tool_calls: List[dict] = []
 
         for _ in range(self.max_turns):
             if complete:
@@ -57,6 +58,7 @@ class ReACTReasoner(BaseReasoner):
                     tool, params, observation = self._act(step_text, "\n".join(reasoning_trace), failed_tool_ids)
                     reasoning_trace.append(f"ACT_EXECUTED: tool={tool.get_summary()}")
                     reasoning_trace.append(f"OBSERVATION: {str(observation)}")
+                    tool_calls.append({"tool_id": tool.id, "summary": tool.get_summary()})
                     logger.info("tool_executed", tool_id=tool.id, params=params if isinstance(params, dict) else None, observation_preview=str(observation)[:200] + "..." if len(str(observation)) > 200 else observation)
                 except ToolCredentialsMissingError as exc:
                     tid = getattr(getattr(exc, "tool", None), "id", None)
@@ -82,7 +84,7 @@ class ReACTReasoner(BaseReasoner):
 
         reasoning_transcript = "\n".join(reasoning_trace)
         success = complete
-        return ReasoningResult(iterations=len(reasoning_trace), success=success, transcript=reasoning_transcript)
+        return ReasoningResult(iterations=len(reasoning_trace), success=success, transcript=reasoning_transcript, tool_calls=tool_calls)
 
     def _think(self, transcript: str) -> Tuple[str, str]:
         VALID_STEP_TYPES = {"THINK", "ACT", "STOP"}
