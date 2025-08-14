@@ -23,11 +23,11 @@ class ReWOOAgent(StandardAgent):
         Initialize the ReWOO agent with pre-configured components.
 
         Args:
-            model: The language model to use (defaults to LiteLLM's default)
+            model: The language model to use.
             max_retries: Maximum number of retries for the ReWOO reflector
         """
         # Initialize the core services
-        llm = LiteLLM(model=model or "claude-sonnet-4")
+        llm = LiteLLM(model=model)
         tools = JenticClient()
         memory = DictMemory()
         reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_retries=max_retries)

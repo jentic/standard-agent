@@ -11,12 +11,11 @@ class LiteLLM(BaseLLM):
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4",
+        model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> None:
-        super().__init__(temperature=temperature)
-        self.model = model
+        super().__init__(model=model, temperature=temperature)
         self.max_tokens = max_tokens
 
     def completion(self, messages: List[Dict[str, str]], **kwargs) -> str:

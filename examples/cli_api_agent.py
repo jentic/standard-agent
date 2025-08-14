@@ -21,7 +21,7 @@ def main() -> None:
     init_logger(config_path)
     load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-    agent = ReWOOAgent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
+    agent = ReWOOAgent(model=os.getenv("LLM_MODEL"))
     # Or assemble your own agent as follows:
     # agent = StandardAgent(
     #     llm = LiteLLM(model=os.getenv("LLM_MODEL", "claude-sonnet-4")),
