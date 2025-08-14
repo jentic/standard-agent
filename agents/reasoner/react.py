@@ -108,7 +108,7 @@ class ReACTReasoner(BaseReasoner):
         return tool, params, observation
 
     def _select_tool(self, action_text: str, failed_tool_ids: List[str]) -> ToolBase:
-        tool_candidates = self.tools.search(action_text, top_k=self.top_k)
+        tool_candidates = [t for t in self.tools.search(action_text, top_k=self.top_k) if t.id not in set(failed_tool_ids)]
         logger.info("tool_search", query=action_text, top_k=self.top_k, candidate_count=len(tool_candidates))
 
         tools_json = "\n".join(t.get_summary() for t in tool_candidates)
