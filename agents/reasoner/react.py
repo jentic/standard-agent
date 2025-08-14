@@ -42,7 +42,12 @@ _THINK_PROMPT = dedent(
        - If step_type == "THINK":
          • text = a brief reasoning step describing what to figure out next; no tool names or API parameters.
     2. Be specific and build on the latest Observation if present. Do not repeat earlier steps verbatim.
-    3. Output ONLY the JSON object. No markdown, no commentary.
+    3. Error recovery policy:
+       • If the latest lines include "OBSERVATION: ERROR:" (e.g., ToolExecutionError, Unauthorized, 5xx), do NOT output STOP on the first failure.
+       • Prefer step_type == "ACT" with a different approach/tool, or step_type == "THINK" with a brief recovery plan.
+       • Avoid selecting the same tool id as the most recent ACT_EXECUTED if it failed.
+       • Only STOP after multiple distinct failed ACT attempts or when the goal is clearly impossible from available context.
+    4. Output ONLY the JSON object. No markdown, no commentary.
     </instructions>
 
     <output_format>
@@ -55,14 +60,17 @@ _TOOL_SELECTION_PROMPT = dedent(
     """
     <role>
     You are an expert orchestrator working within the Agent API ecosystem.
-    Your job is to select the best tool to execute a specific step, using a list of available tools.
+    Your job is to select the best tool to execute a specific plan step, using a list of available tools.
     Each tool may vary in API domain, supported actions, and required parameters.
-    Return exactly one id from the candidates (or `none`).
+    You must evaluate each tool's suitability and return the single best matching tool — or the word none if none qualify.
+
+    Your selection will be executed by an agent, so precision and compatibility are critical.
     </role>
 
     <instructions>
     Analyze the provided step and evaluate all candidate tools. Use the scoring criteria to assess each tool's fitness for executing the step.
     Return the tool id with the highest total score. If no tool scores ≥60, return the word none.
+    You are selecting the most execution-ready tool, not simply the closest match.
     </instructions>
 
     <input>
@@ -72,8 +80,25 @@ _TOOL_SELECTION_PROMPT = dedent(
     {tools_json}
     </input>
 
+    <scoring_criteria>
+    - Action Compatibility (35 pts): Evaluate how well the tool's primary action matches the step's intent.
+    - API Domain Match (30 pts): If the step explicitly mentions a platform, require a direct api_name match; otherwise pick a relevant domain.
+    - Parameter Compatibility (20 pts): Required parameters should be present or inferable.
+    - Workflow Fit (10 pts): Logical integration into surrounding workflow.
+    - Simplicity & Efficiency (5 pts): Prefer direct solutions over unnecessarily complex ones.
+    </scoring_criteria>
+
+    <rules>
+    1. Score each tool using the weighted criteria above. Max score: 100 points.
+    2. Select the tool with the highest total score.
+    3. If multiple tools tie for the highest score, choose the first.
+    4. If no tool scores at least 60 points, return none.
+    5. Do not select the same tool id as the most recent failed attempt if an error was observed.
+    6. Output only the selected tool id or none.
+    </rules>
+
     <output_format>
-    Respond with a single line containing exactly the selected tool id or `none`.
+    Respond with a single line that contains exactly the selected tool's id — no quotes or extra text and no extra reasoning.
     </output_format>
     """
 ).strip()
@@ -175,7 +200,7 @@ class ReACTReasoner(BaseReasoner):
 
             if label == "ACT":
                 try:
-                    tool_id, params, observation = self._act(step_text, transcript)
+                    tool_id, params, observation = self._act(step_text, "\n".join(lines))
                     lines.append(f"ACT_EXECUTED: tool_id={tool_id}")
                     lines.append(f"OBSERVATION: {str(observation)}")
                     obs_preview = str(observation)
@@ -186,7 +211,9 @@ class ReACTReasoner(BaseReasoner):
                     lines.append(f"OBSERVATION: ERROR: ToolSelectionError: {str(exc)}")
                     logger.warning("tool_selection_failed", error=str(exc))
                 except ToolExecutionError as exc:
-                    lines.append(f"OBSERVATION: ERROR: ToolExecutionError: {str(exc)}")
+                    err_tool_id = getattr(getattr(exc, "tool", None), "id", None)
+                    suffix = f" tool_id={err_tool_id}" if err_tool_id else ""
+                    lines.append(f"OBSERVATION: ERROR: ToolExecutionError:{suffix} {str(exc)}")
                     logger.error("tool_execution_failed", error=str(exc))
                 except Exception as exc:
                     lines.append(f"OBSERVATION: ERROR: UnexpectedError: {str(exc)}")
@@ -216,7 +243,17 @@ class ReACTReasoner(BaseReasoner):
 
     def _act(self, action_text: str, transcript: str) -> Tuple[str, Dict[str, Any], Any]:
         query = action_text
-        tool = self._select_and_load_tool(query)
+        # Single preferred selection; on failure, let the loop continue and THINK again
+        candidates: List[ToolBase] = self.tools.search(query, top_k=self.top_k)
+        logger.info("tool_search", query=query, top_k=self.top_k, candidate_count=len(candidates))
+        tools_json = "\n".join([t.get_summary() for t in candidates])
+        chosen_id = (self.llm.prompt(_TOOL_SELECTION_PROMPT.format(step=query, tools_json=tools_json)) or "").strip()
+        if not chosen_id or chosen_id.lower() == "none":
+            raise ToolSelectionError(f"No suitable tool selected for step: {query}")
+        chosen = next((t for t in candidates if t.id == chosen_id), None)
+        if chosen is None:
+            raise ToolSelectionError(f"Selected tool id '{chosen_id}' not in candidate list")
+        tool = self.tools.load(chosen)
         params = self._generate_params(tool, transcript, query)
         observation = self.tools.execute(tool, params)
         return tool.id, params, observation
