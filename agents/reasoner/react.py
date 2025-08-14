@@ -226,19 +226,22 @@ class ReACTReasoner(BaseReasoner):
         return "THINK", "Continuing reasoning to determine next step."
 
     def _act(self, action_text: str, transcript: str) -> Tuple[str, Dict[str, Any], Any]:
-        query = action_text
-        # Single preferred selection; on failure, let the loop continue and THINK again
-        candidates: List[ToolBase] = self.tools.search(query, top_k=self.top_k)
-        logger.info("tool_search", query=query, top_k=self.top_k, candidate_count=len(candidates))
-        tools_json = "\n".join([t.get_summary() for t in candidates])
-        chosen_id = (self.llm.prompt(_TOOL_SELECTION_PROMPT.format(step=query, tools_json=tools_json)) or "").strip()
+        tool_candidates = self.tools.search(action_text, top_k=self.top_k)
+        logger.info("tool_search", query=action_text, top_k=self.top_k, candidate_count=len(tool_candidates))
+
+        tools_json = "\n".join(t.get_summary() for t in tool_candidates)
+        prompt = _TOOL_SELECTION_PROMPT.format(step=action_text, tools_json=tools_json)
+        chosen_id = self.llm.prompt(prompt).strip()
+
         if not chosen_id or chosen_id.lower() == "none":
-            raise ToolSelectionError(f"No suitable tool selected for step: {query}")
-        chosen = next((t for t in candidates if t.id == chosen_id), None)
-        if chosen is None:
+            raise ToolSelectionError(f"No suitable tool selected for step: {action_text}")
+
+        selected_tool = next((t for t in tool_candidates if t.id == chosen_id), None)
+        if selected_tool is None:
             raise ToolSelectionError(f"Selected tool id '{chosen_id}' not in candidate list")
-        tool = self.tools.load(chosen)
-        params = self._generate_params(tool, transcript, query)
+
+        tool = self.tools.load(selected_tool)
+        params = self._generate_params(tool, transcript, action_text)
         observation = self.tools.execute(tool, params)
         return tool.id, params, observation
 
