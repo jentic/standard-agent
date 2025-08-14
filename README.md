@@ -214,7 +214,14 @@ The library ships two reasoner profiles:
 - **ReWOOReasoner** (`agents/reasoner/rewoo.py`): Plan → Execute → Reflect
 - **ReACTReasoner** (`agents/reasoner/react.py`): Think → Act 
 
-Each profile exposes a `run(goal: str) -> ReasoningResult` and produces a `transcript`. The agent synthesizes the final answer from the transcript using a YAML-defined summarization prompt.
+Each profile exposes a `run(goal: str) -> ReasoningResult` and produces a `transcript`. The agent synthesizes the final answer from the transcript.
+
+Note on the reasoning spectrum:
+
+- "Explicit" reasoners externalize structure (plans, intermediate steps) for transparency and control. ReWOO is more explicit.
+- "Implicit" reasoners decide the next move with minimal externalized structure for speed and brevity. ReACT is more implicit.
+
+We welcome contributions of new reasoning strategies anywhere on this spectrum. If you add a profile, keep it as a single-file `BaseReasoner` implementation and define its prompts in YAML under `agents/prompts/reasoners/`.
 
 ### Extending the Library
 
