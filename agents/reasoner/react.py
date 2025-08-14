@@ -89,8 +89,9 @@ _TOOL_SELECTION_PROMPT = dedent(
     2. Select the tool with the highest total score.
     3. If multiple tools tie for the highest score, choose the first.
     4. If no tool scores at least 60 points, return none.
-    5. Do not select the same tool id as the most recent failed attempt if an error was observed.
-    6. Output only the selected tool id or none.
+    5. If a Failed Tools section is provided, do NOT select any id listed there.
+    6. Otherwise, do not select the same tool id as the most recent failed attempt if an error was observed.
+    7. Output only the selected tool id or none.
     </rules>
 
     <output_format>
@@ -168,6 +169,7 @@ class ReACTReasoner(BaseReasoner):
 
         reasoning_trace: List[str] = [f"Goal: {goal}"]
         complete: bool = False
+        failed_tool_ids: List[str] = []
 
         for _ in range(self.max_turns):
             if complete:
@@ -184,12 +186,13 @@ class ReACTReasoner(BaseReasoner):
 
             if step_type == "ACT":
                 try:
-                    tool_id, params, observation = self._act(step_text, "\n".join(reasoning_trace))
+                    tool_id, params, observation = self._act(step_text, "\n".join(reasoning_trace), failed_tool_ids)
                     reasoning_trace.append(f"ACT_EXECUTED: tool_id={tool_id}")
                     reasoning_trace.append(f"OBSERVATION: {str(observation)}")
                     logger.info("tool_executed", tool_id=tool_id, params=params if isinstance(params, dict) else None, observation_preview=str(observation)[:200] + "..." if len(str(observation)) > 200 else observation)
                 except ToolCredentialsMissingError as exc:
                     tid = getattr(getattr(exc, "tool", None), "id", None)
+                    if tid: failed_tool_ids.append(tid)
                     reasoning_trace.append(f"Tool Unauthorized:{f' tool_id={tid}' if tid else ''} {exc}")
                     logger.warning("tool_unauthorized", error=str(exc))
                 except ToolSelectionError as exc:
@@ -197,6 +200,7 @@ class ReACTReasoner(BaseReasoner):
                     logger.warning("tool_selection_failed", error=str(exc))
                 except ToolExecutionError as exc:
                     tid = getattr(getattr(exc, "tool", None), "id", None)
+                    if tid: failed_tool_ids.append(tid)
                     reasoning_trace.append(f"OBSERVATION: ERROR: ToolExecutionError:{f' tool_id={tid}' if tid else ''} {exc}")
                     logger.error("tool_execution_failed", error=str(exc))
                 except Exception as exc:
@@ -225,18 +229,21 @@ class ReACTReasoner(BaseReasoner):
             logger.error("think_parse_failed", error=str(e), exc_info=True)
         return "THINK", "Continuing reasoning to determine next step."
 
-    def _act(self, action_text: str, transcript: str) -> Tuple[str, Dict[str, Any], Any]:
-        tool = self._select_tool(action_text, transcript)
+    def _act(self, action_text: str, transcript: str, failed_tool_ids: List[str]) -> Tuple[str, Dict[str, Any], Any]:
+        tool = self._select_tool(action_text, failed_tool_ids)
         params = self._generate_params(tool, transcript, action_text)
         observation = self.tools.execute(tool, params)
         return tool.id, params, observation
 
-    def _select_tool(self, action_text: str, transcript: str) -> ToolBase:
+    def _select_tool(self, action_text: str, failed_tool_ids: List[str]) -> ToolBase:
         tool_candidates = self.tools.search(action_text, top_k=self.top_k)
         logger.info("tool_search", query=action_text, top_k=self.top_k, candidate_count=len(tool_candidates))
 
         tools_json = "\n".join(t.get_summary() for t in tool_candidates)
         prompt = _TOOL_SELECTION_PROMPT.format(step=action_text, tools_json=tools_json)
+        if failed_tool_ids:
+            failed_block = "\n".join(f"- {tid}" for tid in failed_tool_ids[-3:])
+            prompt += f"\n\n<failed_tools>\n{failed_block}\n</failed_tools>\n"
         chosen_id = self.llm.prompt(prompt).strip()
 
         if not chosen_id or chosen_id.lower() == "none":
