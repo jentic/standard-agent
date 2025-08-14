@@ -39,6 +39,7 @@ class ReACTReasoner(BaseReasoner):
         complete: bool = False
         failed_tool_ids: List[str] = []
         tool_calls: List[dict] = []
+        turns: int = 0
 
         for _ in range(self.max_turns):
             if complete:
@@ -46,11 +47,12 @@ class ReACTReasoner(BaseReasoner):
 
             step_type, step_text = self._think("\n".join(reasoning_trace))
             reasoning_trace.append(f"{step_type}: {step_text}")
+            turns += 1
 
             if step_type == "STOP":
                 reasoning_trace.append(f"FINAL ANSWER: {step_text}")
                 complete = True
-                logger.info("reasoning_complete", reason="final_thought", turns=len(reasoning_trace))
+                logger.info("reasoning_complete", reason="final_thought", turns=turns)
                 break
 
             if step_type == "ACT":
@@ -80,11 +82,11 @@ class ReACTReasoner(BaseReasoner):
                 logger.info("thought_generated", thought=step_text)
 
         if not complete:
-            logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(reasoning_trace))
+            logger.warning("max_turns_reached", max_turns=self.max_turns, turns=turns)
 
         reasoning_transcript = "\n".join(reasoning_trace)
         success = complete
-        return ReasoningResult(iterations=len(reasoning_trace), success=success, transcript=reasoning_transcript, tool_calls=tool_calls)
+        return ReasoningResult(iterations=turns, success=success, transcript=reasoning_transcript, tool_calls=tool_calls)
 
     def _think(self, transcript: str) -> Tuple[str, str]:
         VALID_STEP_TYPES = {"THINK", "ACT", "STOP"}
