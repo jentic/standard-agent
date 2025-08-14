@@ -8,7 +8,7 @@ from collections.abc import MutableMapping
 from agents.reasoner.base import BaseReasoner, ReasoningResult
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
-from agents.tools.exceptions import ToolExecutionError
+from agents.tools.exceptions import ToolExecutionError, ToolCredentialsMissingError
 
 from utils.logger import get_logger
 
@@ -179,7 +179,7 @@ class ReACTReasoner(BaseReasoner):
     def run(self, goal: str) -> ReasoningResult:
         logger.info("ReACT reasoner started", goal=goal, max_turns=self.max_turns)
 
-        lines: List[str] = [f"Goal: {goal}"]
+        reasoning_trace: List[str] = [f"Goal: {goal}"]
         final_answer: Optional[str] = None
         complete: bool = False
 
@@ -187,46 +187,50 @@ class ReACTReasoner(BaseReasoner):
             if complete:
                 break
 
-            transcript = "\n".join(lines)
-            step_type, step_text = self._think(transcript)
-            label = (step_type or "").upper()
-            lines.append(f"{label}: {step_text}")
+            reasoning_transcript = "\n".join(reasoning_trace)
+            step_type, step_text = self._think(reasoning_transcript)
+            reasoning_trace.append(f"{step_type}: {step_text}")
 
-            if label == "STOP":
-                final_answer = step_text
+            if step_type == "STOP":
+                reasoning_trace.append(f"FINAL ANSWER: {step_text}")
                 complete = True
-                logger.info("reasoning_complete", reason="final_thought", turns=len(lines))
+                logger.info("reasoning_complete", reason="final_thought", turns=len(reasoning_trace))
                 break
 
-            if label == "ACT":
+            if step_type == "ACT":
                 try:
-                    tool_id, params, observation = self._act(step_text, "\n".join(lines))
-                    lines.append(f"ACT_EXECUTED: tool_id={tool_id}")
-                    lines.append(f"OBSERVATION: {str(observation)}")
+                    tool_id, params, observation = self._act(step_text, "\n".join(reasoning_trace))
+                    reasoning_trace.append(f"ACT_EXECUTED: tool_id={tool_id}")
+                    reasoning_trace.append(f"OBSERVATION: {str(observation)}")
                     obs_preview = str(observation)
                     if len(obs_preview) > 200:
                         obs_preview = obs_preview[:200] + "..."
                     logger.info("tool_executed", tool_id=tool_id, params=params if isinstance(params, dict) else None, observation_preview=obs_preview)
+                except ToolCredentialsMissingError as exc:
+                    err_tool_id = getattr(getattr(exc, "tool", None), "id", None)
+                    suffix = f" tool_id={err_tool_id}" if err_tool_id else ""
+                    reasoning_trace.append(f"Tool Unauthorized:{suffix} {str(exc)}")
+                    logger.warning("tool_unauthorized", error=str(exc))
                 except ToolSelectionError as exc:
-                    lines.append(f"OBSERVATION: ERROR: ToolSelectionError: {str(exc)}")
+                    reasoning_trace.append(f"OBSERVATION: ERROR: ToolSelectionError: {str(exc)}")
                     logger.warning("tool_selection_failed", error=str(exc))
                 except ToolExecutionError as exc:
                     err_tool_id = getattr(getattr(exc, "tool", None), "id", None)
                     suffix = f" tool_id={err_tool_id}" if err_tool_id else ""
-                    lines.append(f"OBSERVATION: ERROR: ToolExecutionError:{suffix} {str(exc)}")
+                    reasoning_trace.append(f"OBSERVATION: ERROR: ToolExecutionError:{suffix} {str(exc)}")
                     logger.error("tool_execution_failed", error=str(exc))
                 except Exception as exc:
-                    lines.append(f"OBSERVATION: ERROR: UnexpectedError: {str(exc)}")
+                    reasoning_trace.append(f"OBSERVATION: ERROR: UnexpectedError: {str(exc)}")
                     logger.error("tool_unexpected_error", error=str(exc), exc_info=True)
             else:
                 logger.info("thought_generated", thought=str(step_text)[:200] + ("..." if step_text and len(str(step_text)) > 200 else ""))
 
         if not complete and not final_answer:
-            logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(lines))
+            logger.warning("max_turns_reached", max_turns=self.max_turns, turns=len(reasoning_trace))
 
-        transcript = "\n".join(lines)
+        reasoning_transcript = "\n".join(reasoning_trace)
         success = complete
-        return ReasoningResult(final_answer=final_answer or "", iterations=len(lines), success=success, transcript=transcript)
+        return ReasoningResult(final_answer=final_answer or "", iterations=len(reasoning_trace), success=success, transcript=reasoning_transcript)
 
     def _think(self, transcript: str) -> Tuple[str, str]:
         prompt = _THINK_PROMPT.format(transcript=transcript)
@@ -235,7 +239,7 @@ class ReACTReasoner(BaseReasoner):
             step_type = (obj.get("step_type") or "").strip().upper()
             text = (obj.get("text") or "").strip()
             if step_type in {"THINK", "ACT", "STOP"} and text:
-                return step_type, text
+                return step_type.upper(), text
             logger.error("Invalid think output", step_type=step_type, text_present=bool(text))
         except Exception:
             logger.error("think_parse_failed", exc_info=True)
