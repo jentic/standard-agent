@@ -6,7 +6,6 @@ from collections import deque
 from collections.abc import MutableMapping
 from dataclasses import dataclass, field
 from enum import Enum
-from textwrap import dedent
 from typing import Any, Deque, Dict, List, Optional
 from copy import deepcopy
 
@@ -18,9 +17,10 @@ from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError)
 
 from utils.logger import get_logger
-
 logger = get_logger(__name__)
 
+from agents.reasoner.prompts import load_prompts
+_PROMPTS = load_prompts("rewoo", required_prompts=["plan", "classify_step", "reason", "tool_select", "param_gen", "reflect", "reflect_alternatives"])
 
 # ReWOO-specific exception for missing plan inputs
 class MissingInputError(ReasoningError, KeyError):
@@ -29,264 +29,6 @@ class MissingInputError(ReasoningError, KeyError):
     def __init__(self, message: str, missing_key: str | None = None):
         super().__init__(message)
         self.missing_key = missing_key
-
-
-# ----------------------------- Prompts ---------------------------------
-
-_PLAN_PROMPT = dedent(
-    """
-    <role>
-    You are a world-class planning assistant operating within the Agent ecosystem.
-    You specialize in transforming high-level user goals into structured, step-by-step plans that can be executed by API-integrated agents.
-    </role>
-
-    <goal>
-    Decompose the user goal below into a markdown bullet-list plan.
-    </goal>
-
-    <output_format>
-    1. Return only the fenced list (triple back-ticks) — no prose before or after.
-    2. Each bullet should be on its own line, starting with "- ".
-    3. Each bullet = <verb> <object> … followed, in this order, by (input: key_a, key_b) (output: key_c)
-       where the parentheses are literal.
-    4. output: key is mandatory when the step's result is needed later; exactly one snake_case identifier.
-    5. input: is optional; if present, list comma-separated snake_case keys produced by earlier steps.
-    6. Do not mention specific external tool names.
-    </output_format>
-
-    <self_check>
-    After drafting, silently verify — regenerate the list if any check fails:
-    • All output keys unique & snake_case.
-    • All input keys reference existing outputs.
-    • No tool names or extra prose outside the fenced block.
-    </self_check>
-
-    <real_goal>
-    Goal: {goal}
-    </real_goal>
-    """
-).strip()
-
-_STEP_CLASSIFICATION_PROMPT = dedent(
-    """
-    <role>
-    You are a Step Classifier within the Agent ecosystem.
-    Your sole purpose is to determine whether a given step requires external API/tool execution or can be completed through internal reasoning alone.
-    </role>
-
-    <goal>
-    Classify the provided step as either TOOL or REASONING based on whether it requires external API calls.
-    Use classification_rules for guidance
-    </goal>
-
-    <input>
-    Step: {step_text}
-    Available Memory Keys: {keys_list}
-    </input>
-
-    <classification_rules>
-    TOOL steps require:
-    - External API calls (e.g., "search articles", "send email", etc.)
-    - Third-party service interactions
-    - Data retrieval from external sources
-
-    REASONING steps include:
-    - Data transformation or formatting
-    - Summarization or analysis of existing data
-    - Logic operations using available memory
-    - Internal calculations or processing
-    </classification_rules>
-
-    <output_format>
-    Respond with ONLY one word: either "TOOL" or "REASONING"
-    </output_format>
-    """
-).strip()
-
-_REASONING_STEP_PROMPT = dedent(
-    """
-    <role>
-    You are a Data Processor within the Agent ecosystem.
-    Your mission is to perform precise data transformations and reasoning operations on available information.
-    You specialize in content analysis, data extraction, and logical processing to support agent workflows.
-
-    Your core responsibilities:
-    - Process data using only available information
-    - Perform logical reasoning and analysis tasks
-    - Transform data into required formats
-    - Generate accurate, context-appropriate outputs
-    </role>
-
-    <goal>
-    Execute the specified sub-task using only the provided data to produce a single, accurate output.
-    </goal>
-
-    <input>
-    Sub-Task: {step_text}
-    Available Data: {available_data}
-    </input>
-
-    <instructions>
-    1. Analyze the sub-task and available data carefully
-    2. Execute the task using ONLY the provided data
-    3. Produce a single, final output based on the task requirements
-    4. Do not add commentary, explanations, or conversational text
-    </instructions>
-
-    <output_format>
-    - For structured results (lists, objects): Valid JSON object without code fences
-    - For simple text results (summaries, values): Raw text only
-    - No introductory phrases or explanations
-    </output_format>
-    """
-).strip()
-
-_TOOL_SELECTION_PROMPT = dedent(
-    """
-    <role>
-    You are an expert orchestrator working within the Agent API ecosystem.
-    Your job is to select the best tool to execute a specific plan step, using a list of available tools.
-    Each tool may vary in API domain, supported actions, and required parameters.
-    You must evaluate each tool's suitability and return the single best matching tool — or the word none if none qualify.
-
-    Your selection will be executed by an agent, so precision and compatibility are critical.
-    </role>
-
-    <instructions>
-    Analyze the provided step and evaluate all candidate tools. Use the scoring criteria to assess each tool's fitness for executing the step.
-    Return the tool id with the highest total score. If no tool scores ≥60, return the word none.
-    You are selecting the most execution-ready tool, not simply the closest match.
-    </instructions>
-
-    <input>
-    Step: {step}
-
-    Tools (JSON):
-    {tools_json}
-    </input>
-
-    <scoring_criteria>
-    - Action Compatibility (35 pts): Evaluate how well the tool's primary action matches the step's intent.
-    - API Domain Match (30 pts): If the step explicitly mentions a platform, require a direct api_name match; otherwise pick a relevant domain.
-    - Parameter Compatibility (20 pts): Required parameters should be present or inferable.
-    - Workflow Fit (10 pts): Logical integration into surrounding workflow.
-    - Simplicity & Efficiency (5 pts): Prefer direct solutions over unnecessarily complex ones.
-    </scoring_criteria>
-
-    <rules>
-    1. Score each tool using the weighted criteria above. Max score: 100 points.
-    2. Select the tool with the highest total score.
-    3. If multiple tools tie for the highest score, choose the first.
-    4. If no tool scores at least 60 points, return none.
-    5. Output only the selected tool id or none.
-    </rules>
-
-    <output_format>
-    Respond with a single line that contains exactly the selected tool's id — no quotes or extra text and no extra reasoning.
-    </output_format>
-    """
-).strip()
-
-_PARAMETER_GENERATION_PROMPT = dedent(
-    """
-    <role>
-    You are a Parameter Builder within the Agent ecosystem.
-    Your mission is to enable seamless API execution by generating precise parameters from step context and memory data.
-    </role>
-
-    <goal>
-    Generate precise JSON parameters for the specified API call by extracting relevant data from step context and memory.
-    </goal>
-
-    <input>
-    STEP: {step}
-    MEMORY: {step_inputs}
-    SCHEMA: {tool_schema}
-    ALLOWED_KEYS: {allowed_keys}
-    </input>
-
-    <data_extraction_rules>
-    • Articles/News: Extract title/headline and URL fields, format as "Title: URL\n"
-    • Arrays: Process each item, combine into formatted string
-    • Nested Objects: Access properties using dot notation
-    • Quantities: "a/an/one" = 1, "few" = 3, "several" = 5, numbers = exact
-    • Array Slicing: When processing arrays from memory, look for quantity constraints in the STEP text and slice accordingly
-    • Never use placeholder text - always extract real data from memory
-    </data_extraction_rules>
-
-    <instructions>
-    1. Analyze MEMORY for relevant data structures
-    2. Extract actual values using the data extraction rules
-    3. CRITICAL: Check STEP text for quantity constraints
-    4. Format content appropriately for the target API
-    5. Generate valid parameters using only ALLOWED_KEYS
-    6. CRITICAL: Only use parameters documented in the SCHEMA
-    </instructions>
-
-    <constraints>
-    - Output ONLY valid JSON - no markdown or commentary
-    - Use only keys from ALLOWED_KEYS
-    - Extract actual data values from MEMORY
-    </constraints>
-
-    <output_format>
-    Valid JSON object starting with {{ and ending with }}
-    </output_format>
-    """
-).strip()
-
-_REFLECTION_PROMPT = dedent(
-    """
-    <role>
-    You are a Self-Healing Engine operating within the Agent ecosystem. Diagnose step failures and propose a precise corrective action.
-    </role>
-
-    <goal>
-    Analyze the failed step and propose a single, precise fix that will allow the workflow to continue successfully.
-    </goal>
-
-    <input>
-    Goal: {goal}
-    Failed Step: {step}
-    Failed Tool: {failed_tool_id}
-    Error: {error_type}: {error_message}
-    Tool Details: {tool_details}
-    </input>
-
-    <decision_guide>
-    • retry_params – tool appropriate, inputs invalid; derive correct values
-    • change_tool   – current tool cannot accomplish step; pick a better one
-    • rephrase_step – step text ambiguous/misleading; rewrite it
-    • give_up       – required parameter or critical info missing and cannot be inferred
-    </decision_guide>
-
-    <constraints>
-    - Output ONLY valid JSON parsable by JSON.parse()
-    - Choose one action: retry_params | change_tool | rephrase_step | give_up
-    - Provide required fields for chosen action
-    </constraints>
-
-    <output_format>
-    {{
-      "reasoning": "...",
-      "action": "retry_params|change_tool|rephrase_step|give_up",
-      "tool_id": "(if action is change_tool)",
-      "params": "(if action is retry_params or change_tool) object",
-      "step": "(if action is rephrase_step) new text"
-    }}
-    </output_format>
-    """
-).strip()
-
-_REFLECTION_ALTERNATIVES_SECTION = dedent(
-    """
-    Alternative Tools:
-    {alternative_tools}
-    """
-).strip()
-
-# ----------------------------- Data structures -------------------------
-
 
 class StepStatus(str, Enum):
     PENDING = "pending"
@@ -313,8 +55,6 @@ class ReasonerState:
     history: List[str] = field(default_factory=list)
     is_complete: bool = False
 
-
-# ----------------------------- Reasoner --------------------------------
 
 class ReWOOReasoner(BaseReasoner):
     DEFAULT_MAX_ITER = 20
@@ -365,7 +105,7 @@ class ReWOOReasoner(BaseReasoner):
         return ReasoningResult(iterations=iterations, success=success, transcript=transcript)
 
     def _plan(self, goal: str) -> Deque[Step]:
-        generated_plan = (self.llm.prompt(_PLAN_PROMPT.format(goal=goal)) or "").strip("`").lstrip("markdown").strip()
+        generated_plan = (self.llm.prompt(_PROMPTS["plan"].format(goal=goal)) or "").strip("`").lstrip("markdown").strip()
         logger.info("plan_generated", goal=goal, plan=generated_plan)
 
         steps: Deque[Step] = deque()
@@ -422,10 +162,10 @@ class ReWOOReasoner(BaseReasoner):
             missing_key = e.args[0]
             raise MissingInputError(f"Required memory key '{missing_key}' not found for step: {step.text}", missing_key=missing_key) from e
 
-        step_type_response = self.llm.prompt(_STEP_CLASSIFICATION_PROMPT.format(step_text=step.text,keys_list=", ".join(self.memory.keys())))
+        step_type_response = self.llm.prompt(_PROMPTS["classify_step"].format(step_text=step.text, keys_list=", ".join(self.memory.keys())))
 
         if "reasoning" in step_type_response.lower():
-            step.result = self.llm.prompt(_REASONING_STEP_PROMPT.format(step_text=step.text, available_data=json.dumps(inputs, ensure_ascii=False)))
+            step.result = self.llm.prompt(_PROMPTS["reason"].format(step_text=step.text, available_data=json.dumps(inputs, ensure_ascii=False)))
         else:
             tool = self._select_tool(step)
             params = self._generate_params(step, tool, inputs)
@@ -449,7 +189,7 @@ class ReWOOReasoner(BaseReasoner):
             return self.tools.load(JenticTool({"id": suggestion.get("tool_id")}))
 
         tool_candidates = self.tools.search(step.text, top_k=self.top_k)
-        tool_id = self.llm.prompt(_TOOL_SELECTION_PROMPT.format(step=step.text, tools_json="\n".join([t.get_summary() for t in tool_candidates])))
+        tool_id = self.llm.prompt(_PROMPTS["tool_select"].format(step=step.text, tools_json="\n".join([t.get_summary() for t in tool_candidates])))
 
         if tool_id == "none":
             raise ToolSelectionError(f"No suitable tool was found for step: {step.text}")
@@ -470,7 +210,7 @@ class ReWOOReasoner(BaseReasoner):
 
         try:
             param_schema = tool.get_parameters() or {}
-            prompt = _PARAMETER_GENERATION_PROMPT.format(
+            prompt = _PROMPTS["param_gen"].format(
                 step=step.text,
                 tool_schema=json.dumps(param_schema, ensure_ascii=False),
                 step_inputs=json.dumps(inputs, ensure_ascii=False),
@@ -494,7 +234,7 @@ class ReWOOReasoner(BaseReasoner):
         failed_tool_id = error.tool.id if isinstance(error, ToolError) else None
         tool_details = error.tool.get_details() if isinstance(error, ToolError) else None
 
-        prompt = _REFLECTION_PROMPT.format(
+        prompt = _PROMPTS["reflect"].format(
             goal=state.goal,
             step=step.text,
             failed_tool_id=failed_tool_id,
@@ -504,7 +244,7 @@ class ReWOOReasoner(BaseReasoner):
         )
 
         alternatives = [t for t in self.tools.search(step.text, top_k=self.top_k) if t.id != failed_tool_id]
-        prompt += "\n" + _REFLECTION_ALTERNATIVES_SECTION.format(
+        prompt += "\n" + _PROMPTS["reflect_alternatives"].format(
             alternative_tools="\n".join([t.get_summary() for t in alternatives])
         )
 

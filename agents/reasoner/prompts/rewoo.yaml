@@ -28,7 +28,7 @@ plan: |
   Goal: {goal}
   </real_goal>
 
-classify: |
+classify_step: |
   <role>
   You are a Step Classifier within the Agent ecosystem.
   Your sole purpose is to determine whether a given step requires external API/tool execution or can be completed through internal reasoning alone.
