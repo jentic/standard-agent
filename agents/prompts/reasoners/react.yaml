@@ -119,4 +119,3 @@ param_gen: |
   Valid JSON object starting with {{ and ending with }}
   </output_format>
 
-

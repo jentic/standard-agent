@@ -19,8 +19,8 @@ from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, Para
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
-from agents.reasoner.prompts import load_prompts
-_PROMPTS = load_prompts("rewoo", required_prompts=["plan", "classify_step", "reason", "tool_select", "param_gen", "reflect", "reflect_alternatives"])
+from agents.prompts import load_prompts
+_PROMPTS = load_prompts("reasoners/rewoo", required_prompts=["plan", "classify_step", "reason", "tool_select", "param_gen", "reflect", "reflect_alternatives"])
 
 # ReWOO-specific exception for missing plan inputs
 class MissingInputError(ReasoningError, KeyError):
@@ -162,9 +162,9 @@ class ReWOOReasoner(BaseReasoner):
             missing_key = e.args[0]
             raise MissingInputError(f"Required memory key '{missing_key}' not found for step: {step.text}", missing_key=missing_key) from e
 
-        step_type_response = self.llm.prompt(_PROMPTS["classify_step"].format(step_text=step.text, keys_list=", ".join(self.memory.keys())))
+        step_type = self.llm.prompt(_PROMPTS["classify_step"].format(step_text=step.text, keys_list=", ".join(self.memory.keys())))
 
-        if "reasoning" in step_type_response.lower():
+        if "reasoning" in step_type.lower():
             step.result = self.llm.prompt(_PROMPTS["reason"].format(step_text=step.text, available_data=json.dumps(inputs, ensure_ascii=False)))
         else:
             tool = self._select_tool(step)
@@ -178,7 +178,7 @@ class ReWOOReasoner(BaseReasoner):
             state.history.append(f"remembered {step.output_key} : {step.result}")
 
         state.history.append(f"Executed step: {step.text} -> {step.result}")
-        logger.info("step_executed", step_text=step.text, step_type=step_type_response, result=str(step.result)[:100] if step.result is not None else None)
+        logger.info("step_executed", step_text=step.text, step_type=step_type, result=str(step.result)[:100] if step.result is not None else None)
 
     def _select_tool(self, step: Step) -> ToolBase:
         suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")

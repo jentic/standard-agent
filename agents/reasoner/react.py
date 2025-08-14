@@ -13,8 +13,8 @@ from agents.reasoner.exceptions import ToolSelectionError
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
-from agents.reasoner.prompts import load_prompts
-_PROMPTS = load_prompts( "react", required_prompts=["think", "tool_select", "param_gen"])
+from agents.prompts import load_prompts
+_PROMPTS = load_prompts("reasoners/react", required_prompts=["think", "tool_select", "param_gen"])
 
 class ReACTReasoner(BaseReasoner):
     DEFAULT_MAX_TURNS = 20

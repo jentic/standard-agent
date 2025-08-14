@@ -3,7 +3,11 @@ import yaml
 
 
 def load_prompts(profile: str, required_prompts: list[str]) -> dict[str, str]:
-    path = Path(__file__).parent / f"{profile}.yaml"
+    base = Path(__file__).parent
+    path = base / f"{profile}.yaml"
+    if not path.exists():
+        # allow nested profiles like "reasoners/react"
+        path = base / (profile + ".yaml")
     if not path.exists():
         raise FileNotFoundError(f"Prompt file not found: {path}")
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
