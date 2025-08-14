@@ -15,39 +15,7 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.jentic import JenticTool
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
-"""
-Local exceptions for ReWOOReasoner to avoid dependency on sequential/ package.
-"""
-
-class ReasoningError(Exception):
-    """Base exception for all reasoning-related errors."""
-
-    def __init__(self, message: str):
-        super().__init__(message)
-        logger.warning(
-            "reasoning_error",
-            error_type=self.__class__.__name__,
-            message=message,
-        )
-
-
-class MissingInputError(ReasoningError, KeyError):
-    """A required memory key by a step is absent.
-
-    Contains the specific missing memory key to allow upstream dependency pruning.
-    """
-
-    def __init__(self, message: str, missing_key: str | None = None):
-        super().__init__(message)
-        self.missing_key = missing_key
-
-
-class ToolSelectionError(ReasoningError):
-    """A suitable tool could not be found for a step."""
-
-
-class ParameterGenerationError(ToolError):
-    """Valid parameters for a tool could not be generated."""
+from agents.reasoner.exceptions import (ReasoningError, MissingInputError, ToolSelectionError, ParameterGenerationError)
 
 from utils.logger import get_logger
 
@@ -389,14 +357,12 @@ class ReWOOReasoner(BaseReasoner):
         success = not state.plan
         return ReasoningResult(final_answer="", iterations=iterations, tool_calls=[], success=success, transcript=transcript)
 
-    # ----------------------------- Internals ---------------------------
 
     def _plan(self, goal: str) -> Deque[Step]:
         prompt = _PLAN_PROMPT.format(goal=goal)
         response = self.llm.prompt(prompt)
         logger.info("plan_generated", goal=goal, plan=response[:200] + ("..." if response and len(response) > 200 else ""))
 
-        # Strip optional markdown code fence
         content = (response or "").strip("`").lstrip("markdown").strip()
 
         steps: Deque[Step] = deque()

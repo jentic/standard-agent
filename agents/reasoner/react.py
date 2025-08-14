@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import json
 from textwrap import dedent
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from collections.abc import MutableMapping
 
 from agents.reasoner.base import BaseReasoner, ReasoningResult
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolExecutionError, ToolCredentialsMissingError
+from agents.reasoner.exceptions import ToolSelectionError
 
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
 
 # ----------------------------- Prompts ---------------------------------
 
@@ -145,15 +145,6 @@ _PARAMETER_GENERATION_PROMPT = dedent(
     </output_format>
     """
 ).strip()
-
-# ----------------------------- Local exception -------------------------
-
-
-class ToolSelectionError(Exception):
-    """A suitable tool could not be selected from candidates."""
-
-
-# ----------------------------- Reasoner --------------------------------
 
 
 class ReACTReasoner(BaseReasoner):
