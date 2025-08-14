@@ -21,14 +21,19 @@ These principles guide our development and we welcome contributions that share t
 
 There are many ways to contribute to the Standard Agent project. We welcome contributions in the following areas:
 
--   **Reasoning Strategies:** The primary goal of this library is to serve as a collection of reference implementations for different agent reasoning strategies implementing the `BaseReasoner` interface. We welcome contributions of well-documented, easy-to-understand implementations of patterns like ReAct, LATS, Plan-Act, etc.
+-   **Reasoning Strategies (Profiles):** Clear, reference implementations of different reasoning strategies that implement the `BaseReasoner` interface. Current profiles include `ReWOOReasoner` (Plan → Execute → Reflect) and `ReACTReasoner` (Think → Act). We welcome well-documented, easy-to-understand profiles (e.g., ReAct variants, LATS, ToT, GoT).
 -   **Examples:** We need good examples that show how `standard-agent` can be used to solve high-level goals. These examples should be clear and concise.
 -   **Tool Integrations:** While the library comes with a Jentic implementation, you can integrate any tool backend by implementing the `ToolBase` interface. We welcome contributions of new tool integrations.
 -   **Memory Implementations:** The library currently uses simple in-memory dictionaries for storage. We welcome contributions of persistent memory backends (Redis, SQLite, file-based storage) or specialized memory implementations (vector stores, semantic search, conversation summarizers) that implement the `MutableMapping` interface.
 -   **Bug Fixes & Documentation:** We always appreciate well-documented bug reports and improvements to our documentation.
 
-For example, the `SequentialReasoner` is composed of a `Plan`, `ExecuteStep`, `Reflect`, and `SummarizeResult` component. You can create new reasoning behaviors by implementing new "flavors" of these components—such as a ReAct-style executor or a critique-based reflector—and then mixing and matching them to create novel agents. 
-We also encourage the contribution of entirely new `BaseReasoner` implementations to explore different approaches, such as a Tree of Thoughts, Graph of Thoughts, ReAct, or LATS reasoner.
+Reasoner prompts are externalized in YAML under `agents/prompts/` (e.g., `agents/prompts/reasoners/{rewoo,react}.yaml`, and `agents/prompts/agent.yaml` for the agent-level summarizer). Each profile declares the exact required keys and fails fast if a prompt is missing. When contributing new profiles, please:
+
+- Keep the implementation as a single file implementing `BaseReasoner` if possible
+- Add a YAML file under `agents/prompts/reasoners/your_profile.yaml` documenting required keys
+- Use the strict loader (`agents/prompts/load_prompts`) to load your prompts
+
+We also encourage contributions of entirely new `BaseReasoner` implementations to explore approaches like Tree-of-Thoughts, Graph-of-Thoughts, ReAct variants, or LATS.
 
 If you have an idea to improve the Standard Agent, we'd love to see it!
 

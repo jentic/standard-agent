@@ -38,7 +38,7 @@ make install
 source .venv/bin/activate
 
 # Run the agent
-python examples/cli_api_agent.py
+python examples/cli_rewoo_api_agent.py
 ```
 ### Configuration
 
@@ -55,7 +55,7 @@ See [.env.example](./.env.example) for the complete configuration template with 
 **Key Requirements:**
 - **LLM Model**: `LLM_MODEL` - Choose your preferred model (default: claude-sonnet-4)
 - **LLM Provider**: At least one API key (Anthropic, OpenAI, or Google)
-- **Tool Provider**: `JENTIC_AGENT_API_KEY` for instant access to 1000+ tools (get yours at [app.jentic.com](https://app.jentic.com))
+- **Tool Provider**: `JENTIC_AGENT_API_KEY` for instant access to 1500+ tools (get yours at [app.jentic.com](https://app.jentic.com))
 
 
 ### Usage Examples
@@ -64,20 +64,22 @@ We provide two ways to use the agent library: a quick-start method using a pre-b
 
 #### 1. Quick Start: Running a Pre-built Agent
 
-This is the fastest way to get started. The `ReWOOAgent` class provides a `StandardAgent` instance that is already configured with a reasoner, LLM, tools, and memory.
+This is the fastest way to get started. The `ReWOOAgent` and `ReACTAgent` classes provide `StandardAgent` instances that are already configured with a reasoner, LLM, tools, and memory.
 
 ```python
 # examples/cli_api_agent.py
 import os
 from dotenv import load_dotenv
-from agents.prebuilt import ReWOOAgent
+from agents.prebuilt import ReWOOAgent, ReACTAgent
 from examples._cli_helpers import read_user_goal, print_result
 
 # Load API keys from .env file
 load_dotenv()
 
 # 1. Get the pre-built agent.
-agent = ReWOOAgent(model=os.getenv("LLM_MODEL", "claude-sonnet-4"))
+# Choose a prebuilt profile (ReWOO or ReACT)
+agent = ReWOOAgent(model=os.getenv("LLM_MODEL"))
+# agent = ReACTAgent(model=os.getenv("LLM_MODEL"))
 
 # 2. Run the agent's main loop.
 print("🤖 Agent is ready. Press Ctrl+C to exit.")
@@ -114,11 +116,7 @@ from agents.tools.jentic import JenticClient
 from agents.memory.dict_memory import DictMemory
 
 # Import reasoner components
-from agents.reasoner.sequential.reasoner import SequentialReasoner
-from agents.reasoner.sequential.planners.bullet_list import BulletListPlan
-from agents.reasoner.sequential.executors.rewoo import ReWOOExecuteStep
-from agents.reasoner.sequential.reflectors.rewoo import ReWOOReflect
-from agents.reasoner.sequential.summarizer.default import DefaultSummarizeResult
+from agents.reasoner.rewoo import ReWOOReasoner
 
 from examples._cli_helpers import read_user_goal, print_result
 
@@ -129,16 +127,8 @@ llm = LiteLLM(model="gpt-4")
 tools = JenticClient()
 memory = DictMemory()
 
-# Step 2: Build a custom reasoner by composing sequential components
-custom_reasoner = SequentialReasoner(
-    llm=llm,
-    tools=tools, 
-    memory=memory,
-    plan=BulletListPlan(llm=llm),
-    execute_step=ReWOOExecuteStep(llm=llm, tools=tools, memory=memory),
-    reflect=ReWOOReflect(llm=llm, tools=tools, memory=memory, max_retries=5),
-    summarize_result=DefaultSummarizeResult(llm=llm)
-)
+# Step 2: Pick a reasoner profile (single-file implementation)
+custom_reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
 
 # Step 3: Wire everything together in the StandardAgent
 agent = StandardAgent(
@@ -190,13 +180,8 @@ The key insight is that each component follows well-defined interfaces (`BaseLLM
 │   ├── tools/                      # Tool integrations (e.g., Jentic client)
 │   └── reasoner/                   # Core reasoning and execution logic
 │       ├── base.py                 # Base classes and interfaces for reasoners
-│       ├── prebuilt.py             # Pre-composed, ready-to-use reasoner implementations
-│       └── sequential/             # A step-by-step reasoner (Plan -> Execute -> Reflect)
-│           ├── reasoner.py         # Orchestrates the sequential reasoning loop
-│           ├── planners/           # Components for generating plans
-│           ├── executors/          # Components for executing single steps of a plan
-│           ├── reflectors/         # Components for analyzing failures and self-healing
-│           └── summarizer/         # Components for summarizing final results
+│       ├── rewoo.py                # ReWOO (Plan → Execute → Reflect)
+│       └── react.py                # ReACT (Think → Act)
 │   ├── goal_preprocessor/          # [OPTIONAL] Goal preprocessor
 │
 ├── utils/
@@ -215,27 +200,21 @@ The key insight is that each component follows well-defined interfaces (`BaseLLM
 | Layer            | Class / Protocol                                                     | Notes                                                             |
 |------------------|----------------------------------------------------------------------|-------------------------------------------------------------------|
 | **Agent**        | `StandardAgent`                                                      | Owns Reasoner, LLM, Memory, and Tools                             |
-| **Reasoners**    | `SequentialReasoner`, `TreeSearchReasoner` (to be implemented), etc. | Each orchestrates a different reasoning algorithm.                |
+| **Reasoners**    | `ReWOOReasoner`, `ReACTReasoner`                                      | Each orchestrates a different reasoning strategy (profile).       |
 | **Memory**       | `MutableMapping`                                                         | A key-value store accessible to all components.                   |
 | **Tools**        | `JustInTimeToolingBase`                                              | Abstracts external actions (APIs, shell commands, etc.).          |
 | **LLM Wrapper**  | `BaseLLM`                                                            | Provides a uniform interface for interacting with different LLMs. |
 | **Goal Preprocessor** | `BaseGoalPreprocessor`                                            | [Optional] Preprocess goals before reasoning                      |
 
 
-### The Sequential Reasoner
+### Reasoner Profiles
 
-The `SequentialReasoner` is the default reasoning engine. It follows a classic **Plan -> Execute -> Reflect** loop, and its logic is broken down into four distinct, swappable components:
+The library ships two reasoner profiles:
 
-- **Plan**: Takes the user's goal and generates a step-by-step plan.
-  - *Example*: `BulletListPlan`
-- **Step Executor**: Executes a single step from the plan, often by calling a tool.
-  - *Example*: `ReWOOExecuteStep`
-- **Reflector**: If a step fails, this component analyzes the error and decides how to recover (e.g., retry, change the plan).
-  - *Example*: `ReWOOReflector`
-- **Summarizer**: Once the plan is complete, this component synthesizes the final answer for the user.
-  - *Example*: `DefaultSummarizeResult`
+- **ReWOOReasoner** (`agents/reasoner/rewoo.py`): Plan → Execute → Reflect
+- **ReACTReasoner** (`agents/reasoner/react.py`): Think → Act 
 
-This design allows you to customize the reasoning process by mixing and matching different implementations for each stage.
+Each profile exposes a `run(goal: str) -> ReasoningResult` and produces a `transcript`. The agent synthesizes the final answer from the transcript using a YAML-defined summarization prompt.
 
 ### Extending the Library
 
@@ -244,20 +223,19 @@ The library is designed to be modular. Here are some common extension points:
 | Need                               | How to Implement                                                                                                                                                                     |
 |------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Different reasoning strategy**   | Create a new `BaseReasoner` implementation (e.g., `TreeSearchReasoner`) and inject it into `StandardAgent`.                                                                          |
-| **Custom sequential logic**        | Create new `Plan`, `ExecuteStep`, `Reflect`, or `SummarizeResult` components and compose your own `SequentialReasoner`.                                                              |
 | **New tool provider**              | Create a class that inherits from `JustInTimeToolingBase`, implement its methods, and pass it to your `StandardAgent`.                                                               |
 | **Persistent memory**              | Create a class that implements the `MutableMapping` interface (e.g., using Redis), and pass it to your `StandardAgent`.                                                              |
 | **New Planners, Executors, etc.**  | Create your own implementations of `Plan`, `ExecuteStep`, `Reflect`, or `SummarizeResult` to invent new reasoning capabilities, then compose them in a `SequentialReasoner`. |
 | **Pre-process or validate goals**  | Create a class that inherits from `BaseGoalPreprocessor` and pass it to `StandardAgent`. Use this to resolve conversational ambiguities, check for malicious intent, or sanitize inputs. |
 
 
-## 🔮 Roadmap
+## Roadmap
 
-- Async agent loop & concurrency-safe inboxes
 - Additional pre-built reasoner implementations (ReAct, ToT, Graph-of-Thought)
 - More out of the box composable parts to enable custom agents or reasoner implementations
 - Web dashboard (live agent state + logs)
 - Vector-store memory with RAG planning
 - Slack / Discord integration
 - Redis / VectorDB memory
+- Async agent loop & concurrency-safe inboxes
 - Ideas are welcome! [Open an issue](https://github.com/jentic/standard-agent/issues) or [submit a pull request](https://github.com/jentic/standard-agent/pulls).
