@@ -7,7 +7,7 @@ from agents.prompts import load_prompts
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
-_PROMPTS = load_prompts("goal_preprocessors/conversational", required_prompts=["resolve"])
+_PROMPTS = load_prompts("goal_preprocessors/conversational", required_prompts=["clarify_goal"])
 
 
 class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
@@ -27,7 +27,7 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
     def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
 
         history_str = "\n".join(f"Goal: {item['goal']}\nResult: {item['result']}" for item in history)
-        prompt = _PROMPTS["resolve"].format(history_str=history_str, goal=goal)
+        prompt = _PROMPTS["clarify_goal"].format(history_str=history_str, goal=goal)
         response = self.llm.prompt_to_json(prompt)
 
         if response.get("revised_goal"):
