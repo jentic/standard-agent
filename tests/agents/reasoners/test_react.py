@@ -137,3 +137,95 @@ def test_react_tool_selection_error_is_logged_and_no_tool_call_recorded():
     assert "ToolSelectionError" in result.transcript
 
 
+def test_react_think_invalid_output_falls_back_to_default_and_counts_turn():
+    # First THINK invalid -> fallback THINK; then STOP
+    llm = DummyLLM(
+        json_queue=[
+            {"step_type": "", "text": ""},  # invalid
+            {"step_type": "STOP", "text": "final"},
+        ]
+    )
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=3)
+    result = reasoner.run("goal")
+
+    assert result.iterations == 2  # fallback THINK + STOP
+    assert "THINK:" in result.transcript
+    assert "FINAL ANSWER:" in result.transcript
+
+
+def test_react_max_turns_reached_returns_partial_result():
+    # Provide only THINKs, no STOP, up to max_turns
+    llm = DummyLLM(
+        json_queue=[
+            {"step_type": "THINK", "text": "t1"},
+            {"step_type": "THINK", "text": "t2"},
+            {"step_type": "THINK", "text": "t3"},
+        ]
+    )
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=3)
+    result = reasoner.run("goal")
+
+    assert result.iterations == 3
+    assert result.success is False
+    assert "THINK:" in result.transcript
+
+
+def test_react_unexpected_error_is_logged_and_no_tool_call_recorded():
+    # Execute raises generic Exception; should log UnexpectedError and not record tool call
+    llm = DummyLLM(
+        json_queue=[
+            {"step_type": "ACT", "text": "do something"},
+            {},
+            {"step_type": "STOP", "text": "final"},
+        ],
+        text_queue=["t1"],
+    )
+    tools = DummyTools(
+        tools=[DummyTool("t1", "Tool One")],
+        failures={"t1": Exception("boom")},
+    )
+    memory: Dict[str, Any] = DictMemory()
+
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=3)
+    result = reasoner.run("goal")
+
+    assert result.success is True  # STOP after error
+    assert result.tool_calls == []
+    assert "UnexpectedError:" in result.transcript
+
+
+def test_react_returning_failed_tool_id_again_triggers_selection_error():
+    # After t1 fails, LLM selects t1 again; candidates exclude t1, so selection error should be logged
+    from agents.tools.exceptions import ToolCredentialsMissingError
+
+    llm = DummyLLM(
+        json_queue=[
+            {"step_type": "ACT", "text": "first"},
+            {},
+            {"step_type": "ACT", "text": "second"},
+            {},
+            {"step_type": "STOP", "text": "done"},
+        ],
+        text_queue=[
+            "t1",  # first selection
+            "t1",  # model wrongly selects same failed tool id
+        ],
+    )
+    t1 = DummyTool("t1", "Tool One")
+    tools = DummyTools(tools=[t1, DummyTool("t2", "Tool Two")], failures={"t1": ToolCredentialsMissingError("Missing creds", t1)})
+    memory: Dict[str, Any] = DictMemory()
+
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=5)
+    result = reasoner.run("goal")
+
+    assert result.tool_calls == []  # no success recorded
+    assert "Tool Unauthorized:" in result.transcript
+    assert "ToolSelectionError" in result.transcript
+
+
