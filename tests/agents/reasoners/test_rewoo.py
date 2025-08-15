@@ -2,7 +2,7 @@ from agents.memory.dict_memory import DictMemory
 from agents.reasoner.rewoo import ReWOOReasoner
 from typing import Any, Dict, List
 
-from tests.agents.reasoners.conftest import DummyLLM, DummyTools, DummyTool, CaptureTools
+from tests.conftest import DummyLLM, DummyTools, DummyTool, CaptureTools
 from agents.tools.exceptions import ToolExecutionError
 
 def test_rewoo_plan_parses_valid_bullets_and_records_successful_tool_call():

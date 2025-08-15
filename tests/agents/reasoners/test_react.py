@@ -4,7 +4,7 @@ from agents.reasoner.react import ReACTReasoner
 from agents.memory.dict_memory import DictMemory
 
 # Reuse test doubles from conftest in this package
-from tests.agents.reasoners.conftest import DummyLLM, DummyTools, DummyTool
+from tests.conftest import DummyLLM, DummyTools, DummyTool
 
 
 def test_react_iterations_counts_turns_not_transcript_lines():
