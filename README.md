@@ -53,7 +53,7 @@ Before running the agent, you need to create a `.env` file in the root of the pr
 See [.env.example](./.env.example) for the complete configuration template with detailed comments and setup instructions.
 
 **Key Requirements:**
-- **LLM Model**: `LLM_MODEL` - Choose your preferred model (default: claude-sonnet-4)
+- **LLM Model**: `LLM_MODEL` - Choose your preferred model
 - **LLM Provider**: At least one API key (Anthropic, OpenAI, or Google)
 - **Tool Provider**: `JENTIC_AGENT_API_KEY` for instant access to 1500+ tools (get yours at [app.jentic.com](https://app.jentic.com))
 
