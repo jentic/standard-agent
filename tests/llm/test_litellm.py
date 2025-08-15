@@ -1,14 +1,27 @@
 # Test for the litellm.py script
 
 import pytest
+import json
 from unittest.mock import patch, MagicMock
 from agents.llm.litellm import LiteLLM
 
 class TestLiteLLM:
-    # Tests default initialisation of LLM service with Gemini provider for specific default config model
+    # Tests default initialisation of LLM service with default model
     def test_default_init_default_model(self):
         svc = LiteLLM()
         assert svc.model == "claude-sonnet-4"
+
+    # Tests default initialisation of LLM service with default model and temperature parameter set
+    def test_default_init_default_model_temperature_parameter(self):
+        svc = LiteLLM(temperature=0.7)
+        assert svc.model == "claude-sonnet-4"
+        assert svc.temperature == 0.7
+
+    # Tests default initialisation of LLM service with default model and max tokens parameter set
+    def test_default_init_default_model_max_tokens_parameter(self):
+        svc = LiteLLM(max_tokens=10000)
+        assert svc.model == "claude-sonnet-4"
+        assert svc.max_tokens == 10000
 
     # Tests initialisation of LLM service with Anthropic provider for any model
     def test_anthropic_init_any_model(self):
@@ -39,6 +52,7 @@ class TestLiteLLM:
         assert svc.model == "invalid-model"
     
     @patch('agents.llm.litellm.litellm.completion')
+    # Tests completion method
     def test_completion(self, mock_litellm_completion):
         # Arrange: Configure the mock to return a predictable response
         mock_response = MagicMock()
@@ -61,3 +75,22 @@ class TestLiteLLM:
             model="gemini/gemini-2.0-flash",
             messages=messages,
         )
+
+    @patch('agents.llm.base_llm.BaseLLM.prompt_to_json')
+    # Tests prompt_to_json method
+    def test_prompt_to_json(self, mock_base_prompt_to_json):
+        # Arrange: Configure the mock to return a predictable JSON object
+        expected_json = {"key": "value"}
+        mock_base_prompt_to_json.return_value = expected_json
+
+        svc = LiteLLM()
+        prompt_content = "Give me a JSON object"
+
+        # Act: Call the method under test
+        result = svc.prompt_to_json(prompt_content)
+
+        # Assert: Check that the result is what the mock returned
+        assert result == expected_json
+
+        # Assert: Check that the base method was called correctly
+        mock_base_prompt_to_json.assert_called_once_with(prompt_content)
