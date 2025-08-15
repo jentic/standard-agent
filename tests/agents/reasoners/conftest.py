@@ -63,6 +63,26 @@ class DummyTools(JustInTimeToolingBase):
         return {"ok": True, "tool": tool.id, "params": params}
 
 
+class CaptureTools(DummyTools):
+    """Test helper: wraps DummyTools but captures last executed params and maps loads.
+
+    - last_params stores the most recent params passed to execute
+    - load maps arbitrary tool-like objects by id back to the registered DummyTool
+    """
+    def __init__(self, tools: List[ToolBase] | None = None, failures: Dict[str, Exception] | None = None):
+        super().__init__(tools=tools, failures=failures)
+        self.last_params: Dict[str, Any] | None = None
+
+    def load(self, tool: ToolBase) -> ToolBase:  # type: ignore[override]
+        target_id = getattr(tool, "id", None)
+        mapped = next((t for t in self._tools if getattr(t, "id", None) == target_id), None)
+        return mapped or tool
+
+    def execute(self, tool: ToolBase, params: Dict[str, Any]) -> Any:  # type: ignore[override]
+        self.last_params = params
+        return super().execute(tool, params)
+
+
 @pytest.fixture
 def dummy_llm() -> DummyLLM:
     return DummyLLM()
