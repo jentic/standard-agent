@@ -20,7 +20,3 @@ plan.md
 todo.md
 count_code_lines.py
 
-pdm.lock
-pyproject.toml
-.pdm-Python
-
