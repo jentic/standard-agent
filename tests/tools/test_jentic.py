@@ -163,6 +163,16 @@ class TestJenticClient:
         assert client._jentic is not None
         assert client._filter_by_credentials is False
 
+    @pytest.mark.parametrize("filter_by_credentials", [True, False])
+    def test_init_with_filter_by_credentials(self, mock_jentic_sdk, filter_by_credentials: bool):
+        """
+        Tests initialization of JenticClient with filter_by_credentials.
+        """
+        client = JenticClient(filter_by_credentials=filter_by_credentials)
+        assert client is not None
+        assert client._jentic is not None
+        assert client._filter_by_credentials == filter_by_credentials
+
     def test_search_success(self, mock_jentic_sdk):
         """
         Tests successful search call.
