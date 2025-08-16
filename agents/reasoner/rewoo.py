@@ -68,7 +68,7 @@ class ReWOOReasoner(BaseReasoner):
         memory: MutableMapping,
         max_iterations: int = DEFAULT_MAX_ITER,
         max_retries: int = 2,
-        top_k: int = 15,
+        top_k: int = 25,
     ) -> None:
         super().__init__(llm=llm, tools=tools, memory=memory)
         self.max_iterations = max_iterations

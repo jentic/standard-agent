@@ -26,7 +26,7 @@ class ReACTReasoner(BaseReasoner):
         tools: JustInTimeToolingBase,
         memory: MutableMapping,
         max_turns: int = DEFAULT_MAX_TURNS,
-        top_k: int = 15,
+        top_k: int = 25,
     ) -> None:
         super().__init__(llm=llm, tools=tools, memory=memory)
         self.max_turns = max_turns

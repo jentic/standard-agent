@@ -57,7 +57,7 @@ class ReACTAgent(StandardAgent):
     - ConversationalGoalPreprocessor to enable conversational follow-ups.
     """
 
-    def __init__(self, *, model: str | None = None, max_turns: int = 20, top_k: int = 15):
+    def __init__(self, *, model: str | None = None, max_turns: int = 20, top_k: int = 25):
         """
         Initialize the ReACT agent with pre-configured components.
 
