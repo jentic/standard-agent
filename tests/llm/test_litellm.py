@@ -2,50 +2,57 @@
 
 import pytest
 import json
+import os
 from unittest.mock import patch, MagicMock
 from agents.llm.litellm import LiteLLM
 
 class TestLiteLLM:
-    # Tests default initialisation of LLM service with default model
-    def test_default_init_default_model(self):
+    # Tests default initialisation of LLM service with default model from environment variable
+    @patch('os.getenv')
+    def test_default_init_default_model(self, mock_getenv):
+        mock_getenv.return_value = "claude-sonnet-4"
         svc = LiteLLM()
         assert svc.model == "claude-sonnet-4"
 
-    # Tests default initialisation of LLM service with default model and temperature parameter set
-    def test_default_init_default_model_temperature_parameter(self):
+    # Tests default initialisation of LLM service with default model and temperature parameter set from environment variable
+    @patch('os.getenv')
+    def test_default_init_default_model_temperature_parameter(self, mock_getenv):
+        mock_getenv.return_value = "claude-sonnet-4"
         svc = LiteLLM(temperature=0.7)
         assert svc.model == "claude-sonnet-4"
         assert svc.temperature == 0.7
 
-    # Tests default initialisation of LLM service with default model and max tokens parameter set
-    def test_default_init_default_model_max_tokens_parameter(self):
+    # Tests default initialisation of LLM service with default model and max tokens parameter set from environment variable
+    @patch('os.getenv')
+    def test_default_init_default_model_max_tokens_parameter(self, mock_getenv):
+        mock_getenv.return_value = "claude-sonnet-4"
         svc = LiteLLM(max_tokens=10000)
         assert svc.model == "claude-sonnet-4"
         assert svc.max_tokens == 10000
 
     # Tests initialisation of LLM service with Anthropic provider for any model
-    def test_anthropic_init_any_model(self):
+    def test_anthropic_init_any_model_parameter_override(self):
         svc = LiteLLM(
             model="claude-sonnet-4-20250514",
         )
         assert svc.model == "claude-sonnet-4-20250514"
 
     # Tests initialisation of LLM service with OpenAI provider for any model
-    def test_openai_init_any_model(self):
+    def test_openai_init_any_model_parameter_override(self):
         svc = LiteLLM(
             model="gpt-4o"
         )
         assert svc.model == "gpt-4o"
 
     # Tests initialisation of LLM service with Gemini provider for any model
-    def test_gemini_init_any_model(self):
+    def test_gemini_init_any_model_parameter_override(self):
         svc = LiteLLM(
             model="gemini/gemini-2.0-flash",
         )
         assert svc.model == "gemini/gemini-2.0-flash"
 
     # Tests invalid provider (should not raise exception, just use fallback)
-    def test_invalid_provider(self):
+    def test_invalid_provider_parameter_override(self):
         svc = LiteLLM(
             model="invalid-model"
         )
@@ -76,12 +83,14 @@ class TestLiteLLM:
             messages=messages,
         )
 
+    @patch('os.getenv')
     @patch('agents.llm.base_llm.BaseLLM.prompt_to_json')
     # Tests prompt_to_json method
-    def test_prompt_to_json(self, mock_base_prompt_to_json):
+    def test_prompt_to_json(self, mock_base_prompt_to_json, mock_getenv):
         # Arrange: Configure the mock to return a predictable JSON object
         expected_json = {"key": "value"}
         mock_base_prompt_to_json.return_value = expected_json
+        mock_getenv.return_value = "claude-sonnet-4"
 
         svc = LiteLLM()
         prompt_content = "Give me a JSON object"
