@@ -59,9 +59,7 @@ class TestLiteLLM:
         mock_response.choices[0].message.content = "  Mocked response content  "
         mock_litellm_completion.return_value = mock_response
 
-        svc = LiteLLM(
-            model="gemini/gemini-2.0-flash",
-        )
+        svc = LiteLLM(model="gemini/gemini-2.0-flash",temperature=0.7)
 
         # Act: Call the completion method
         messages = [{"role": "user", "content": "Hello"}]
@@ -74,6 +72,7 @@ class TestLiteLLM:
         mock_litellm_completion.assert_called_once_with(
             model="gemini/gemini-2.0-flash",
             messages=messages,
+            temperature=0.7
         )
     
     @patch('os.getenv')
