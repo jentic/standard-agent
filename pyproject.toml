@@ -6,6 +6,24 @@ build-backend = "setuptools.build_meta"
 name = "standard-agent"
 version = "0.1.0"
 description = "A simple, modular library for building AI agents—with a composable core and plug‑in components."
+dependencies = [
+    "jentic>=0.9.1",
+    "openai>=1.0",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0.0",
+    "litellm>=1.74.3",
+    "google-generativeai",
+    "structlog",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock",
+    "ruff",
+    "mypy",
+]
 
 [tool.setuptools]
 packages = ["agents", "utils"]
