@@ -17,8 +17,23 @@ from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict
 from functools import wraps
-
+import re
 import structlog
+
+
+ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+
+class StripAnsiFormatter(logging.Formatter):
+    """Formatter that removes ANSI escape sequences from the final string.
+
+    This keeps console colour intact (since console uses a different handler)
+    but guarantees file logs are clean and machine-readable.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+        formatted: str = super().format(record)
+        return ANSI_ESCAPE_RE.sub("", formatted)
 
 
 def _supports_colour() -> bool:
@@ -94,7 +109,7 @@ def init_logger(config_path: str | Path | None = None) -> None:
             handler = logging.FileHandler(path)  # type: ignore[assignment]
 
         handler.setLevel(getattr(logging, file_cfg.get("level", "DEBUG").upper(), logging.DEBUG))
-        formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+        formatter = StripAnsiFormatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
         handler.setFormatter(formatter)
         
         # Add to root logger
