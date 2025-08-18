@@ -154,10 +154,13 @@ def mock_jentic_sdk():
 class TestJenticClient:
     """Tests for the JenticClient class."""
 
-    def test_init(self, mock_jentic_sdk):
+    def test_init(self, mock_jentic_sdk, monkeypatch):
         """
         Tests initialization of JenticClient.
         """
+        # Ensure environment variable is not set for this test
+        monkeypatch.delenv("JENTIC_FILTER_BY_CREDENTIALS", raising=False)
+        
         client = JenticClient()
         assert client is not None
         assert client._jentic is not None
