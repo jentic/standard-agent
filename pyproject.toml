@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "standard-agent"
+version = "0.1.0"
+description = "A simple, modular library for building AI agents—with a composable core and plug‑in components."
+
+[tool.setuptools]
+packages = ["agents", "utils"]
+
+[tool.setuptools.package-dir]
+agents = "agents"
+utils = "utils"
