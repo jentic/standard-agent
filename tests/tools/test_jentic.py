@@ -154,14 +154,17 @@ def mock_jentic_sdk():
 class TestJenticClient:
     """Tests for the JenticClient class."""
 
-    def test_init(self, mock_jentic_sdk):
+    def test_init(self, mock_jentic_sdk, monkeypatch):
         """
         Tests initialization of JenticClient.
         """
+        # Ensure environment variable is set to True (default in env example)
+        monkeypatch.setenv("JENTIC_FILTER_BY_CREDENTIALS", "true")
+        
         client = JenticClient()
         assert client is not None
         assert client._jentic is not None
-        assert client._filter_by_credentials is False
+        assert client._filter_by_credentials is True
 
     @pytest.mark.parametrize("filter_by_credentials", [True, False])
     def test_init_with_filter_by_credentials(self, mock_jentic_sdk, filter_by_credentials: bool):
