@@ -165,3 +165,55 @@ class TestLiteLLM:
 
         # Assert: Check that the base method was called correctly
         mock_base_prompt_to_json.assert_called_once_with(prompt_content)
+
+    @patch('os.getenv')
+    @patch('agents.llm.base_llm.BaseLLM.prompt_to_json')
+    # Tests prompt_to_json retry logic with max_retries parameter
+    def test_prompt_to_json_max_retries_used(self, mock_base_prompt_to_json, mock_getenv):
+        # Arrange: Configure the mock to fail twice, then succeed on third attempt
+        expected_json = {"key": "value"}
+        mock_base_prompt_to_json.side_effect = [
+            json.JSONDecodeError("Invalid JSON", "", 0),  # First attempt fails
+            json.JSONDecodeError("Invalid JSON", "", 0),  # Second attempt fails
+            expected_json  # Third attempt succeeds
+        ]
+        mock_getenv.return_value = "claude-sonnet-4"
+
+        svc = LiteLLM()
+        prompt_content = "Give me a JSON object"
+
+        # Act: Call the method under test with max_retries=2 (allows 3 total attempts)
+        result = svc.prompt_to_json(prompt_content, max_retries=2)
+
+        # Assert: Check that the result is what the mock returned on success
+        assert result == expected_json
+
+        # Assert: Check that the base method was called 3 times (initial + 2 retries)
+        assert mock_base_prompt_to_json.call_count == 3
+        
+        # Assert: Check that the first call used the original prompt
+        first_call_args = mock_base_prompt_to_json.call_args_list[0]
+        assert first_call_args[0][0] == prompt_content
+        
+        # Assert: Check that subsequent calls used modified prompts (retry logic)
+        second_call_args = mock_base_prompt_to_json.call_args_list[1]
+        assert "Give me a JSON object" in second_call_args[0][0]  # Original prompt in correction template
+        assert "previous response was not valid JSON" in second_call_args[0][0]
+
+    @patch('os.getenv')
+    @patch('agents.llm.base_llm.BaseLLM.prompt_to_json')
+    # Tests prompt_to_json when max_retries is exceeded
+    def test_prompt_to_json_max_retries_exceeded(self, mock_base_prompt_to_json, mock_getenv):
+        # Arrange: Configure the mock to always fail
+        mock_base_prompt_to_json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+        mock_getenv.return_value = "claude-sonnet-4"
+
+        svc = LiteLLM()
+        prompt_content = "Give me a JSON object"
+
+        # Act & Assert: Call should raise JSONDecodeError after max_retries+1 attempts
+        with pytest.raises(json.JSONDecodeError):
+            svc.prompt_to_json(prompt_content, max_retries=1)
+
+        # Assert: Check that the base method was called max_retries+1 times (2 attempts with max_retries=1)
+        assert mock_base_prompt_to_json.call_count == 2
