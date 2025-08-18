@@ -26,4 +26,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["find:"]
+packages = ["agents", "utils"]
+
+[tool.setuptools.package-data]
+agents = ["prompts/**/*.yaml"]
