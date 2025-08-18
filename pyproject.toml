@@ -26,8 +26,4 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["agents", "utils"]
-
-[tool.setuptools.package-dir]
-agents = "agents"
-utils = "utils"
+packages = ["find:"]
