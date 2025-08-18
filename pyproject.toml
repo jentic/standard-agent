@@ -26,7 +26,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["agents", "utils"]
+packages = { find = { where = ["."], include = ["agents*", "utils*"] } }
 
 [tool.setuptools.package-data]
 agents = ["prompts/**/*.yaml"]
