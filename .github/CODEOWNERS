@@ -1,0 +1,4 @@
+# Require a Jentic maintainer on every change
+*  @jentic/engineering
+/.github/        @jentic/<team-slug>
+/.github/CODEOWNERS  @jentic/<team-slug>
