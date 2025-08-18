@@ -75,6 +75,75 @@ class TestLiteLLM:
             model="gemini/gemini-2.0-flash",
             messages=messages,
         )
+    
+    @patch('os.getenv')
+    @patch('agents.llm.litellm.litellm.completion')
+    # Tests completion method
+    def test_completion_env_parameters_used(self, mock_litellm_completion, mock_getenv):
+        # Arrange: Configure the mock to return a predictable response
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "  Mocked response content  "
+        mock_litellm_completion.return_value = mock_response
+        mock_getenv.return_value.temperature = 0.7
+        mock_getenv.return_value.max_tokens = 10000
+
+        svc = LiteLLM(
+            model="gemini/gemini-2.0-flash",
+            temperature=mock_getenv.return_value.temperature,
+            max_tokens=mock_getenv.return_value.max_tokens,
+        )
+
+        assert svc.model == "gemini/gemini-2.0-flash"
+        assert svc.temperature == 0.7
+        assert svc.max_tokens == 10000
+
+        # Act: Call the completion method
+        messages = [{"role": "user", "content": "Hello"}]
+        result = svc.completion(messages)
+
+        # Assert: Check that the result is the stripped content from the mock
+        assert result == "Mocked response content"
+
+        # Assert: Check that litellm.completion was called with the correct arguments
+        mock_litellm_completion.assert_called_once_with(
+            model="gemini/gemini-2.0-flash",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=10000,
+        )
+    
+    @patch('agents.llm.litellm.litellm.completion')
+    # Tests completion method
+    def test_completion_kwargs_parameters_used(self, mock_litellm_completion):
+        # Arrange: Configure the mock to return a predictable response
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "  Mocked response content  "
+        mock_litellm_completion.return_value = mock_response
+
+        svc = LiteLLM(
+            model="gemini/gemini-2.0-flash",
+            temperature=0.7,
+            max_tokens=10000,
+        )
+
+        assert svc.model == "gemini/gemini-2.0-flash"
+        assert svc.temperature == 0.7
+        assert svc.max_tokens == 10000
+
+        # Act: Call the completion method
+        messages = [{"role": "user", "content": "Hello"}]
+        result = svc.completion(messages)
+
+        # Assert: Check that the result is the stripped content from the mock
+        assert result == "Mocked response content"
+
+        # Assert: Check that litellm.completion was called with the correct arguments
+        mock_litellm_completion.assert_called_once_with(
+            model="gemini/gemini-2.0-flash",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=10000,
+        )
 
     @patch('os.getenv')
     @patch('agents.llm.base_llm.BaseLLM.prompt_to_json')
