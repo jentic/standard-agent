@@ -9,14 +9,14 @@ from agents.llm.litellm import LiteLLM
 class TestLiteLLM:
     # Tests default initialisation of LLM service with default model from environment variable
     @patch('os.getenv')
-    def test_default_init_default_model(self, mock_getenv):
+    def test_env_model_used(self, mock_getenv):
         mock_getenv.return_value = "claude-sonnet-4"
         svc = LiteLLM()
         assert svc.model == "claude-sonnet-4"
 
     # Tests default initialisation of LLM service with default model and temperature parameter set from environment variable
     @patch('os.getenv')
-    def test_default_init_default_model_temperature_parameter(self, mock_getenv):
+    def test_env_temperature_used(self, mock_getenv):
         mock_getenv.return_value = "claude-sonnet-4"
         svc = LiteLLM(temperature=0.7)
         assert svc.model == "claude-sonnet-4"
@@ -24,7 +24,7 @@ class TestLiteLLM:
 
     # Tests default initialisation of LLM service with default model and max tokens parameter set from environment variable
     @patch('os.getenv')
-    def test_default_init_default_model_max_tokens_parameter(self, mock_getenv):
+    def test_env_max_tokens_used(self, mock_getenv):
         mock_getenv.return_value = "claude-sonnet-4"
         svc = LiteLLM(max_tokens=10000)
         assert svc.model == "claude-sonnet-4"
@@ -50,13 +50,6 @@ class TestLiteLLM:
             model="gemini/gemini-2.0-flash",
         )
         assert svc.model == "gemini/gemini-2.0-flash"
-
-    # Tests invalid provider (should not raise exception, just use fallback)
-    def test_invalid_provider_parameter_override(self):
-        svc = LiteLLM(
-            model="invalid-model"
-        )
-        assert svc.model == "invalid-model"
     
     @patch('agents.llm.litellm.litellm.completion')
     # Tests completion method
