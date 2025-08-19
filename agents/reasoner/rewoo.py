@@ -199,7 +199,7 @@ class ReWOOReasoner(BaseReasoner):
         selected_tool = next((t for t in tool_candidates if t.id == tool_id), None)
         if selected_tool is None:
             raise ToolSelectionError(f"Selected tool ID '{tool_id}' is invalid for step: {step.text}")
-        logger.info("tool_selected", step_text=step.text, tool=selected_tool)
+        logger.info("tool_selected", step_text=step.text, tool=selected_tool.id)
 
         return self.tools.load(selected_tool)
 
