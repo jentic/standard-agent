@@ -19,9 +19,13 @@ from typing import Any, Dict
 from functools import wraps
 import structlog
 
+# Structured logging constants
+TIME_KEY = "@timestamp"
 
 def _supports_colour() -> bool:
     """True if stdout seems to handle ANSI colour codes."""
+    if os.getenv("NO_COLOR"):
+        return False
     if sys.platform == "win32" and os.getenv("TERM") != "xterm":
         return False
     return sys.stdout.isatty()
@@ -45,22 +49,25 @@ def _base_processors() -> list:
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="ISO", key="@timestamp"),
+        structlog.processors.TimeStamper(fmt="ISO", key=TIME_KEY),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
     ]
 
+def _pre_chain() -> list:
+    """Processors to normalize stdlib LogRecord into structlog shape before rendering."""
+    return [
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="ISO", key=TIME_KEY),
+    ]
 
 def _build_console_handler(level: int) -> logging.Handler:
     formatter = structlog.stdlib.ProcessorFormatter(
-        foreign_pre_chain=[
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.processors.TimeStamper(fmt="ISO", key="@timestamp"),
-        ],
+        foreign_pre_chain=_pre_chain(),
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer(colors=_supports_colour(), timestamp_key="@timestamp"),
+            structlog.dev.ConsoleRenderer(colors=_supports_colour(), timestamp_key=TIME_KEY),
         ],
     )
     handler = logging.StreamHandler(sys.stdout)
@@ -84,11 +91,7 @@ def _build_file_handler(file_cfg: Dict[str, Any]) -> logging.Handler:
 
     handler.setLevel(getattr(logging, file_cfg.get("level", "DEBUG").upper(), logging.DEBUG))
     formatter = structlog.stdlib.ProcessorFormatter(
-        foreign_pre_chain=[
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.processors.TimeStamper(fmt="ISO", key="@timestamp"),
-        ],
+        foreign_pre_chain=_pre_chain(),
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             structlog.processors.EventRenamer(to="message"),
