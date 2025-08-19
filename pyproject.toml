@@ -1,14 +1,14 @@
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "standard-agent"
 version = "0.1.0"
 description = "A simple, modular library for building AI agents—with a composable core and plug‑in components."
+requires-python = ">=3.10"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", 'NOTICE']
 dependencies = [
     "jentic>=0.9.1",
-    "openai>=1.0",
+    "openai>=1.0,<1.100.0",
     "pydantic>=2.0",
     "python-dotenv>=1.0.0",
     "litellm>=1.74.3",
@@ -24,6 +24,10 @@ dev = [
     "ruff",
     "mypy",
 ]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = { find = { where = ["."], include = ["agents*", "utils*"] } }
