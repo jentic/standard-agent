@@ -1,5 +1,5 @@
-install:          ## create venv + install deps
-	python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+install:          ## create venv + install deps (editable dev mode)
+	python3 -m venv .venv && . .venv/bin/activate && pip install -e ".[dev]"
 test:             ## run unit tests
 	. .venv/bin/activate && pytest -q
 lint:             ## static checks
