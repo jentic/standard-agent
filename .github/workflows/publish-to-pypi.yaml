@@ -1,6 +1,6 @@
 # This workflow is triggered on push events but only for the jentic-sdk directory.
 # It builds and publishes the jentic sdk to PyPI and TestPyPI.
-name: Publish Python distribution of the jentic sdk to PyPI and TestPyPI
+name: Publish Python distribution of the Jentic Standard Agent to PyPI and TestPyPI
 
 on: 
   push:
