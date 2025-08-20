@@ -1,0 +1,86 @@
+# This workflow is triggered on push events but only for the jentic-sdk directory.
+# It builds and publishes the jentic sdk to PyPI and TestPyPI.
+name: Publish Python distribution of the jentic sdk to PyPI and TestPyPI
+
+on: 
+  push:
+    branches:
+      - main
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version_changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get current version
+        id: get_version
+        run: |
+          VERSION=$(grep '^version =' pyproject.toml | sed -E 's/version = "([^"]+)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Get published version from PyPI
+        id: get_pypi_version
+        run: |
+          PKG_NAME=$(grep '^name =' pyproject.toml | sed -E 's/name = "([^"]+)"/\1/')
+          PYPI_VERSION=$(curl -s https://pypi.org/pypi/$PKG_NAME/json | jq -r .info.version)
+          echo "pypi_version=$PYPI_VERSION" >> $GITHUB_OUTPUT
+      - name: Check if version changed
+        id: check
+        run: |
+          if [ "${{ steps.get_version.outputs.version }}" = "${{ steps.get_pypi_version.outputs.pypi_version }}" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build distribution 📦
+    runs-on: ubuntu-latest
+    needs: check-version
+    if: needs.check-version.outputs.version_changed == 'true'
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+    - name: Install pypa/build
+      run: >-
+        python3 -m
+        pip install
+        build
+        --user
+    - name: Build a binary wheel and a source tarball
+      run: python3 -m build standard-agent
+    - name: Store the distribution packages
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-package-distributions
+        path: standard-agent/dist/
+
+  publish-to-pypi:
+    name: >-
+      Publish Python 🐍 distribution 📦 to PyPI
+    needs:
+    - build
+    - check-version
+    if: needs.check-version.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/standard-agent # Replace <package-name> with your PyPI project name
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+    - name: Download all the dists
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Publish distribution 📦 to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
