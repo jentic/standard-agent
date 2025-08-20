@@ -191,7 +191,7 @@ The key insight is that each component follows well-defined interfaces (`BaseLLM
 │
 ├── tests/                          # Unit and integration tests
 ├── Makefile                        # Commands for installation, testing, etc.
-├── requirements.txt                # Project dependencies
+├── pyproject.toml                  # Project and dependency metadata
 └── config.json                     # Agent configuration file
 ```
 
