@@ -52,9 +52,8 @@ Add the following to your `.env` in the project root:
 
 ## Install Dependencies
 
-Install core deps, then the Slack example deps:
+Install core deps using make install, then the Slack example deps:
 ```bash
-pip install -r requirements.txt
 pip install -r examples/slack/requirements.txt
 ```
 
