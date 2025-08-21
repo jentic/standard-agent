@@ -54,7 +54,6 @@ Add the following to your `.env` in the project root:
 
 Install core deps, then the Slack example deps:
 ```bash
-pip install -r requirements.txt
 pip install -r examples/slack/requirements.txt
 ```
 
@@ -66,7 +65,7 @@ From the project root:
 python examples/slack/slack_agent.py
 ```
 
-- Mention the bot in a channel: `@your-bot find the latest news about rust 1.80`
+- Mention the bot in a channel: `@your-bot find the latest new york times articles about OpenAI`
 - Or DM the bot directly.
 
 ## Notes
