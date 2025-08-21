@@ -59,7 +59,7 @@ pip install -r examples/slack/requirements.txt
 
 ## Run
 
-From the project root:
+From the project root: 
 
 ```bash
 python examples/slack/slack_agent.py
