@@ -20,9 +20,10 @@ This example lets you converse with a Standard Agent from Slack using Socket Mod
 
 3. Add bot scopes and install the app
    - Left sidebar → Features → OAuth & Permissions → Scopes → Bot Token Scopes: add
+     - `commands` (for slash commands)
+     - `chat:write`
      - `app_mentions:read`
      - `im:history`
-     - `chat:write`
    - Click “Install to Workspace” (or “Reinstall to Workspace”).
    - Copy the “Bot User OAuth Token” (starts with `xoxb-`) and save it as `SLACK_BOT_TOKEN` in your `.env`.
 
@@ -37,9 +38,19 @@ This example lets you converse with a Standard Agent from Slack using Socket Mod
      - `message.im` (direct messages)
    - Save changes. With Socket Mode enabled, no public URL is required.
 
-6. Invite and test
+6. Create slash command and enable interactivity
+   - Left sidebar → Features → Slash Commands → Create New Command.
+   - Command: `/standard-agent`
+   - Request URL: (leave blank for Socket Mode)
+   - Save.
+   - Left sidebar → Interactivity & Shortcuts → toggle On (no URL needed for Socket Mode).
+
+7. Invite and test
    - In Slack, invite your bot to a channel: `/invite @your-bot`.
-   - Mention the bot or DM it to start chatting.
+   - Configure the agent key via slash command: `/standard-agent configure` (a modal opens).
+   - Optionally pick a reasoner profile: `/standard-agent reasoner-profile react` or `rewoo`.
+   - Mention the bot in a channel: `@your-bot find articles about AI` (the bot replies in a thread).
+   - Or DM the bot directly and type your goal.
 
 ## Environment Variables
 
@@ -65,12 +76,22 @@ From the project root:
 python examples/slack/slack_agent.py
 ```
 
-- Mention the bot in a channel: `@your-bot find the latest new york times articles about OpenAI`
-- Or DM the bot directly.
+- Configure: `/standard-agent configure` (paste Jentic Agent API Key)
+- Switch profile: `/standard-agent reasoner-profile <react|rewoo>`
+- Mention-based: `@your-bot find the latest news about AI`
+- DM-based: send a goal as a direct message to the bot
+
+### Quick flow
+
+1. Create a Slack channel.
+2. Invite the bot: `/invite @your-bot`.
+3. If no JENTIC_AGENT_API_KEY key in `.env`, run `/standard-agent configure` and paste your Agent API Key which you can get from app.jentic.com.
+4. (Optional) Set profile: `/standard-agent reasoner-profile <react|rewoo>`. default is `rewoo`.
+5. Talk to the agent with `@your-bot <goal>` or DM the bot.
 
 ## Notes
 
-- The agent composes LLM + Tools + Memory + Reasoner (ReWOO by default). Switch to ReACT via `AGENT_PROFILE=react`.
+- The agent composes LLM + Tools + Memory + Reasoner. Choose the profile via `/standard-agent reasoner-profile <react|rewoo>`.
 - For tool usage, configure credentials for the tools you intend to use; default provider is the Jentic catalog when `JENTIC_AGENT_API_KEY` is present.
 - Messages are answered synchronously; long-running tool calls will block until completion.
 
