@@ -76,11 +76,6 @@ From the project root:
 python examples/slack/slack_agent.py
 ```
 
-- Configure: `/standard-agent configure` (paste Jentic Agent API Key)
-- Switch profile: `/standard-agent reasoner-profile <react|rewoo>`
-- Mention-based: `@your-bot find the latest news about AI`
-- DM-based: send a goal as a direct message to the bot
-
 ### Quick flow
 
 1. Create a Slack channel.

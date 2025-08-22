@@ -15,12 +15,20 @@ from agents.standard_agent import StandardAgent
 from agents.prebuilt import ReWOOAgent, ReACTAgent
 from utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 
+# Simple registry for reasoner profiles → agent factory
+REASONER_FACTORIES = {
+    "rewoo": lambda model: ReWOOAgent(model=model),
+    "react": lambda model: ReACTAgent(model=model),
+}
 
-def build_agent(jentic_key: Optional[str] = None, profile: Optional[str] = None) -> StandardAgent:
-    """Construct a single global StandardAgent, with optional Jentic key and reasoner profile."""
+
+def build_agent(profile: Optional[str] = None) -> StandardAgent:
+    """Construct a single global StandardAgent for the chosen profile.
+
+    Assumes JENTIC_AGENT_API_KEY is already set in the environment if tools are needed.
+    """
     # Ensure an asyncio event loop exists in this worker thread (for Jentic SDK)
     try:
         asyncio.get_event_loop()
@@ -31,22 +39,9 @@ def build_agent(jentic_key: Optional[str] = None, profile: Optional[str] = None)
     chosen_profile = (profile or "rewoo").strip().lower()
     model = os.getenv("LLM_MODEL")
 
-    # Temporarily override env key during construction if provided
-    prev = os.environ.get("JENTIC_AGENT_API_KEY")
-    try:
-        if jentic_key is not None:
-            os.environ["JENTIC_AGENT_API_KEY"] = jentic_key
-
-        if chosen_profile == "react":
-            logger.info("initializing_react_agent", model=model)
-            return ReACTAgent(model=model)
-        logger.info("initializing_rewoo_agent", model=model)
-        return ReWOOAgent(model=model)
-    finally:
-        if prev is None:
-            os.environ.pop("JENTIC_AGENT_API_KEY", None)
-        else:
-            os.environ["JENTIC_AGENT_API_KEY"] = prev
+    factory = REASONER_FACTORIES.get(chosen_profile, REASONER_FACTORIES["rewoo"])  # default to rewoo
+    logger.info("initializing_agent", profile=chosen_profile, model=model)
+    return factory(model)
 
 
 def extract_goal_from_text(text: str, bot_user_id: Optional[str]) -> str:
@@ -74,11 +69,25 @@ def main() -> None:
     env_has_key = bool(os.getenv("JENTIC_AGENT_API_KEY"))
     configured_key: Optional[str] = None
     chosen_profile: str = "rewoo"
-    current_agent: Optional[StandardAgent] = build_agent(None, chosen_profile) if env_has_key else None
+    current_agent: Optional[StandardAgent] = build_agent(chosen_profile) if env_has_key else None
 
     app = App(token=bot_token, signing_secret=signing_secret)
 
     bot_user_id: Optional[str] = None
+
+    NOT_CONFIGURED_MSG = "Not configured. Run /standard-agent configure to set the Agent API Key."
+
+    # Helper to ensure a global agent exists or notify the user
+    def ensure_agent_or_notify(*, say, thread_ts: Optional[str] = None) -> Optional[StandardAgent]:
+        nonlocal current_agent
+        if current_agent is None:
+            # Re-check env dynamically in case it was set outside this process path
+            has_any_key = configured_key is not None or bool(os.getenv("JENTIC_AGENT_API_KEY"))
+            if not has_any_key:
+                say(text=NOT_CONFIGURED_MSG, thread_ts=thread_ts)
+                return None
+            current_agent = build_agent(chosen_profile)
+        return current_agent
 
     @app.command("/standard-agent")
     def on_cmd_standard_agent(ack, body, client, respond):  # type: ignore[no-redef]
@@ -95,8 +104,8 @@ def main() -> None:
             chosen_profile = parts[1].lower()
             # Rebuild agent if we already have credentials
             try:
-                if configured_key is not None or env_has_key:
-                    current_agent = build_agent(configured_key, chosen_profile)
+                if configured_key is not None or env_has_key or os.getenv("JENTIC_AGENT_API_KEY"):
+                    current_agent = build_agent(chosen_profile)
                     respond(response_type="ephemeral", text=f"Reasoner profile set to {chosen_profile} and agent reloaded.")
                 else:
                     respond(response_type="ephemeral", text=f"Reasoner profile set to {chosen_profile}. Configure key via /standard-agent configure before use.")
@@ -134,7 +143,7 @@ def main() -> None:
                 respond(response_type="ephemeral", text=f"Failed to open config modal: {exc}")
             return
 
-        respond(response_type="ephemeral", text="Usage: /standard-agent configure")
+        respond(response_type="ephemeral", text="Usage: /standard-agent configure | /standard-agent reasoner-profile <react|rewoo>")
 
     @app.view("configure_agent_view")
     def on_config_submit(ack, body, client):  # type: ignore[no-redef]
@@ -150,9 +159,10 @@ def main() -> None:
 
             nonlocal configured_key, current_agent
             configured_key = key
-            # Build/replace the single agent now to validate
+            # Persist key and build/replace the single agent now to validate
             try:
-                current_agent = build_agent(configured_key, chosen_profile)
+                os.environ["JENTIC_AGENT_API_KEY"] = configured_key
+                current_agent = build_agent(chosen_profile)
             except Exception as exc:  # pragma: no cover
                 logger.error("agent_build_failed", error=str(exc), exc_info=True)
                 if user_id:
@@ -183,15 +193,12 @@ def main() -> None:
                 return
 
             # Ensure a single agent exists
-            nonlocal current_agent
-            if current_agent is None:
-                if configured_key is None and not env_has_key:
-                    say(text="Not configured. Run /standard-agent configure to set the Agent API Key.", thread_ts=thread_ts)
-                    return
-                current_agent = build_agent(configured_key, chosen_profile)
+            agent_instance = ensure_agent_or_notify(say=say, thread_ts=thread_ts)
+            if agent_instance is None:
+                return
 
             logger.info("slack_goal_received", channel=channel, goal_preview=goal[:120])
-            result = current_agent.solve(goal)
+            result = agent_instance.solve(goal)
             answer = result.final_answer or "(No answer)"
             say(text=answer[:39000], thread_ts=thread_ts)
         except Exception as exc:  # pragma: no cover - best-effort guard
@@ -213,15 +220,12 @@ def main() -> None:
                 return
 
             # Ensure a single agent exists
-            nonlocal current_agent
-            if current_agent is None:
-                if configured_key is None and not env_has_key:
-                    say(text="Not configured. Run /standard-agent configure to set the Agent API Key.")
-                    return
-                current_agent = build_agent(configured_key, chosen_profile)
+            agent_instance = ensure_agent_or_notify(say=say)
+            if agent_instance is None:
+                return
 
             logger.info("slack_dm_goal_received", channel=channel, goal_preview=goal[:120])
-            result = current_agent.solve(goal)
+            result = agent_instance.solve(goal)
             answer = result.final_answer or "(No answer)"
             say(text=answer[:39000])
         except Exception as exc:  # pragma: no cover - best-effort guard
