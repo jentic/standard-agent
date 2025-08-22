@@ -134,7 +134,18 @@ def configure_slack_handlers(app: App, runtime: SlackAgentRuntime) -> None:
                 respond(response_type="ephemeral", text=f"Failed to open config modal: {exc}")
             return
 
-        respond(response_type="ephemeral", text="Usage: /standard-agent configure | /standard-agent reasoner <react|rewoo|list>")
+        # Kill the agent and clear the API key
+        if text == "kill":
+            runtime.current_agent = None
+            os.environ.pop("JENTIC_AGENT_API_KEY", None)
+            logger.warning("agent_killed")
+            respond(
+                response_type="ephemeral",
+                text="Agent killed. API key cleared; new requests will be rejected until reconfigured.",
+            )
+            return
+
+        respond(response_type="ephemeral", text="Usage: /standard-agent configure | /standard-agent reasoner <react|rewoo|list> | /standard-agent kill")
 
     @app.view("configure_agent_view")
     def handle_config_submit(ack, body, client):  # type: ignore[no-redef]
