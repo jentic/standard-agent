@@ -1,118 +1,146 @@
 from __future__ import annotations
 
+"""A compact, readable Slack runtime for an OSS standard agent."""
+
+import asyncio
 import os
 import re
 import sys
-from typing import Optional
-import asyncio
-import json
+from dataclasses import dataclass
+from enum import Enum
+from typing import Callable, Optional
 
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+from agents.prebuilt import ReACTAgent, ReWOOAgent
 from agents.standard_agent import StandardAgent
-from agents.prebuilt import ReWOOAgent, ReACTAgent
 from utils.logger import get_logger
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Logging
+# ──────────────────────────────────────────────────────────────────────────────
 
 logger = get_logger(__name__)
 
-# Simple registry for reasoner profiles → agent factory
-REASONER_FACTORIES = {
-    "rewoo": lambda model: ReWOOAgent(model=model),
-    "react": lambda model: ReACTAgent(model=model),
-}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Configuration & Runtime
+# ──────────────────────────────────────────────────────────────────────────────
+
+class ReasonerProfile(str, Enum):
+    REWOO = "rewoo"
+    REACT = "react"
 
 
-def build_agent(profile: Optional[str] = None) -> StandardAgent:
-    """Construct a single global StandardAgent for the chosen profile.
+@dataclass(slots=True)
+class SlackConfig:
+    app_token: str
+    bot_token: str
+    signing_secret: Optional[str]
 
-    Assumes JENTIC_AGENT_API_KEY is already set in the environment if tools are needed.
-    """
-    # Ensure an asyncio event loop exists in this worker thread (for Jentic SDK)
+    @staticmethod
+    def from_env() -> "SlackConfig":
+        app_token = os.getenv("SLACK_APP_TOKEN", "").strip()
+        bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
+        signing_secret = os.getenv("SLACK_SIGNING_SECRET")
+        if not app_token or not bot_token:
+            raise SystemExit("Missing SLACK_APP_TOKEN or SLACK_BOT_TOKEN in environment.")
+        return SlackConfig(app_token, bot_token, signing_secret)
+
+
+@dataclass(slots=True)
+class Runtime:
+    chosen_profile: ReasonerProfile = ReasonerProfile.REWOO
+    current_agent: Optional[StandardAgent] = None
+    bot_user_id: Optional[str] = None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Agent factories
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _ensure_event_loop() -> None:
     try:
         asyncio.get_event_loop()
     except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        asyncio.set_event_loop(asyncio.new_event_loop())
 
-    chosen_profile = (profile or "rewoo").strip().lower()
+
+def _build_agent(profile: ReasonerProfile) -> StandardAgent:
+    _ensure_event_loop()
     model = os.getenv("LLM_MODEL")
 
-    factory = REASONER_FACTORIES.get(chosen_profile, REASONER_FACTORIES["rewoo"])  # default to rewoo
-    logger.info("initializing_agent", profile=chosen_profile, model=model)
+    factories: dict[ReasonerProfile, Callable[[Optional[str]], StandardAgent]] = {
+        ReasonerProfile.REWOO: lambda m: ReWOOAgent(model=m),
+        ReasonerProfile.REACT: lambda m: ReACTAgent(model=m),
+    }
+    try:
+        factory = factories[profile]
+    except KeyError as e:  # pragma: no cover
+        raise ValueError(f"Unknown reasoner profile: {profile}") from e
+
+    logger.info("initializing_agent", profile=profile.value, model=model)
     return factory(model)
 
 
-def extract_goal_from_text(text: str, bot_user_id: Optional[str]) -> str:
+def _require_agent(runtime: Runtime) -> Optional[StandardAgent]:
+    """Return an agent, building one iff API key exists; otherwise None."""
+    if runtime.current_agent is not None:
+        return runtime.current_agent
+    if not os.getenv("JENTIC_AGENT_API_KEY"):
+        return None
+    runtime.current_agent = _build_agent(runtime.chosen_profile)
+    return runtime.current_agent
+
+
+def extract_goal(text: str, bot_user_id: Optional[str]) -> str:
+    """Trim message and strip a leading <@BOT> mention if present."""
     if not text:
         return ""
-    cleaned = text
+    cleaned = text.strip()
     if bot_user_id:
-        mention_pattern = re.compile(rf"<@{re.escape(bot_user_id)}>\s*")
-        cleaned = mention_pattern.sub("", cleaned).strip()
+        cleaned = re.sub(rf"^<@{re.escape(bot_user_id)}>\s*", "", cleaned)
     return cleaned
 
 
-def main() -> None:
-    load_dotenv()
+def is_dm(channel_id: Optional[str]) -> bool:
+    return bool(channel_id) and str(channel_id).startswith("D")
 
-    app_token = os.getenv("SLACK_APP_TOKEN")
-    bot_token = os.getenv("SLACK_BOT_TOKEN")
-    signing_secret = os.getenv("SLACK_SIGNING_SECRET")
 
-    if not app_token or not bot_token:
-        print("Missing SLACK_APP_TOKEN or SLACK_BOT_TOKEN in environment.")
-        sys.exit(1)
+# ──────────────────────────────────────────────────────────────────────────────
+# Slack wiring
+# ──────────────────────────────────────────────────────────────────────────────
 
-    # Single global agent, configured from env or via /standard-agent configure
-    env_has_key = bool(os.getenv("JENTIC_AGENT_API_KEY"))
-    configured_key: Optional[str] = None
-    chosen_profile: str = "rewoo"
-    current_agent: Optional[StandardAgent] = build_agent(chosen_profile) if env_has_key else None
-
-    app = App(token=bot_token, signing_secret=signing_secret)
-
-    bot_user_id: Optional[str] = None
-
-    NOT_CONFIGURED_MSG = "Not configured. Run /standard-agent configure to set the Agent API Key."
-
-    # Helper to ensure a global agent exists or notify the user
-    def ensure_agent_or_notify(*, say, thread_ts: Optional[str] = None) -> Optional[StandardAgent]:
-        nonlocal current_agent
-        if current_agent is None:
-            # Re-check env dynamically in case it was set outside this process path
-            has_any_key = configured_key is not None or bool(os.getenv("JENTIC_AGENT_API_KEY"))
-            if not has_any_key:
-                say(text=NOT_CONFIGURED_MSG, thread_ts=thread_ts)
-                return None
-            current_agent = build_agent(chosen_profile)
-        return current_agent
+def configure_handlers(app: App, runtime: Runtime) -> None:
+    """Register all Slack handlers in one place."""
 
     @app.command("/standard-agent")
-    def on_cmd_standard_agent(ack, body, client, respond):  # type: ignore[no-redef]
+    def handle_command(ack, body, client, respond):  # type: ignore[no-redef]
         ack()
         text = (body.get("text") or "").strip()
 
-        # Change reasoner profile: /standard-agent reasoner-profile <react|rewoo>
-        if text.startswith("reasoner-profile"):
+        # Switch reasoner: /standard-agent reasoner <react|rewoo>
+        if text.startswith("reasoner"):
             parts = text.split()
-            if len(parts) != 2 or parts[1].lower() not in {"react", "rewoo"}:
-                respond(response_type="ephemeral", text="Usage: /standard-agent reasoner-profile <react|rewoo>")
+            if len(parts) != 2 or parts[1].lower() not in {p.value for p in ReasonerProfile}:
+                respond(response_type="ephemeral", text="Usage: /standard-agent reasoner <react|rewoo>")
                 return
-            nonlocal chosen_profile, current_agent
-            chosen_profile = parts[1].lower()
-            # Rebuild agent if we already have credentials
+
+            runtime.chosen_profile = ReasonerProfile(parts[1].lower())
             try:
-                if configured_key is not None or env_has_key or os.getenv("JENTIC_AGENT_API_KEY"):
-                    current_agent = build_agent(chosen_profile)
-                    respond(response_type="ephemeral", text=f"Reasoner profile set to {chosen_profile} and agent reloaded.")
+                if os.getenv("JENTIC_AGENT_API_KEY"):
+                    runtime.current_agent = _build_agent(runtime.chosen_profile)
+                    respond(response_type="ephemeral", text=f"Reasoner set to {runtime.chosen_profile.value} and agent reloaded.")
                 else:
-                    respond(response_type="ephemeral", text=f"Reasoner profile set to {chosen_profile}. Configure key via /standard-agent configure before use.")
+                    respond(response_type="ephemeral", text=f"Reasoner set to {runtime.chosen_profile.value}. Configure key via /standard-agent configure before use.")
             except Exception as exc:  # pragma: no cover
+                logger.error("reasoner_switch_failed", error=str(exc), exc_info=True)
                 respond(response_type="ephemeral", text=f"Failed to switch profile: {exc}")
             return
 
+        # Configure API key via modal
         if text == "configure":
             try:
                 client.views_open(
@@ -120,7 +148,6 @@ def main() -> None:
                     view={
                         "type": "modal",
                         "callback_id": "configure_agent_view",
-                        "private_metadata": json.dumps({}),
                         "title": {"type": "plain_text", "text": "Configure Agent"},
                         "submit": {"type": "plain_text", "text": "Save"},
                         "close": {"type": "plain_text", "text": "Cancel"},
@@ -143,26 +170,23 @@ def main() -> None:
                 respond(response_type="ephemeral", text=f"Failed to open config modal: {exc}")
             return
 
-        respond(response_type="ephemeral", text="Usage: /standard-agent configure | /standard-agent reasoner-profile <react|rewoo>")
+        respond(response_type="ephemeral", text="Usage: /standard-agent configure | /standard-agent reasoner <react|rewoo>")
 
     @app.view("configure_agent_view")
-    def on_config_submit(ack, body, client):  # type: ignore[no-redef]
+    def handle_config_submit(ack, body, client):  # type: ignore[no-redef]
         ack()
         try:
             user_id = body.get("user", {}).get("id")
-
             key = body["view"]["state"]["values"]["keyb"]["key"]["value"].strip()
+
             if not key:
                 if user_id:
                     client.chat_postMessage(channel=user_id, text="No key provided.")
                 return
 
-            nonlocal configured_key, current_agent
-            configured_key = key
-            # Persist key and build/replace the single agent now to validate
             try:
-                os.environ["JENTIC_AGENT_API_KEY"] = configured_key
-                current_agent = build_agent(chosen_profile)
+                os.environ["JENTIC_AGENT_API_KEY"] = key
+                runtime.current_agent = _build_agent(runtime.chosen_profile)
             except Exception as exc:  # pragma: no cover
                 logger.error("agent_build_failed", error=str(exc), exc_info=True)
                 if user_id:
@@ -174,70 +198,69 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover
             logger.error("config_submit_error", error=str(exc), exc_info=True)
 
+    def _answer(goal: str, say, thread_ts: Optional[str] = None) -> None:
+        agent = _require_agent(runtime)
+        if agent is None:
+            say(text="Not configured. Run /standard-agent configure to set the Agent API Key.", thread_ts=thread_ts)
+            return
+        logger.info("agent_goal_received", preview=goal[:120])
+        result = agent.solve(goal)
+        say(text=(result.final_answer or "(No answer)")[:39000], thread_ts=thread_ts)
+
     @app.event("app_mention")
-    def handle_app_mention(event, say):  # type: ignore[no-redef]
-        nonlocal bot_user_id
+    def handle_mention(event, say):  # type: ignore[no-redef]
         try:
-            text = event.get("text", "")
-            channel = event.get("channel")
-            thread_ts = event.get("ts")
-            # team_id not needed for single-agent mode
-
-            if bot_user_id is None:
+            if runtime.bot_user_id is None:
                 auth = app.client.auth_test()
-                bot_user_id = auth.get("user_id")
+                runtime.bot_user_id = auth.get("user_id")
 
-            goal = extract_goal_from_text(text, bot_user_id)
+            goal = extract_goal(event.get("text", ""), runtime.bot_user_id)
             if not goal:
-                say(text="Please provide a goal after mentioning me.", thread_ts=thread_ts)
+                say(text="Please provide a goal after mentioning me.", thread_ts=event.get("ts"))
                 return
-
-            # Ensure a single agent exists
-            agent_instance = ensure_agent_or_notify(say=say, thread_ts=thread_ts)
-            if agent_instance is None:
-                return
-
-            logger.info("slack_goal_received", channel=channel, goal_preview=goal[:120])
-            result = agent_instance.solve(goal)
-            answer = result.final_answer or "(No answer)"
-            say(text=answer[:39000], thread_ts=thread_ts)
-        except Exception as exc:  # pragma: no cover - best-effort guard
+            _answer(goal, say, thread_ts=event.get("ts"))
+        except Exception as exc:  # pragma: no cover
             logger.error("slack_app_mention_error", error=str(exc), exc_info=True)
             say(text=f"Error: {exc}")
 
     @app.message(re.compile(".*"))
     def handle_dm(message, say):  # type: ignore[no-redef]
         try:
-            channel = message.get("channel")
-            channel_is_dm = bool(channel) and str(channel).startswith("D")
-            if not channel_is_dm:
+            if not is_dm(message.get("channel")):
                 return
-
-            text = message.get("text", "")
-            goal = extract_goal_from_text(text, None)
+            goal = extract_goal(message.get("text", ""), None)
             if not goal:
                 say(text="Send me a goal to get started.")
                 return
-
-            # Ensure a single agent exists
-            agent_instance = ensure_agent_or_notify(say=say)
-            if agent_instance is None:
-                return
-
-            logger.info("slack_dm_goal_received", channel=channel, goal_preview=goal[:120])
-            result = agent_instance.solve(goal)
-            answer = result.final_answer or "(No answer)"
-            say(text=answer[:39000])
-        except Exception as exc:  # pragma: no cover - best-effort guard
+            _answer(goal, say)
+        except Exception as exc:  # pragma: no cover
             logger.error("slack_dm_error", error=str(exc), exc_info=True)
             say(text=f"Error: {exc}")
 
-    handler = SocketModeHandler(app, app_token)
+
+def main() -> None:
+    load_dotenv()
+    config = SlackConfig.from_env()
+
+    runtime = Runtime()
+    if os.getenv("JENTIC_AGENT_API_KEY"):
+        try:
+            runtime.current_agent = _build_agent(runtime.chosen_profile)
+        except Exception as exc:  # pragma: no cover
+            logger.error("agent_init_on_boot_failed", error=str(exc), exc_info=True)
+
+    app = App(token=config.bot_token, signing_secret=config.signing_secret)
+    configure_handlers(app, runtime)
+
     logger.info("slack_socket_mode_starting")
-    handler.start()
+    SocketModeHandler(app, config.app_token).start()
 
 
 if __name__ == "__main__":
-    main()
-
-
+    try:
+        main()
+    except SystemExit as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("Exiting…", file=sys.stderr)
