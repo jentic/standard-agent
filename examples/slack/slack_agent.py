@@ -50,7 +50,7 @@ class SlackAgentRuntime:
 
 def _ensure_event_loop() -> None:
     try:
-        asyncio.get_event_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         asyncio.set_event_loop(asyncio.new_event_loop())
 
@@ -82,23 +82,26 @@ def configure_slack_handlers(app: App, runtime: SlackAgentRuntime) -> None:
         ack()
         text = (body.get("text") or "").strip()
 
-        # Switch reasoner: /standard-agent reasoner <react|rewoo>
+        # Switch/list reasoner: /standard-agent reasoner <react|rewoo|list>
         if text.startswith("reasoner"):
             parts = text.split()
-            if len(parts) != 2 or parts[1].lower() not in {p.value for p in ReasonerProfile}:
-                respond(response_type="ephemeral", text="Usage: /standard-agent reasoner <react|rewoo>")
+            valid_reasoner_profiles = {p.value for p in ReasonerProfile}
+            if len(parts) == 2 and parts[1].lower() == "list":
+                respond(response_type="ephemeral", text=f"Available Reasoners: [{', '.join(sorted(valid_reasoner_profiles))}]. Current: {runtime.chosen_profile.value}")
                 return
-
-            runtime.chosen_profile = ReasonerProfile(parts[1].lower())
-            try:
-                if os.getenv("JENTIC_AGENT_API_KEY"):
-                    runtime.current_agent = _build_agent(runtime.chosen_profile)
-                    respond(response_type="ephemeral", text=f"Reasoner set to {runtime.chosen_profile.value} and agent reloaded.")
-                else:
-                    respond(response_type="ephemeral", text=f"Reasoner set to {runtime.chosen_profile.value}. Configure key via /standard-agent configure before use.")
-            except Exception as exc:  # pragma: no cover
-                logger.error("reasoner_switch_failed", error=str(exc), exc_info=True)
-                respond(response_type="ephemeral", text=f"Failed to switch profile: {exc}")
+            if len(parts) == 2 and parts[1].lower() in valid_reasoner_profiles:
+                runtime.chosen_profile = ReasonerProfile(parts[1].lower())
+                try:
+                    if os.getenv("JENTIC_AGENT_API_KEY"):
+                        runtime.current_agent = _build_agent(runtime.chosen_profile)
+                        respond(response_type="ephemeral", text=f"Reasoner set to {runtime.chosen_profile.value} and agent reloaded.")
+                    else:
+                        respond(response_type="ephemeral", text=f"Reasoner set to {runtime.chosen_profile.value}. Configure key via /standard-agent configure before use.")
+                except Exception as exc:  # pragma: no cover
+                    logger.error("reasoner_switch_failed", error=str(exc), exc_info=True)
+                    respond(response_type="ephemeral", text=f"Failed to switch profile: {exc}")
+                return
+            respond(response_type="ephemeral", text="Usage: /standard-agent reasoner <react|rewoo|list>")
             return
 
         # Configure Jentic Agent API key via modal
@@ -120,7 +123,7 @@ def configure_slack_handlers(app: App, runtime: SlackAgentRuntime) -> None:
                                 "element": {
                                     "type": "plain_text_input",
                                     "action_id": "key",
-                                    "placeholder": {"type": "plain_text", "text": "Paste key from app.jentic.com"},
+                                    "placeholder": {"type": "plain_text", "text": "Paste JENTIC AGENT API KEY from app.jentic.com"},
                                 },
                             }
                         ],
@@ -131,7 +134,7 @@ def configure_slack_handlers(app: App, runtime: SlackAgentRuntime) -> None:
                 respond(response_type="ephemeral", text=f"Failed to open config modal: {exc}")
             return
 
-        respond(response_type="ephemeral", text="Usage: /standard-agent configure | /standard-agent reasoner <react|rewoo>")
+        respond(response_type="ephemeral", text="Usage: /standard-agent configure | /standard-agent reasoner <react|rewoo|list>")
 
     @app.view("configure_agent_view")
     def handle_config_submit(ack, body, client):  # type: ignore[no-redef]
@@ -185,7 +188,7 @@ def configure_slack_handlers(app: App, runtime: SlackAgentRuntime) -> None:
             _answer(goal, say, thread_ts=event.get("ts"))
         except Exception as exc:  # pragma: no cover
             logger.error("slack_app_mention_error", error=str(exc), exc_info=True)
-            say(text=f"Error: {exc}")
+            say(text=f"Something went wrong. Please try again")
 
     @app.message(re.compile(".*"))
     def handle_dm(message, say):  # type: ignore[no-redef]
@@ -200,7 +203,7 @@ def configure_slack_handlers(app: App, runtime: SlackAgentRuntime) -> None:
             _answer(goal, say)
         except Exception as exc:  # pragma: no cover
             logger.error("slack_dm_error", error=str(exc), exc_info=True)
-            say(text=f"Error: {exc}")
+            say(text=f"Something went wrong. Please try again")
 
 
 def main() -> None:
