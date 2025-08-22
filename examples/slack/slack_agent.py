@@ -4,6 +4,8 @@ import os
 import re
 import sys
 from typing import Optional
+import asyncio
+import json
 
 from dotenv import load_dotenv
 from slack_bolt import App
@@ -20,7 +22,6 @@ logger = get_logger(__name__)
 def build_agent(jentic_key: Optional[str] = None, profile: Optional[str] = None) -> StandardAgent:
     """Construct a single global StandardAgent, with optional Jentic key and reasoner profile."""
     # Ensure an asyncio event loop exists in this worker thread (for Jentic SDK)
-    import asyncio
     try:
         asyncio.get_event_loop()
     except RuntimeError:
@@ -70,7 +71,6 @@ def main() -> None:
         sys.exit(1)
 
     # Single global agent, configured from env or via /standard-agent configure
-    import json
     env_has_key = bool(os.getenv("JENTIC_AGENT_API_KEY"))
     configured_key: Optional[str] = None
     chosen_profile: str = "rewoo"
@@ -198,35 +198,35 @@ def main() -> None:
             logger.error("slack_app_mention_error", error=str(exc), exc_info=True)
             say(text=f"Error: {exc}")
 
-    # @app.message(re.compile(".*"))
-    # def handle_dm(message, say):  # type: ignore[no-redef]
-    #     try:
-    #         channel = message.get("channel")
-    #         channel_is_dm = bool(channel) and str(channel).startswith("D")
-    #         if not channel_is_dm:
-    #             return
-    #
-    #         text = message.get("text", "")
-    #         goal = extract_goal_from_text(text, None)
-    #         if not goal:
-    #             say(text="Send me a goal to get started.")
-    #             return
-    #
-    #         # Ensure a single agent exists
-    #         with agent_lock:
-    #             if current_agent is None:
-    #                 if configured_key is None and not env_has_key:
-    #                     say(text="Not configured. Run /standard-agent configure to set the Agent API Key.")
-    #                     return
-    #                 current_agent = build_agent(configured_key)
-    #
-    #         logger.info("slack_dm_goal_received", channel=channel, goal_preview=goal[:120])
-    #         result = current_agent.solve(goal)
-    #         answer = result.final_answer or "(No answer)"
-    #         say(text=answer[:39000])
-    #     except Exception as exc:  # pragma: no cover - best-effort guard
-    #         logger.error("slack_dm_error", error=str(exc), exc_info=True)
-    #         say(text=f"Error: {exc}")
+    @app.message(re.compile(".*"))
+    def handle_dm(message, say):  # type: ignore[no-redef]
+        try:
+            channel = message.get("channel")
+            channel_is_dm = bool(channel) and str(channel).startswith("D")
+            if not channel_is_dm:
+                return
+
+            text = message.get("text", "")
+            goal = extract_goal_from_text(text, None)
+            if not goal:
+                say(text="Send me a goal to get started.")
+                return
+
+            # Ensure a single agent exists
+            nonlocal current_agent
+            if current_agent is None:
+                if configured_key is None and not env_has_key:
+                    say(text="Not configured. Run /standard-agent configure to set the Agent API Key.")
+                    return
+                current_agent = build_agent(configured_key, chosen_profile)
+
+            logger.info("slack_dm_goal_received", channel=channel, goal_preview=goal[:120])
+            result = current_agent.solve(goal)
+            answer = result.final_answer or "(No answer)"
+            say(text=answer[:39000])
+        except Exception as exc:  # pragma: no cover - best-effort guard
+            logger.error("slack_dm_error", error=str(exc), exc_info=True)
+            say(text=f"Error: {exc}")
 
     handler = SocketModeHandler(app, app_token)
     logger.info("slack_socket_mode_starting")
