@@ -8,7 +8,7 @@ import re
 import sys
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Optional
+from typing import Optional
 
 from dotenv import load_dotenv
 from slack_bolt import App
@@ -18,16 +18,7 @@ from agents.prebuilt import ReACTAgent, ReWOOAgent
 from agents.standard_agent import StandardAgent
 from utils.logger import get_logger
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Logging
-# ──────────────────────────────────────────────────────────────────────────────
-
 logger = get_logger(__name__)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Configuration & Runtime
-# ──────────────────────────────────────────────────────────────────────────────
 
 class ReasonerProfile(str, Enum):
     REWOO = "rewoo"
@@ -51,15 +42,11 @@ class SlackConfig:
 
 
 @dataclass(slots=True)
-class Runtime:
+class SlackAgentRuntime:
     chosen_profile: ReasonerProfile = ReasonerProfile.REWOO
     current_agent: Optional[StandardAgent] = None
     bot_user_id: Optional[str] = None
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Agent factories
-# ──────────────────────────────────────────────────────────────────────────────
 
 def _ensure_event_loop() -> None:
     try:
@@ -71,28 +58,10 @@ def _ensure_event_loop() -> None:
 def _build_agent(profile: ReasonerProfile) -> StandardAgent:
     _ensure_event_loop()
     model = os.getenv("LLM_MODEL")
-
-    factories: dict[ReasonerProfile, Callable[[Optional[str]], StandardAgent]] = {
-        ReasonerProfile.REWOO: lambda m: ReWOOAgent(model=m),
-        ReasonerProfile.REACT: lambda m: ReACTAgent(model=m),
-    }
-    try:
-        factory = factories[profile]
-    except KeyError as e:  # pragma: no cover
-        raise ValueError(f"Unknown reasoner profile: {profile}") from e
-
     logger.info("initializing_agent", profile=profile.value, model=model)
-    return factory(model)
-
-
-def _require_agent(runtime: Runtime) -> Optional[StandardAgent]:
-    """Return an agent, building one iff API key exists; otherwise None."""
-    if runtime.current_agent is not None:
-        return runtime.current_agent
-    if not os.getenv("JENTIC_AGENT_API_KEY"):
-        return None
-    runtime.current_agent = _build_agent(runtime.chosen_profile)
-    return runtime.current_agent
+    if profile is ReasonerProfile.REACT:
+        return ReACTAgent(model=model)
+    return ReWOOAgent(model=model)
 
 
 def extract_goal(text: str, bot_user_id: Optional[str]) -> str:
@@ -105,16 +74,8 @@ def extract_goal(text: str, bot_user_id: Optional[str]) -> str:
     return cleaned
 
 
-def is_dm(channel_id: Optional[str]) -> bool:
-    return bool(channel_id) and str(channel_id).startswith("D")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Slack wiring
-# ──────────────────────────────────────────────────────────────────────────────
-
-def configure_handlers(app: App, runtime: Runtime) -> None:
-    """Register all Slack handlers in one place."""
+def configure_slack_handlers(app: App, runtime: SlackAgentRuntime) -> None:
+    """Register all Slack handlers"""
 
     @app.command("/standard-agent")
     def handle_command(ack, body, client, respond):  # type: ignore[no-redef]
@@ -140,7 +101,7 @@ def configure_handlers(app: App, runtime: Runtime) -> None:
                 respond(response_type="ephemeral", text=f"Failed to switch profile: {exc}")
             return
 
-        # Configure API key via modal
+        # Configure Jentic Agent API key via modal
         if text == "configure":
             try:
                 client.views_open(
@@ -199,12 +160,15 @@ def configure_handlers(app: App, runtime: Runtime) -> None:
             logger.error("config_submit_error", error=str(exc), exc_info=True)
 
     def _answer(goal: str, say, thread_ts: Optional[str] = None) -> None:
-        agent = _require_agent(runtime)
-        if agent is None:
-            say(text="Not configured. Run /standard-agent configure to set the Agent API Key.", thread_ts=thread_ts)
-            return
+        # Ensure agent exists or prompt for configuration
+        if runtime.current_agent is None:
+            if not os.getenv("JENTIC_AGENT_API_KEY"):
+                say(text="Not configured. Run /standard-agent configure to set the Agent API Key.", thread_ts=thread_ts)
+                return
+            runtime.current_agent = _build_agent(runtime.chosen_profile)
+
         logger.info("agent_goal_received", preview=goal[:120])
-        result = agent.solve(goal)
+        result = runtime.current_agent.solve(goal)
         say(text=(result.final_answer or "(No answer)")[:39000], thread_ts=thread_ts)
 
     @app.event("app_mention")
@@ -226,7 +190,8 @@ def configure_handlers(app: App, runtime: Runtime) -> None:
     @app.message(re.compile(".*"))
     def handle_dm(message, say):  # type: ignore[no-redef]
         try:
-            if not is_dm(message.get("channel")):
+            channel_id = message.get("channel")
+            if not (channel_id and str(channel_id).startswith("D")):
                 return
             goal = extract_goal(message.get("text", ""), None)
             if not goal:
@@ -241,8 +206,7 @@ def configure_handlers(app: App, runtime: Runtime) -> None:
 def main() -> None:
     load_dotenv()
     config = SlackConfig.from_env()
-
-    runtime = Runtime()
+    runtime = SlackAgentRuntime()
     if os.getenv("JENTIC_AGENT_API_KEY"):
         try:
             runtime.current_agent = _build_agent(runtime.chosen_profile)
@@ -250,7 +214,7 @@ def main() -> None:
             logger.error("agent_init_on_boot_failed", error=str(exc), exc_info=True)
 
     app = App(token=config.bot_token, signing_secret=config.signing_secret)
-    configure_handlers(app, runtime)
+    configure_slack_handlers(app, runtime)
 
     logger.info("slack_socket_mode_starting")
     SocketModeHandler(app, config.app_token).start()
