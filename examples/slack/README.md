@@ -2,11 +2,27 @@
 
 This example lets you converse with a Standard Agent from Slack using Socket Mode.
 
-## Prerequisites
+## Quick Start
 
-- A Slack workspace where you can install custom apps
-- Python environment with project dependencies installed
-- .env configured with an LLM provider key and (optionally) tool provider key
+From the project root:
+
+```bash
+pip install -r examples/slack/requirements.txt
+python examples/slack/slack_agent.py
+```
+
+In Slack:
+- Make sure the app is installed to your workspace (App settings → OAuth & Permissions → Install to Workspace)
+- Invite the bot: `/invite @your-bot`
+- Configure the agent key: `/standard-agent configure` (paste API key from app.jentic.com)
+- Talk to the agent: `@your-bot <goal>` or DM the bot
+
+### Slash commands
+
+- `/standard-agent configure` — open a modal to paste your Jentic Agent API Key
+- `/standard-agent reasoner <react|rewoo>` — switch reasoning strategy (default: rewoo)
+- `/standard-agent reasoner list` — show available strategies and the current one
+- `/standard-agent kill` — clear the API key and reset the agent
 
 ## Create a Slack App
 
@@ -45,12 +61,6 @@ This example lets you converse with a Standard Agent from Slack using Socket Mod
    - Save.
    - Left sidebar → Interactivity & Shortcuts → toggle On (no URL needed for Socket Mode).
 
-7. Invite and test
-   - In Slack, invite your bot to a channel: `/invite @your-bot`.
-   - Configure the agent key via slash command: `/standard-agent configure` (a modal opens).
-   - Optionally pick a reasoner profile: `/standard-agent reasoner-profile react` or `rewoo`.
-   - Mention the bot in a channel: `@your-bot find articles about AI` (the bot replies in a thread).
-   - Or DM the bot directly and type your goal.
 
 ## Environment Variables
 
@@ -59,35 +69,3 @@ Add the following to your `.env` in the project root:
 - `SLACK_APP_TOKEN` — App-level token with `connections:write` (Socket Mode)
 - `SLACK_BOT_TOKEN` — Bot token for posting messages
 - `SLACK_SIGNING_SECRET` — Signing secret (not strictly required for Socket Mode, but recommended)
-
-
-## Install Dependencies
-
-Install core deps, then the Slack example deps:
-```bash
-pip install -r examples/slack/requirements.txt
-```
-
-## Run
-
-From the project root:
-
-```bash
-python examples/slack/slack_agent.py
-```
-
-### Quick flow
-
-1. Create a Slack channel.
-2. Invite the bot: `/invite @your-bot`.
-3. If no JENTIC_AGENT_API_KEY key in `.env`, run `/standard-agent configure` and paste your Agent API Key which you can get from app.jentic.com.
-4. (Optional) Set profile: `/standard-agent reasoner-profile <react|rewoo>`. default is `rewoo`.
-5. Talk to the agent with `@your-bot <goal>` or DM the bot.
-
-## Notes
-
-- The agent composes LLM + Tools + Memory + Reasoner. Choose the profile via `/standard-agent reasoner-profile <react|rewoo>`.
-- For tool usage, configure credentials for the tools you intend to use; default provider is the Jentic catalog when `JENTIC_AGENT_API_KEY` is present.
-- Messages are answered synchronously; long-running tool calls will block until completion.
-
-
