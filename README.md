@@ -17,9 +17,21 @@
 
 ## Architecture Overview
 
-Standard Agent is a simple, modular library for building AI agents—with a composable core and plug‑in components.
+*Standard Agent* is a simple, modular library for building AI agents, with a composable core and plug‑in components. 
+
+It is *not* a complete agent with a nice user interface. It is a library that provides the core agent reasoning loop that bridges an LLM with tools, featuring a flexible design that allows you to swap out different LLMs, reasoning strategies, memory backends, and tool providers. A basic example CLI interface is provided, but you will generally have to provide your own system prompt, tool set and UI. [Jentic](https://jentic.com) can help with the tool set, but you can also roll your own.
 
 ![Standard Agent architecture](docs/assets/standard_agent_architecture.png)
+
+It is deliberately small so it can be easily read and understood (whether by you or your coding agent), and used with confidence. This is a *less is more* approach to agent development.  You can browse it to understand how agents work. You can use it to quickly build your own agents, skipping the boilerplate and focusing on business logic. 
+
+*Standard Agent* excels when equipped with just-in-time tool loading, a paradigm that we advocate at [Jentic](https://jentic.com). This means dynamically loading (or "late-binding") tools at run-time depending on the specific goal or task at hand. This permits better context engineering, keeping the context uncluttered and the LLM focused on the tool details that matter, while eliminating practical limits on the number of tools that can be provided (here's a [blog post](https://jentic.com/blog/just-in-time-tooling) on the topic).
+
+We hope the community will benefit from *Standard Agent* in the following wyas:
+- A common project for reference implementations of common reasoning strategies (ReACT, ReWOO, LATS etc.)
+- An easy way to experiment with variations on reasoning strategies or new approaches
+- A way to perform apple-to-apple comparisons and evaluations of different reasoning strategies
+- An easy upgrade path for agents as better reasoning strategies emerge.
 
 
 ## Quick Start
@@ -44,27 +56,27 @@ python examples/cli_rewoo_api_agent.py
 
 Before running the agent, you need to create a `.env` file in the root of the project to store your API keys and other secrets. The application will automatically load these variables.
 
-**Quick Setup:**
+#### Quick Setup:
 1. Copy the provided template: `cp .env.example .env`
 2. Edit the `.env` file and replace placeholder values with your actual API keys
 3. At minimum, you need one LLM provider key to get started
-4. Add JENTIC_API_KEY for out-of-the-box tool access (recommended)
+4. Add `JENTIC_API_KEY` for out-of-the-box tool access (recommended)
 
 See [.env.example](./.env.example) for the complete configuration template with detailed comments and setup instructions.
 
-**Key Requirements:**
+#### Key Requirements:
 - **LLM Model**: `LLM_MODEL` - Choose your preferred model
 - **LLM Provider**: At least one API key (Anthropic, OpenAI, or Google)
-- **Tool Provider**: `JENTIC_AGENT_API_KEY` for instant access to 1500+ tools (get yours at [app.jentic.com](https://app.jentic.com))
+- **Tool Provider**: `JENTIC_API_KEY` for turn-key access to capabilities based on 1500+ APIs (get yours at [jentic.com](https://jentic.com))
 
 
 ### Usage Examples
 
-We provide two ways to use the agent library: a quick-start method using a pre-built agent, and a more advanced method that shows how to build an agent from scratch.
+*Standard Agent* includes pre-built agent classes for a quick-start, but you can also compose your own agent from scratch. Both approaches are shown below.
 
 #### 1. Quick Start: Running a Pre-built Agent
 
-This is the fastest way to get started. The `ReWOOAgent` and `ReACTAgent` classes provide `StandardAgent` instances that are already configured with a reasoner, LLM, tools, and memory.
+This is the fastest way to get started. `ReWOOAgent` and `ReACTAgent` are subclasses of `StandardAgent` that are pre-configured with a reasoner, LLM, tools, and memory.
 
 ```python
 # examples/cli_api_agent.py
@@ -98,9 +110,9 @@ while True:
         break
 ```
 
-#### 2. Custom Agent Composition: Build Your Own
+#### 2. Custom: Compose Your Own Agent
 
-The real power of Standard Agent comes from its **composable architecture**. Every component is swappable, allowing you to create custom agents tailored to your specific needs. Here's how to build agents from scratch by mixing and matching components.
+The real power of *Standard Agent* comes from its **composable architecture**. Every component is swappable, allowing you to create custom agents tailored to your specific needs, without reimplementing a lot of code. Here's how to build agents from scratch by mixing and matching components.
 
 ```python
 # main_build_your_own_agent.py
@@ -156,9 +168,9 @@ while True:
 ```
 ---
 
-**💡 Why This Matters**
+## Architecture
 
-This composition approach means you can:
+*Standard Agent* provides a composable architecture that allows you to swap out different LLMs, reasoning strategies, memory backends, and tool providers. This allows you to:
 
 - **Start simple** with pre-built agents like `ReWOOAgent`
 - **Gradually customize** by swapping individual components
@@ -166,7 +178,7 @@ This composition approach means you can:
 - **Extend incrementally** by implementing new components that follow the same interfaces
 - **Mix and match** components from different sources without breaking existing code
 
-The key insight is that each component follows well-defined interfaces (`BaseLLM`, `BaseMemory`, `JustInTimeToolingBase`, etc.), so they can be combined in any configuration that makes sense for your use case.
+Each component follows well-defined interfaces (`BaseLLM`, `BaseMemory`, `JustInTimeToolingBase`, etc.), so they can be combined in any configuration that makes sense for you.
 
 ### Project Layout
 
@@ -207,21 +219,21 @@ The key insight is that each component follows well-defined interfaces (`BaseLLM
 | **Goal Preprocessor** | `BaseGoalPreprocessor`                                            | [Optional] Preprocess goals before reasoning                      |
 
 
-### Reasoner Profiles
+### Reasoner Strategies
 
-The library ships two reasoner profiles:
+The library currently ships two reasoner strategies:
 
-- **ReWOOReasoner** (`agents/reasoner/rewoo.py`): Plan → Execute → Reflect
-- **ReACTReasoner** (`agents/reasoner/react.py`): Think → Act 
+- **ReWOOReasoner** (`agents/reasoner/rewoo.py`): Plan → Execute → Reflect  (arxiv [link](https://arxiv.org/abs/2305.18323))
+- **ReACTReasoner** (`agents/reasoner/react.py`): Think → Act (arxiv [link](https://arxiv.org/abs/2210.03629))
 
 Each profile exposes a `run(goal: str) -> ReasoningResult` and produces a `transcript`. The agent synthesizes the final answer from the transcript.
 
-Note on the reasoning spectrum:
+We note that there are broadly two ways to implement agentic reasoning:
 
-- "Explicit" reasoners externalize structure (plans, intermediate steps) for transparency and control. ReWOO is more explicit.
-- "Implicit" reasoners decide the next move with minimal externalized structure for speed and brevity. ReACT is more implicit.
+- "Explicit" reasoning explicitly implements the reasoning strategy in the code that calls the LLM. ReWOO is more explicit.
+- "Implicit" reasoning lets the LLM steer the reasoning strategy, informed only by the system prompt. ReACT is more implicit.
 
-We welcome contributions of new reasoning strategies anywhere on this spectrum. If you add a profile, keep it as a single-file `BaseReasoner` implementation and define its prompts in YAML under `agents/prompts/reasoners/`.
+We welcome contributions of new reasoning strategies anywhere on this spectrum. If you add a profile, please keep it as a single module that implements the `BaseReasoner` class and define its prompts in YAML under `agents/prompts/reasoners/`.
 
 ### Extending the Library
 
@@ -237,12 +249,13 @@ The library is designed to be modular. Here are some common extension points:
 
 
 ## Roadmap
+We welcome all help implementing parts of the roadmap, or contributing new ideas. We will merge anything we think makes sense in this core library, and will link to all other relevant work.
 
 - Additional pre-built reasoner implementations (ReAct, ToT, Graph-of-Thought)
 - More out of the box composable parts to enable custom agents or reasoner implementations
 - Web dashboard (live agent state + logs)
 - Vector-store memory with RAG planning
-- Slack / Discord integration
 - Redis / VectorDB memory
+- More advanced CLI example with local file system tools
 - Async agent loop & concurrency-safe inboxes
 - Ideas are welcome! [Open an issue](https://github.com/jentic/standard-agent/issues) or [submit a pull request](https://github.com/jentic/standard-agent/pulls).
