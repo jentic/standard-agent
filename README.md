@@ -60,7 +60,7 @@ Before running the agent, you need to create a `.env` file in the root of the pr
 1. Copy the provided template: `cp .env.example .env`
 2. Edit the `.env` file and replace placeholder values with your actual API keys
 3. At minimum, you need one LLM provider key to get started
-4. Add `JENTIC_API_KEY`á for out-of-the-box tool access (recommended)
+4. Add `JENTIC_API_KEY` for out-of-the-box tool access (recommended)
 
 See [.env.example](./.env.example) for the complete configuration template with detailed comments and setup instructions.
 
