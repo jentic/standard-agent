@@ -62,14 +62,23 @@ def _pre_chain() -> list:
         structlog.processors.TimeStamper(fmt="ISO", key=TIME_KEY),
     ]
 
-def _build_console_handler(level: int) -> logging.Handler:
-    formatter = structlog.stdlib.ProcessorFormatter(
-        foreign_pre_chain=_pre_chain(),
-        processors=[
+def _build_console_handler(level: int, renderer: str) -> logging.Handler:
+    """Build a console handler with either pretty or JSON rendering."""
+
+    processors: list[Any]
+    if renderer == "json":
+        processors = [
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.processors.EventRenamer(to="message"),
+            structlog.processors.JSONRenderer(),
+        ]
+    else:  # pretty (default)
+        processors = [
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             structlog.dev.ConsoleRenderer(colors=_supports_colour(), timestamp_key=TIME_KEY),
-        ],
-    )
+        ]
+
+    formatter = structlog.stdlib.ProcessorFormatter(foreign_pre_chain=_pre_chain(), processors=processors,)
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(level)
     handler.setFormatter(formatter)
@@ -103,10 +112,13 @@ def _build_file_handler(file_cfg: Dict[str, Any]) -> logging.Handler:
 
 
 def init_logger(config_path: str | Path | None = None) -> None:
-    """Structured setup for hosted agents: JSON for files and non-TTY stdout.
+    """Structured logging setup.
 
-    - Local TTY console: coloured ConsoleRenderer for readability
-    - Non-TTY stdout and files: JSON for ingestion by log frameworks
+    Console renderer is configurable via config, with env override support when needed:
+    - Config: logging.console.renderer = "json" | "pretty" (default: pretty)
+    - Env (optional): LOG_CONSOLE_RENDERER=pretty|json (wins over config)
+
+    Files always use JSON with optional rotation.
     """
     cfg = _read_cfg(config_path)
 
@@ -125,7 +137,10 @@ def init_logger(config_path: str | Path | None = None) -> None:
     # Console handler enabled by default
     console_enabled = cfg.get("console", {}).get("enabled", True)
     if console_enabled:
-        handlers.append(_build_console_handler(root_level))
+        renderer = os.getenv("LOG_CONSOLE_RENDERER") or cfg.get("console", {}).get("renderer", "pretty").strip().lower()
+        if renderer not in {"json", "pretty"}:
+            raise ValueError(f"Invalid console logging renderer option: {renderer!r}. Allowed: json, pretty")
+        handlers.append(_build_console_handler(root_level, renderer))
 
     # File handler (JSON) if enabled
     file_cfg = cfg.get("file", {})
