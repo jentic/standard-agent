@@ -13,10 +13,14 @@ from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
 from  agents.tools.base import JustInTimeToolingBase
 from  agents.goal_preprocessor.base import BaseGoalPreprocessor
+from  agents.prompts import load_prompts
 
 from  uuid import uuid4
+import time
 from  enum import Enum
-from agents.prompts import load_prompts
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 _PROMPTS = load_prompts("agent", required_prompts=["summarize"])
 
@@ -68,6 +72,7 @@ class StandardAgent:
     def solve(self, goal: str) -> ReasoningResult:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
+        start_time = time.perf_counter()
 
         if self.goal_preprocessor:
             revised_goal, intervention_message = self.goal_preprocessor.process(goal, self.memory.get("conversation_history"))
@@ -86,6 +91,19 @@ class StandardAgent:
             self.memory[f"result:{run_id}"] = result
             self.memory["conversation_history"].append({"goal": goal, "result": result.final_answer})
             self._state = AgentState.READY
+
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            logger.info(
+                "final_result",
+                run_id=run_id,
+                success=result.success,
+                iterations=result.iterations,
+                tool_calls_count=len(result.tool_calls or []),
+                duration_ms=duration_ms,
+                goal=goal,
+                final_answer_preview=((result.final_answer[:200] + "…") if (result.final_answer and len(result.final_answer) > 200) else result.final_answer),
+                model=getattr(self.llm, "model", None),
+            )
             return result
 
         except Exception:

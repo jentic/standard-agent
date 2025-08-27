@@ -4,14 +4,13 @@
 
     "console": {
       "enabled": true,
-      "format": "%(asctime)s | %(levelname_coloured)s | %(name)s: %(message)s"
+      "renderer": "pretty"
     },
 
     "file": {
       "enabled": true,
       "level": "DEBUG",
       "path": "logs/standard_agent.log",
-      "format": "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
       "rotation": {
         "enabled": true,
         "max_bytes": 10485760,
