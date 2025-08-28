@@ -126,7 +126,7 @@ def init_logger(config_path: str | Path | None = None) -> None:
 
     # Defer rendering to handlers
     structlog.configure(
-        processors=_base_processors() + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],  # type: ignore[arg-type]
+        processors=_base_processors() + [structlog.contextvars.merge_contextvars, structlog.stdlib.ProcessorFormatter.wrap_for_formatter],  # type: ignore[arg-type]
         wrapper_class=structlog.stdlib.BoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
