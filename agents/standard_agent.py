@@ -109,8 +109,7 @@ class StandardAgent:
             raise
 
     def _record_interaction(self, entry: dict) -> None:
-        if self.conversation_history_window <= 0:  # disabled
+        if self.conversation_history_window <= 0:
             return
         self.memory["conversation_history"].append(entry)
-        if self.conversation_history_window and len(self.memory["conversation_history"]) > self.conversation_history_window:
-            del self.memory["conversation_history"][:-self.conversation_history_window]
+        self.memory["conversation_history"][:] = self.memory["conversation_history"][-self.conversation_history_window:]
