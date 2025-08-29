@@ -9,6 +9,7 @@ from typing import Optional, List
 from dotenv import load_dotenv
 
 import discord
+from discord import app_commands
 
 from agents.standard_agent import StandardAgent
 from agents.prebuilt import ReACTAgent, ReWOOAgent
@@ -64,6 +65,33 @@ def extract_goal_from_mention(content: str, bot_user_id: int) -> str:
     return goal
 
 
+class KeyConfigModal(discord.ui.Modal, title="Configure Agent"):
+    def __init__(self, runtime: DiscordAgentRuntime):
+        super().__init__()
+        self.runtime = runtime
+        self.api_key = discord.ui.TextInput(
+            label="Agent API Key",
+            placeholder="Paste JENTIC AGENT API KEY from app.jentic.com",
+            required=True,
+            style=discord.TextStyle.short,
+            max_length=200,
+        )
+        self.add_item(self.api_key)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:  # type: ignore[override]
+        key = (self.api_key.value or "").strip()
+        if not key:
+            await interaction.response.send_message("No key provided.", ephemeral=True)
+            return
+        try:
+            os.environ["JENTIC_AGENT_API_KEY"] = key
+            self.runtime.current_agent = _build_agent(self.runtime.chosen_profile)
+            await interaction.response.send_message("Agent configured.", ephemeral=True)
+        except Exception as exc:  # pragma: no cover
+            logger.error("agent_build_failed", error=str(exc))
+            await interaction.response.send_message(f"Saved key, but failed to initialize agent: {exc}", ephemeral=True)
+
+
 async def main() -> None:
     # Logging + env
     init_logger()
@@ -80,7 +108,12 @@ async def main() -> None:
     intents.guilds = True
     intents.messages = True
 
-    client = discord.Client(intents=intents)
+    class DiscordAgentClient(discord.Client):
+        def __init__(self, *, intents: discord.Intents):
+            super().__init__(intents=intents)
+            self.tree = app_commands.CommandTree(self)
+
+    client = DiscordAgentClient(intents=intents)
     runtime = DiscordAgentRuntime()
     # Preload agent if key provided
     if os.getenv("JENTIC_AGENT_API_KEY"):
@@ -89,10 +122,66 @@ async def main() -> None:
         except Exception as exc:
             logger.error("agent_init_on_boot_failed", error=str(exc))
 
+    # Slash commands (app commands)
+    standard_group = app_commands.Group(name="standard_agent", description="Configure Standard Agent")
+
+    @standard_group.command(name="reasoner", description="Switch or list reasoning strategy")
+    @app_commands.describe(mode="Choose 'react' or 'rewoo'. Leave empty to list current/available.")
+    async def reasoner(interaction: discord.Interaction, mode: Optional[str] = None):
+        try:
+            valid = {p.value for p in ReasonerProfile}
+            if not mode:
+                await interaction.response.send_message(
+                    f"Available reasoners: {', '.join(sorted(valid))}. Current: {runtime.chosen_profile.value}",
+                    ephemeral=True,
+                )
+                return
+            mode_l = mode.lower().strip()
+            if mode_l not in valid:
+                await interaction.response.send_message("Usage: /standard_agent reasoner <react|rewoo>", ephemeral=True)
+                return
+            runtime.chosen_profile = ReasonerProfile(mode_l)
+            if os.getenv("JENTIC_AGENT_API_KEY"):
+                runtime.current_agent = _build_agent(runtime.chosen_profile)
+                await interaction.response.send_message(
+                    f"Reasoner set to {runtime.chosen_profile.value} and agent reloaded.", ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    f"Reasoner set to {runtime.chosen_profile.value}. Configure key first via /standard_agent configure.",
+                    ephemeral=True,
+                )
+        except Exception as exc:  # pragma: no cover
+            logger.error("reasoner_switch_failed", error=str(exc))
+            await interaction.response.send_message(f"Failed to switch profile: {exc}", ephemeral=True)
+
+    @standard_group.command(name="configure", description="Open a modal to configure the Agent API key")
+    async def configure(interaction: discord.Interaction):
+        try:
+            await interaction.response.send_modal(KeyConfigModal(runtime))
+        except Exception as exc:  # pragma: no cover
+            logger.error("open_config_modal_failed", error=str(exc))
+            await interaction.response.send_message(f"Failed to open config modal: {exc}", ephemeral=True)
+
+    @standard_group.command(name="kill", description="Clear the API key and reset the agent")
+    async def kill(interaction: discord.Interaction):
+        runtime.current_agent = None
+        os.environ.pop("JENTIC_AGENT_API_KEY", None)
+        logger.warning("agent_killed")
+        await interaction.response.send_message(
+            "Agent killed. API key cleared; new requests will be rejected until reconfigured.", ephemeral=True
+        )
+
+    client.tree.add_command(standard_group)
+
     @client.event
     async def on_ready():
         logger.info("discord_ready", user=str(client.user), user_id=getattr(client.user, "id", None))
         print(f"Logged in as {client.user} (ID: {getattr(client.user, 'id', None)})")
+        try:
+            await client.tree.sync()
+        except Exception as exc:  # pragma: no cover
+            logger.error("discord_command_sync_failed", error=str(exc))
 
     @client.event
     async def on_message(message: discord.Message):
