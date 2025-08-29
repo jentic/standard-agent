@@ -1,6 +1,7 @@
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
 import pytest
+import json
 
 from agents.standard_agent import StandardAgent, AgentState
 from agents.reasoner.base import BaseReasoner, ReasoningResult
@@ -87,10 +88,6 @@ def test_agent_solve_sets_final_answer_from_summarizer_and_records_history(monke
     assert hist and len(hist) == 1
     assert hist[-1]["goal"] == "find answer"
     assert hist[-1]["result"] == "SUMMARIZED"
-
-    # Goal and result stored with deterministic run id
-    assert memory.get("goal:RUN123") == "find answer"
-    assert isinstance(memory.get("result:RUN123"), ReasoningResult)
 
 
 def test_agent_uses_goal_preprocessor_and_returns_intervention_message(monkeypatch):
@@ -209,4 +206,30 @@ def test_agent_initial_state_is_ready():
 
     assert agent.state == AgentState.READY
 
+
+
+def test_agent_memory_is_json_serializable(monkeypatch):
+    llm = DummyLLM(text_queue=["S1", "S2"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=DummyReasoner(), conversation_history_window=2)
+
+    agent.solve("g1")
+    agent.solve("g2")
+
+    dumped = json.dumps(agent.memory)
+    assert isinstance(dumped, str)
+    assert isinstance(agent.memory.get("conversation_history"), list)
+    assert len(agent.memory["conversation_history"]) == 2
+
+
+def test_agent_conversation_history_disabled_window():
+    llm = DummyLLM(text_queue=["S"])  # summarizer output
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=DummyReasoner(), conversation_history_window=0)
+
+    agent.solve("g1")
+
+    assert memory.get("conversation_history") == []
 

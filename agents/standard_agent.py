@@ -8,7 +8,6 @@ agent owns the services; the reasoner simply uses what the agent provides.
 from __future__ import annotations
 
 from  collections.abc import MutableMapping
-from  collections import deque
 from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
 from  agents.tools.base import JustInTimeToolingBase
@@ -61,7 +60,8 @@ class StandardAgent:
         self.reasoner = reasoner
 
         self.goal_preprocessor = goal_preprocessor
-        self.memory.setdefault("conversation_history", deque(maxlen=conversation_history_window))
+        self.conversation_history_window = conversation_history_window
+        self.memory.setdefault("conversation_history", [])
 
         self._state: AgentState = AgentState.READY
 
@@ -77,19 +77,17 @@ class StandardAgent:
         if self.goal_preprocessor:
             revised_goal, intervention_message = self.goal_preprocessor.process(goal, self.memory.get("conversation_history"))
             if intervention_message:
-                self.memory["conversation_history"].append({ "goal": goal, "result": f"user intervention message: {intervention_message}"})
+                self._record_interaction({"goal": goal, "result": f"user intervention message: {intervention_message}"})
                 return ReasoningResult(success=False, final_answer=intervention_message)
             goal = revised_goal
 
-        self.memory[f"goal:{run_id}"] = goal
         self._state = AgentState.BUSY
 
         try:
             result = self.reasoner.run(goal)
             result.final_answer = self.llm.prompt(_PROMPTS["summarize"].format(goal=goal, history=getattr(result, "transcript", "")))
 
-            self.memory[f"result:{run_id}"] = result
-            self.memory["conversation_history"].append({"goal": goal, "result": result.final_answer})
+            self._record_interaction({"goal": goal, "result": result.final_answer})
             self._state = AgentState.READY
 
             duration_ms = int((time.perf_counter() - start_time) * 1000)
@@ -109,3 +107,9 @@ class StandardAgent:
         except Exception:
             self._state = AgentState.NEEDS_ATTENTION
             raise
+
+    def _record_interaction(self, entry: dict) -> None:
+        if self.conversation_history_window <= 0:
+            return
+        self.memory["conversation_history"].append(entry)
+        self.memory["conversation_history"][:] = self.memory["conversation_history"][-self.conversation_history_window:]
