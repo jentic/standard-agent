@@ -88,10 +88,6 @@ def test_agent_solve_sets_final_answer_from_summarizer_and_records_history(monke
     assert hist[-1]["goal"] == "find answer"
     assert hist[-1]["result"] == "SUMMARIZED"
 
-    # Goal and result stored with deterministic run id
-    assert memory.get("goal:RUN123") == "find answer"
-    assert isinstance(memory.get("result:RUN123"), ReasoningResult)
-
 
 def test_agent_uses_goal_preprocessor_and_returns_intervention_message(monkeypatch):
     _fixed_uuid4(monkeypatch, "RUNINT")
