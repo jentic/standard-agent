@@ -7,8 +7,8 @@ This example lets you converse with a Standard Agent from Discord using mention-
 From the project root:
 
 ```bash
-pip install -r examples/discord_bot/requirements.txt
-python examples/discord_bot/bot.py
+pip install -r examples/discord/requirements.txt
+python examples/discord/discord_agent.py
 ```
 
 In Discord:
