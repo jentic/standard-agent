@@ -56,12 +56,6 @@ def _build_agent(profile_key: str) -> StandardAgent:
     return builder(model)
 
 
-def extract_goal_from_mention(content: str, bot_user_id: int) -> str:
-    mention_regex = re.compile(rf"<@!?{bot_user_id}>") # Matches <@123> and <@!123>
-    goal = mention_regex.sub("", content).strip()
-    return goal
-
-
 class KeyConfigModal(discord.ui.Modal, title="Configure Agent"):
     def __init__(self, runtime: DiscordAgentRuntime):
         super().__init__()
@@ -90,15 +84,12 @@ class KeyConfigModal(discord.ui.Modal, title="Configure Agent"):
 
 
 async def main() -> None:
-    # Logging + env
     init_logger()
     load_dotenv()
 
     token = os.getenv("DISCORD_BOT_TOKEN")
     if not token:
         raise RuntimeError("DISCORD_BOT_TOKEN is required in .env")
-
-    # No channel allowlist; rely on Discord permissions + mention-gating
 
     intents = discord.Intents.default()
     intents.message_content = True
@@ -123,7 +114,7 @@ async def main() -> None:
     standard_group = app_commands.Group(name="standard_agent", description="Configure Standard Agent")
 
     @standard_group.command(name="reasoner", description="Switch or list reasoning strategy")
-    @app_commands.describe(mode="Choose reasoning strategy. Leave empty to list current/available.")
+    @app_commands.describe(reasoning_strategy="Choose reasoning strategy. Leave empty to list current/available.")
     async def reasoner(interaction: discord.Interaction, reasoning_strategy: Optional[str] = None):
         try:
             valid = set(list_profiles())
@@ -190,44 +181,14 @@ async def main() -> None:
 
             # Extract goal (text after mention)
             content = message.content or ""
-            goal = extract_goal_from_mention(content, bot_user.id)  # type: ignore[arg-type]
+            # Strip the bot mention token (<@ID> or <@!ID>) and surrounding punctuation/space
+            goal = re.sub(rf"^\s*<@!?{bot_user.id}>\s*", "", content).lstrip(":,;.- ").strip()  # type: ignore[arg-type]
 
             if not goal:
                 await message.channel.send("Please provide a goal after mentioning me.")
                 return
 
-            # Handle simple text commands
-            goal = goal.lower().strip()
-            if goal.startswith("reasoner"):
-                parts = goal.split()
-                valid = set(list_profiles())
-                if len(parts) == 2 and parts[1] == "list":
-                    await message.channel.send(f"Available reasoners: {', '.join(sorted(valid))}. Current: {runtime.chosen_profile}")
-                    return
-                if len(parts) == 2 and parts[1] in valid:
-                    runtime.chosen_profile = parts[1]
-                    try:
-                        if os.getenv("JENTIC_AGENT_API_KEY"):
-                            runtime.current_agent = _build_agent(runtime.chosen_profile)
-                            await message.channel.send(f"Reasoner set to {runtime.chosen_profile} and agent reloaded.")
-                        else:
-                            await message.channel.send(f"Reasoner set to {runtime.chosen_profile}. Configure key first (see README).")
-                    except Exception as exc:
-                        logger.error("reasoner_switch_failed", error=str(exc))
-                        await message.channel.send(f"Failed to switch profile: {exc}")
-                    return
-                await message.channel.send("Usage: @Bot reasoner <react|rewoo|list>")
-                return
-
-            if goal == "kill":
-                runtime.current_agent = None
-                os.environ.pop("JENTIC_AGENT_API_KEY", None)
-                logger.warning("agent_killed")
-                await message.channel.send("Agent killed. API key cleared; new requests will be rejected until reconfigured.")
-                return
-
             async with message.channel.typing():
-                # Ensure agent exists or prompt for configuration
                 if runtime.current_agent is None:
                     if not os.getenv("JENTIC_AGENT_API_KEY"):
                         await message.channel.send("Not configured. Use /standard_agent configure to set the Agent API Key.")
