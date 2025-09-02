@@ -14,15 +14,14 @@ python examples/discord/discord_agent.py
 In Discord:
 - Invite the bot to your server (see “Create a Discord App” below)
 - Mention the bot in a channel it can read: `@your-bot <goal>`
-- Optional: restrict to specific channels via `DISCORD_ALLOWED_CHANNEL_IDS`
+  - Bot only responds when mentioned (no DMs)
 
-### Commands
+### Slash Commands
 
-- `@your-bot reasoner list` — show available strategies and the current one
-- `@your-bot reasoner <react|rewoo>` — switch reasoning strategy (default: rewoo)
-- `@your-bot configure <JENTIC_AGENT_API_KEY>` — set the Agent API key at runtime
-  - Note: sharing secrets in-channel is unsafe; prefer environment variables
-- `@your-bot kill` — clear the API key and reset the agent
+- `/standard_agent configure` — open a modal to paste your Jentic Agent API Key
+- `/standard_agent reasoner` — list available strategies and the current one
+- `/standard_agent reasoner [reasoning_strategy]` — switch reasoning strategy (default: rewoo)
+- `/standard_agent kill` — clear the API key and reset the agent
 
 ## Create a Discord App
 
@@ -46,7 +45,6 @@ In Discord:
 Add the following to your `.env` in the project root:
 
 - `DISCORD_BOT_TOKEN` — Bot token for logging in
-- `DISCORD_ALLOWED_CHANNEL_IDS` (optional) — comma-separated allowlist of channel IDs
 
 ## Usage
 

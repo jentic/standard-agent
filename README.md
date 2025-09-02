@@ -60,14 +60,14 @@ Before running the agent, you need to create a `.env` file in the root of the pr
 1. Copy the provided template: `cp .env.example .env`
 2. Edit the `.env` file and replace placeholder values with your actual API keys
 3. At minimum, you need one LLM provider key to get started
-4. Add `JENTIC_API_KEY` for out-of-the-box tool access (recommended)
+4. Add `JENTIC_AGENT_API_KEY` for out-of-the-box tool access (recommended)
 
 See [.env.example](./.env.example) for the complete configuration template with detailed comments and setup instructions.
 
 #### Key Requirements:
 - **LLM Model**: `LLM_MODEL` - Choose your preferred model
 - **LLM Provider**: At least one API key (Anthropic, OpenAI, or Google)
-- **Tool Provider**: `JENTIC_API_KEY` for turn-key access to capabilities based on 1500+ APIs (get yours at [jentic.com](https://jentic.com))
+- **Tool Provider**: `JENTIC_AGENT_API_KEY` for turn-key access to capabilities based on 1500+ APIs (get yours at [jentic.com](https://jentic.com))
 
 
 ### Usage Examples
