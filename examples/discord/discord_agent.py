@@ -4,8 +4,7 @@ import re
 import asyncio
 import textwrap
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Callable, Dict
 from dotenv import load_dotenv
 
 import discord
@@ -30,38 +29,36 @@ def chunk(text: str, max_len: int = 2000) -> List[str]:
     return parts
 
 
-def parse_allowed_channels(env_val: Optional[str]) -> Optional[set[int]]:
-    if not env_val:
-        return None
-    return {int(x.strip()) for x in env_val.split(",") if x.strip().isdigit()}
 
+AGENT_BUILDERS: Dict[str, Callable[[Optional[str]], StandardAgent]] = {
+    "rewoo": lambda model: ReWOOAgent(model=model),
+    "react": lambda model: ReACTAgent(model=model),
+}
 
-class ReasonerProfile(str, Enum):
-    REWOO = "rewoo"
-    REACT = "react"
-
+def list_profiles() -> List[str]:
+    return sorted(AGENT_BUILDERS.keys())
 
 @dataclass(slots=True)
 class DiscordAgentRuntime:
-    chosen_profile: ReasonerProfile = ReasonerProfile.REWOO
+    chosen_profile: str = "rewoo"
     current_agent: Optional[StandardAgent] = None
     bot_user_id: Optional[int] = None
 
 
-def _build_agent(profile: ReasonerProfile) -> StandardAgent:
+def _build_agent(profile_key: str) -> StandardAgent:
+    key = (profile_key or "").strip().lower()
+    builder = AGENT_BUILDERS.get(key)
+    if not builder:
+        available = ", ".join(sorted(AGENT_BUILDERS.keys()))
+        raise ValueError(f"Unknown agent profile: {profile_key}. Available: {available}")
     model = os.getenv("LLM_MODEL")
-    logger.info("initializing_agent", profile=profile.value, model=model)
-    if profile is ReasonerProfile.REACT:
-        return ReACTAgent(model=model)
-    return ReWOOAgent(model=model)
+    logger.info("initializing_agent", profile=key, model=model)
+    return builder(model)
 
 
 def extract_goal_from_mention(content: str, bot_user_id: int) -> str:
-    # Matches <@123> and <@!123>
-    mention_regex = re.compile(rf"<@!?{bot_user_id}>")
+    mention_regex = re.compile(rf"<@!?{bot_user_id}>") # Matches <@123> and <@!123>
     goal = mention_regex.sub("", content).strip()
-    # Also strip a leading colon or punctuation if users write "@Bot: do X"
-    goal = goal.lstrip(":,;.- ").strip()
     return goal
 
 
@@ -101,7 +98,7 @@ async def main() -> None:
     if not token:
         raise RuntimeError("DISCORD_BOT_TOKEN is required in .env")
 
-    allowed_channels = parse_allowed_channels(os.getenv("DISCORD_ALLOWED_CHANNEL_IDS"))
+    # No channel allowlist; rely on Discord permissions + mention-gating
 
     intents = discord.Intents.default()
     intents.message_content = True
@@ -126,31 +123,26 @@ async def main() -> None:
     standard_group = app_commands.Group(name="standard_agent", description="Configure Standard Agent")
 
     @standard_group.command(name="reasoner", description="Switch or list reasoning strategy")
-    @app_commands.describe(mode="Choose 'react' or 'rewoo'. Leave empty to list current/available.")
-    async def reasoner(interaction: discord.Interaction, mode: Optional[str] = None):
+    @app_commands.describe(mode="Choose reasoning strategy. Leave empty to list current/available.")
+    async def reasoner(interaction: discord.Interaction, reasoning_strategy: Optional[str] = None):
         try:
-            valid = {p.value for p in ReasonerProfile}
-            if not mode:
+            valid = set(list_profiles())
+            if not reasoning_strategy:
                 await interaction.response.send_message(
-                    f"Available reasoners: {', '.join(sorted(valid))}. Current: {runtime.chosen_profile.value}",
+                    f"Available reasoners: {', '.join(sorted(valid))}. Current: {runtime.chosen_profile}",
                     ephemeral=True,
                 )
                 return
-            mode_l = mode.lower().strip()
-            if mode_l not in valid:
-                await interaction.response.send_message("Usage: /standard_agent reasoner <react|rewoo>", ephemeral=True)
+            reasoning_strategy = reasoning_strategy.lower().strip()
+            if reasoning_strategy not in valid:
+                await interaction.response.send_message("Usage: /standard_agent reasoner reasoning_strategy", ephemeral=True)
                 return
-            runtime.chosen_profile = ReasonerProfile(mode_l)
+            runtime.chosen_profile = reasoning_strategy
             if os.getenv("JENTIC_AGENT_API_KEY"):
                 runtime.current_agent = _build_agent(runtime.chosen_profile)
-                await interaction.response.send_message(
-                    f"Reasoner set to {runtime.chosen_profile.value} and agent reloaded.", ephemeral=True
-                )
+                await interaction.response.send_message(f"Reasoner set to {runtime.chosen_profile} and agent reloaded.", ephemeral=True)
             else:
-                await interaction.response.send_message(
-                    f"Reasoner set to {runtime.chosen_profile.value}. Configure key first via /standard_agent configure.",
-                    ephemeral=True,
-                )
+                await interaction.response.send_message(f"Reasoner set to {runtime.chosen_profile}. Configure key first via /standard_agent configure.", ephemeral=True,)
         except Exception as exc:  # pragma: no cover
             logger.error("reasoner_switch_failed", error=str(exc))
             await interaction.response.send_message(f"Failed to switch profile: {exc}", ephemeral=True)
@@ -168,16 +160,14 @@ async def main() -> None:
         runtime.current_agent = None
         os.environ.pop("JENTIC_AGENT_API_KEY", None)
         logger.warning("agent_killed")
-        await interaction.response.send_message(
-            "Agent killed. API key cleared; new requests will be rejected until reconfigured.", ephemeral=True
-        )
+        await interaction.response.send_message("Agent killed. API key cleared; new requests will be rejected until reconfigured.", ephemeral=True)
 
     client.tree.add_command(standard_group)
 
     @client.event
     async def on_ready():
         logger.info("discord_ready", user=str(client.user), user_id=getattr(client.user, "id", None))
-        print(f"Logged in as {client.user} (ID: {getattr(client.user, 'id', None)})")
+        logger.info(f"Logged in as {client.user} (ID: {getattr(client.user, 'id', None)})")
         try:
             await client.tree.sync()
         except Exception as exc:  # pragma: no cover
@@ -198,11 +188,6 @@ async def main() -> None:
             if not mentioned:
                 return
 
-            # Optional channel allowlist
-            if allowed_channels is not None and hasattr(message.channel, "id"):
-                if message.channel.id not in allowed_channels:
-                    return
-
             # Extract goal (text after mention)
             content = message.content or ""
             goal = extract_goal_from_mention(content, bot_user.id)  # type: ignore[arg-type]
@@ -212,21 +197,21 @@ async def main() -> None:
                 return
 
             # Handle simple text commands
-            lower = goal.lower().strip()
-            if lower.startswith("reasoner"):
-                parts = lower.split()
-                valid = {p.value for p in ReasonerProfile}
+            goal = goal.lower().strip()
+            if goal.startswith("reasoner"):
+                parts = goal.split()
+                valid = set(list_profiles())
                 if len(parts) == 2 and parts[1] == "list":
-                    await message.channel.send(f"Available reasoners: {', '.join(sorted(valid))}. Current: {runtime.chosen_profile.value}")
+                    await message.channel.send(f"Available reasoners: {', '.join(sorted(valid))}. Current: {runtime.chosen_profile}")
                     return
                 if len(parts) == 2 and parts[1] in valid:
-                    runtime.chosen_profile = ReasonerProfile(parts[1])
+                    runtime.chosen_profile = parts[1]
                     try:
                         if os.getenv("JENTIC_AGENT_API_KEY"):
                             runtime.current_agent = _build_agent(runtime.chosen_profile)
-                            await message.channel.send(f"Reasoner set to {runtime.chosen_profile.value} and agent reloaded.")
+                            await message.channel.send(f"Reasoner set to {runtime.chosen_profile} and agent reloaded.")
                         else:
-                            await message.channel.send(f"Reasoner set to {runtime.chosen_profile.value}. Configure key first (see README).")
+                            await message.channel.send(f"Reasoner set to {runtime.chosen_profile}. Configure key first (see README).")
                     except Exception as exc:
                         logger.error("reasoner_switch_failed", error=str(exc))
                         await message.channel.send(f"Failed to switch profile: {exc}")
@@ -234,26 +219,7 @@ async def main() -> None:
                 await message.channel.send("Usage: @Bot reasoner <react|rewoo|list>")
                 return
 
-            if lower.startswith("configure"):
-                # Warning: sharing keys in public channels is unsafe; prefer .env.
-                try:
-                    key = goal.split(" ", 1)[1].strip()
-                except Exception:
-                    await message.channel.send("Usage: @Bot configure <JENTIC_AGENT_API_KEY>. Note: sending secrets in-channel is unsafe.")
-                    return
-                if not key:
-                    await message.channel.send("No key provided. Prefer configuring via environment variables.")
-                    return
-                os.environ["JENTIC_AGENT_API_KEY"] = key
-                try:
-                    runtime.current_agent = _build_agent(runtime.chosen_profile)
-                    await message.channel.send("Agent configured. Consider deleting your message to hide the key.")
-                except Exception as exc:
-                    logger.error("agent_build_failed", error=str(exc))
-                    await message.channel.send(f"Saved key, but failed to initialize agent: {exc}")
-                return
-
-            if lower == "kill":
+            if goal == "kill":
                 runtime.current_agent = None
                 os.environ.pop("JENTIC_AGENT_API_KEY", None)
                 logger.warning("agent_killed")
@@ -264,7 +230,7 @@ async def main() -> None:
                 # Ensure agent exists or prompt for configuration
                 if runtime.current_agent is None:
                     if not os.getenv("JENTIC_AGENT_API_KEY"):
-                        await message.channel.send("Not configured. Use @Bot configure <KEY> or set environment variable.")
+                        await message.channel.send("Not configured. Use /standard_agent configure to set the Agent API Key.")
                         return
                     runtime.current_agent = _build_agent(runtime.chosen_profile)
                 # Bridge sync agent call to a thread to avoid blocking the loop
