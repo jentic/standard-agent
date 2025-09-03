@@ -1,12 +1,12 @@
 ## Agent Evaluation Framework PRD (Standard-Agent)
 
 ### 1. Problem Statement
-We need a non-intrusive evaluation framework to compare agents and configurations built with `Standard-Agent` on an apples-to-apples basis. The first-pass metrics per run: Success (boolean), Time to Complete, Tokens Consumed (ptok + ctok), and Steps Taken. Metrics must be persisted and aggregated over a labeled dataset (Goal + Expected Result) to compute success/failure rates and other analytics.
+We need a non-intrusive evaluation framework to compare agents and configurations built with `Standard-Agent` on an apples-to-apples basis. The first-pass metrics per run: Success (boolean), Time to Complete, and Tokens Consumed (ptok + ctok). Metrics must be persisted and aggregated over a labeled dataset (Goal + Expected Result) to compute success/failure rates and other analytics.
 
 ### 2. Goals and Non-Goals
 - Goals
   - Instrument `StandardAgent` runs without invasive code changes, ideally via decorators.
-  - Collect per-run metrics: success, latency, tokens, steps.
+  - Collect per-run metrics: success, latency, tokens.
   - Persist run-level metrics with sufficient context (agent id, config, seed, dataset item id).
   - Provide aggregation utilities (per agent/config, per dataset) to compute success rate and distributions.
   - Optional: Surface traces and metrics in a UI dashboard.
@@ -19,19 +19,17 @@ We need a non-intrusive evaluation framework to compare agents and configuration
 - Success: use `ReasoningResult.success` (boolean).
 - Time to Complete: wall-clock time of `StandardAgent.solve(goal)`.
 - Tokens Consumed: sum of prompt and completion tokens across the run (ptok+ctok) using the LLM wrapper counters.
-- Steps Taken: count of reasoning/tool steps (reasoner-dependent; ReWOO: plan+exec+reflect steps; ReACT: think/act loops).
 
 ### 4. High-Level Approach
 - Use decorators to hook into key functions:
   - At the entry/exit of `StandardAgent.solve` to time the run and emit a run span.
   - Inside LLM calls (e.g., `LiteLLM.completion`) to accumulate token usage.
-  - Inside reasoner loops to increment step counts.
 - Prefer Deepeval’s `@observe` + `update_current_span` for tracing and metric capture with minimal intrusion. Wrap our functions externally where possible to avoid edits to core files.
 - Persist run records to a simple backend (JSONL or SQLite) with a clean schema. Support later export to Deepeval/Confident if needed.
 
 ### 5. Deepeval Feasibility and Integration Plan
 - Decorator: `@observe` to create spans on instrumented functions, with `update_current_span(test_case=LLMTestCase(...))` to attach IO.
-- Custom Metrics: Implement `BaseMetric` subclasses for latency, steps, and token totals if needed, or compute them via tracing spans and store as custom fields.
+- Custom Metrics: Implement `BaseMetric` subclasses for latency and token totals if needed, or compute them via tracing spans and store as custom fields.
 - Dashboard: Use Deepeval’s Confident AI integration to surface custom metrics if available; otherwise, store locally and visualize later.
 - Non-intrusiveness: Provide wrapper decorators in a separate module (`evaluation/hooks.py`) and apply them in example runners or via a lightweight monkeypatch in tests.
 
@@ -60,14 +58,12 @@ We need a non-intrusive evaluation framework to compare agents and configuration
   - tokens_prompt: int
   - tokens_completion: int
   - tokens_total: int
-  - steps: int
   - trace_ids: Optional[list[str]] (if Deepeval span ids)
   - extra: dict (freeform)
 
 ### 8. Instrumentation Details (v1)
 - Latency: wall-clock via `time.monotonic()` around `agent.solve`.
 - Tokens: extend `LiteLLM` to expose per-call token counts; accumulate in a thread-local or per-run context span.
-- Steps: increment on each reasoner step entry (ReWOO plan, execute, reflect; ReACT loop iteration). Use decorator on `Reasoner.run` plus helper counters.
 - Success: read from `ReasoningResult.success` post-run.
 
 ### 9. Storage
@@ -78,7 +74,7 @@ We need a non-intrusive evaluation framework to compare agents and configuration
 - Aggregations:
   - Success rate = sum(success)/N.
   - Failure rate = 1 - success rate.
-  - Avg/median time_ms, tokens_total, steps.
+  - Avg/median time_ms and tokens_total.
   - Breakdown by agent_name, config_hash, dataset_id.
 - CLI commands:
   - `eval run --dataset <path> --agent <profile> --config <cfg.json>`
@@ -98,7 +94,7 @@ def observe_agent_run(func):
         result = func(self, goal, *args, **kwargs)
         duration_ms = int((time.monotonic() - start) * 1000)
         update_current_span(test_case=LLMTestCase(input=goal, actual_output=str(result)))
-        # also stash duration_ms in a span attribute; tokens/steps aggregated elsewhere
+        # also stash duration_ms in a span attribute; tokens aggregated elsewhere
         return result
     return wrapper
 ```
@@ -115,6 +111,6 @@ def observe_agent_run(func):
 
 ### 14. Acceptance Criteria (v1)
 - Run a dataset of ≥10 goals against ≥2 agent configs.
-- Persist per-run records including success, time_ms, tokens_total, steps.
-- Aggregate success rate and mean time/tokens/steps per config.
+- Persist per-run records including success, time_ms and tokens_total.
+- Aggregate success rate and mean time/tokens per config.
 - No changes required to core `agents/*` files beyond optional opt-in wrappers in example runners.
