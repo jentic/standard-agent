@@ -13,7 +13,7 @@ We need a non-intrusive evaluation framework to compare agents and configuration
 - Non-Goals (for first pass)
   - Ground-truth validators for arbitrary tasks (will rely on `ReasoningResult.success`).
   - Complex outcome grading; simple boolean success only.
-  - Advanced dashboards; we’ll prefer Deepeval/Confident integrations if feasible.
+  - Importing Deepeval in core; core remains provider-agnostic.
 
 ### 3. Key Metrics (v1)
 - Success: use `ReasoningResult.success` (boolean).
@@ -21,23 +21,32 @@ We need a non-intrusive evaluation framework to compare agents and configuration
 - Tokens Consumed: sum of prompt and completion tokens across the run (ptok+ctok) using the LLM wrapper counters.
 
 ### 4. High-Level Approach
-- Use decorators to hook into key functions:
-  - At the entry/exit of `StandardAgent.solve` to time the run and emit a run span.
-  - Inside LLM calls (e.g., `LiteLLM.completion`) to accumulate token usage.
-- Prefer Deepeval’s `@observe` + `update_current_span` for tracing and metric capture with minimal intrusion. Wrap our functions externally where possible to avoid edits to core files.
-- Persist run records to a simple backend (JSONL or SQLite) with a clean schema. Support later export to Deepeval/Confident if needed.
+- Use a provider-agnostic `evaluation/tracing.py` with our own `@observe`-like decorator that:
+  - Starts/ends spans around target functions.
+  - Uses contextvars to accumulate per-run totals (tokens, timing).
+  - Records inputs/outputs with truncation and redaction.
+- Plug in backends via adapters:
+  - `JsonTracer` (default, no deps): write spans/run summaries to JSONL.
+  - Optional adapters: `OpenTelemetryTracer`, `DeepEvalTracer` (used only from runner if installed).
+- Wrap the actual instance methods in the runner (per-instance), not in core.
+- Persist run records to JSONL (and optionally SQLite later) with a clean schema.
 
-### 5. Deepeval Feasibility and Integration Plan
-- Decorator: `@observe` to create spans on instrumented functions, with `update_current_span(test_case=LLMTestCase(...))` to attach IO.
-- Custom Metrics: Implement `BaseMetric` subclasses for latency and token totals if needed, or compute them via tracing spans and store as custom fields.
-- Dashboard: Use Deepeval’s Confident AI integration to surface custom metrics if available; otherwise, store locally and visualize later.
-- Non-intrusiveness: Provide wrapper decorators in a separate module (`evaluation/hooks.py`) and apply them in example runners or via a lightweight monkeypatch in tests.
+### 5. Tracing/Backend Integration Plan
+- Core does NOT import Deepeval.
+- Runner selects tracer backend based on config/env:
+  - Default: `JsonTracer`.
+  - If `OTEL_EXPORTER_OTLP_ENDPOINT` present: use `OpenTelemetryTracer`.
+  - If Deepeval is installed and explicitly requested: use `DeepEvalTracer` adapter.
+- Our `observe(tracer, attrs_fn=None)` decorator is used to wrap:
+  - `StandardAgent.solve` (per-instance) for latency and IO capture.
+  - LLM completion method (per-instance) for token usage accumulation.
 
 ### 6. Architecture & Components
 - evaluation/
-  - hooks.py: decorators using Deepeval tracing to capture spans and metrics.
-  - storage.py: persistence (JSONL, and optional SQLite with SQLAlchemy).
-  - metrics.py: metric aggregation utilities (success rate, avg latency, token distributions).
+  - tracing.py: pluggable tracer interface, `observe` decorator, contextvars store.
+  - hooks.py: helper to enable per-instance wrapping of agent/llm methods.
+  - storage.py: persistence (JSONL, optional SQLite later).
+  - metrics.py: aggregation utilities (success rate, avg latency, token distributions).
   - dataset.py: schema and loader for gold dataset items.
   - runner.py: CLI to run agents on datasets and collect results.
 
@@ -83,31 +92,24 @@ We need a non-intrusive evaluation framework to compare agents and configuration
 ### 11. Example Hook Usage (sketch)
 ```python
 # evaluation/hooks.py
-from deepeval.tracing import observe, update_current_span
-from deepeval.test_case import LLMTestCase
+from evaluation.tracing import observe, JsonTracer
 import time
 
+tracer = JsonTracer(output_path="./eval_runs/spans.jsonl")
+
 def observe_agent_run(func):
-    @observe()
-    def wrapper(self, goal: str, *args, **kwargs):
-        start = time.monotonic()
-        result = func(self, goal, *args, **kwargs)
-        duration_ms = int((time.monotonic() - start) * 1000)
-        update_current_span(test_case=LLMTestCase(input=goal, actual_output=str(result)))
-        # also stash duration_ms in a span attribute; tokens aggregated elsewhere
-        return result
-    return wrapper
+    return observe(tracer)(func)
 ```
 
 ### 12. Risks & Mitigations
 - Relying on `ReasoningResult.success` may mislabel outcomes — acceptable for v1; plan validator interface in v2.
-- Deepeval dashboard custom metrics may require Confident AI account/features — store locally regardless; surface to dashboard when available.
 - Token counting accuracy varies by model/provider — use provider responses where available; otherwise estimate via tiktoken as fallback.
+- Multiple tracing backends add complexity — default to JsonTracer; make others opt-in.
 
 ### 13. Milestones
-- M1: Hooks + JSONL persistence for v1 metrics; CLI runner minimal.
+- M1: Tracing layer + JSONL persistence for v1 metrics; CLI runner minimal.
 - M2: Aggregation utilities; per-agent/config reports.
-- M3: Optional dashboard surfacing via Deepeval; SQLite backend.
+- M3: Optional adapters (OpenTelemetry, Deepeval) and SQLite backend.
 
 ### 14. Acceptance Criteria (v1)
 - Run a dataset of ≥10 goals against ≥2 agent configs.
