@@ -8,6 +8,9 @@ import sys
 from pathlib import Path
 import uuid
 from datetime import datetime, timezone
+import platform
+import sys
+from importlib import metadata as importlib_metadata
 from typing import Any, Dict
 
 from .dataset import load_dataset
@@ -34,6 +37,52 @@ def build_agent(profile: str, model: str) -> Any:
     if profile.lower() == "react":
         return ReACTAgent(model=model)
     raise ValueError(f"Unknown profile: {profile}")
+
+
+def _likely_secret_string(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    if len(value) < 32:
+        return False
+    safe_chars = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.+/=")
+    return all(c in safe_chars for c in value)
+
+
+def redact_config(obj: Any) -> Any:
+    """Recursively redact likely secret values by key name or shape."""
+    sensitive_keys = {"key", "token", "secret", "password", "auth", "credential", "api_key", "apikey"}
+    if isinstance(obj, dict):
+        redacted: Dict[str, Any] = {}
+        for k, v in obj.items():
+            if any(kw in k.lower() for kw in sensitive_keys):
+                redacted[k] = "***"
+            else:
+                redacted[k] = redact_config(v)
+        return redacted
+    if isinstance(obj, list):
+        return [redact_config(v) for v in obj]
+    if _likely_secret_string(obj):
+        return "***"
+    return obj
+
+
+def collect_runtime_env(agent: Any) -> Dict[str, Any]:
+    pkg_versions: Dict[str, str] = {}
+    for pkg in ("litellm", "standard-agent", "jent ic", "structlog"):
+        try:
+            ver = importlib_metadata.version(pkg)
+            pkg_versions[pkg] = ver
+        except Exception:
+            continue
+    llm_model = getattr(getattr(agent, "llm", None), "model", None)
+    return {
+        "model": llm_model,
+        "llm_wrapper": getattr(getattr(agent, "llm", None), "__class__", type("", (), {})).__name__,
+        "agent_name": agent.__class__.__name__,
+        "python_version": sys.version.split()[0],
+        "platform": platform.platform(terse=True),
+        "package_versions": pkg_versions or None,
+    }
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -93,6 +142,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 tokens_prompt=tokens_prompt,
                 tokens_completion=tokens_completion,
                 tokens_total=tokens_total,
+                agent_config=redact_config(config) if config else None,
+                runtime_env=collect_runtime_env(agent),
             )
             storage.append(rec)
         except Exception as e:
@@ -112,6 +163,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 tokens_completion=None,
                 tokens_total=None,
                 errors=[str(e)],
+                agent_config=redact_config(config) if config else None,
+                runtime_env=collect_runtime_env(agent),
             )
             storage.append(rec)
 
