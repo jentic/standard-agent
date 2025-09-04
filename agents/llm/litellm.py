@@ -38,6 +38,22 @@ class LiteLLM(BaseLLM):
                 completion_kwargs[key] = value
 
         resp = litellm.completion(**completion_kwargs)
+
+        # Notify eval layer about per-call token usage if available
+        # Expected shape: resp.usage.prompt_tokens / completion_tokens (provider-dependent)
+        try:
+            usage = getattr(resp, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", None) if usage is not None else None
+            completion_tokens = getattr(usage, "completion_tokens", None) if usage is not None else None
+            # Call optional usage callback if provided on this instance
+            usage_cb = getattr(self, "usage_callback", None)
+            if callable(usage_cb):
+                usage_cb(prompt_tokens if isinstance(prompt_tokens, int) else None,
+                         completion_tokens if isinstance(completion_tokens, int) else None)
+        except Exception:
+            # Never fail the main call due to usage accounting
+            pass
+
         try:
             return resp.choices[0].message.content.strip()
         except (IndexError, AttributeError):
