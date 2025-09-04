@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import MethodType
+import time
 from typing import Any, Optional
 
 from .tracing import Tracer, observe, current_run
@@ -17,12 +18,12 @@ def enable_instrumentation(agent: Any, llm: Optional[Any], tracer: Tracer) -> No
         return
 
     if hasattr(agent, "solve"):
-        original_solve = agent.solve
+        original_solve = agent.solve  # bound method
 
         def _attrs_fn(goal: str, *args, **kwargs):
             return {"goal_preview": goal[:1000] if isinstance(goal, str) else str(goal)}
 
-        def _wrap_solve(*args, **kwargs):
+        def _wrap_solve(goal: str, *args, **kwargs):
             # Initialize per-run token aggregation
             run = current_run.get()
             if run is None:
@@ -31,11 +32,18 @@ def enable_instrumentation(agent: Any, llm: Optional[Any], tracer: Tracer) -> No
             run.setdefault("tokens_prompt_sum", 0)
             run.setdefault("tokens_completion_sum", 0)
             run.setdefault("token_na", False)
-            return original_solve(*args, **kwargs)
+            # Latency start
+            t_start = time.monotonic()
+            result = original_solve(goal, *args, **kwargs)
+            # Latency end
+            try:
+                run["time_ms"] = int((time.monotonic() - t_start) * 1000)
+            except Exception:
+                run["time_ms"] = 0
+            return result
 
-        wrapped = observe(tracer, attrs_fn=_attrs_fn)(_wrap_solve)
-        # Rebind to this instance
-        agent.solve = MethodType(wrapped, agent)
+        # Do NOT bind via MethodType; original_solve is already bound
+        agent.solve = observe(tracer, attrs_fn=_attrs_fn)(_wrap_solve)
 
     setattr(agent, "_eval_wrapped", True)
 
@@ -59,10 +67,11 @@ def enable_instrumentation(agent: Any, llm: Optional[Any], tracer: Tracer) -> No
         # attach callback to llm instance
         setattr(llm, "usage_callback", _usage_callback)
 
-        def completion_wrapper(*args, **kwargs):
-            return original_completion(*args, **kwargs)
+        def completion_wrapper(messages, **kwargs):
+            return original_completion(messages, **kwargs)
 
-        llm.completion = MethodType(completion_wrapper, llm)
+        # original_completion is already bound, don't rebind with MethodType
+        llm.completion = completion_wrapper
         setattr(llm, "_eval_wrapped", True)
 
 

@@ -1,0 +1,5 @@
+{"id": "nyt-1", "goal": "Find New York Times articles about OpenAI."}
+{"id": "nyt-2", "goal": "Find New York Times articles about OpenAI and send an email to the author @rishikeshchirammelajit@gmail.com."}
+//{"id": "nyt-2", "goal": "Find New York Times articles about OpenAI and write a 3-line summary."}
+//{"id": "nyt-3", "goal": "Find New York Times articles about OpenAI and create a concise report."}
+

@@ -6,13 +6,15 @@ import json
 import os
 import sys
 from pathlib import Path
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from .dataset import load_dataset
 from .hooks import enable_instrumentation
 from .metrics import aggregate, group_by
 from .storage import JsonlStorage, RunRecord, make_output_path
-from .tracing import JsonTracer
+from .tracing import JsonTracer, current_run
 
 
 def compute_config_hash(config: Dict[str, Any]) -> str:
@@ -60,39 +62,55 @@ def cmd_run(args: argparse.Namespace) -> int:
             break
         processed += 1
         try:
+            # reset per-run context
+            current_run.set({})
             result = agent.solve(goal)
+            run_state = current_run.get() or {}
+            token_na = bool(run_state.get("token_na"))
+            if token_na:
+                tokens_prompt = None
+                tokens_completion = None
+                tokens_total = None
+            else:
+                tokens_prompt = int(run_state.get("tokens_prompt_sum", 0))
+                tokens_completion = int(run_state.get("tokens_completion_sum", 0))
+                tokens_total = tokens_prompt + tokens_completion
+            time_ms = int(run_state.get("time_ms", 0))
             success = bool(getattr(result, "success", False))
             successes += int(success)
             rec = RunRecord(
-                run_id=f"run-{processed}",
+                run_id=str(uuid.uuid4()),
                 dataset_id=dataset_path.stem,
                 item_id=str(item_id),
                 agent_name=agent.__class__.__name__,
                 config_hash=cfg_hash,
+                timestamp_utc=datetime.now(timezone.utc).isoformat(),
                 goal=goal,
                 expected=expected,
                 result=str(result),
                 success=success,
-                # time_ms and tokens require deeper integration; stub 0 for now
-                time_ms=0,
-                tokens_prompt=0,
-                tokens_completion=0,
+                time_ms=time_ms,
+                tokens_prompt=tokens_prompt,
+                tokens_completion=tokens_completion,
+                tokens_total=tokens_total,
             )
             storage.append(rec)
         except Exception as e:
             rec = RunRecord(
-                run_id=f"run-{processed}",
+                run_id=str(uuid.uuid4()),
                 dataset_id=dataset_path.stem,
                 item_id=str(item_id),
                 agent_name=agent.__class__.__name__,
                 config_hash=cfg_hash,
+                timestamp_utc=datetime.now(timezone.utc).isoformat(),
                 goal=goal,
                 expected=expected,
                 result=str(e),
                 success=False,
                 time_ms=0,
-                tokens_prompt=0,
-                tokens_completion=0,
+                tokens_prompt=None,
+                tokens_completion=None,
+                tokens_total=None,
                 errors=[str(e)],
             )
             storage.append(rec)

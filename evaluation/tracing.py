@@ -77,7 +77,6 @@ def observe(tracer: Tracer, attrs_fn: Optional[Callable[..., Dict[str, Any]]] = 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             run_state = current_run.get()
-            created_state = False
             if run_state is None:
                 run_state = {
                     "run_id": str(uuid.uuid4()),
@@ -85,7 +84,6 @@ def observe(tracer: Tracer, attrs_fn: Optional[Callable[..., Dict[str, Any]]] = 
                     "tokens_completion": 0,
                 }
                 current_run.set(run_state)
-                created_state = True
 
             attrs = {}
             if attrs_fn:
@@ -93,7 +91,14 @@ def observe(tracer: Tracer, attrs_fn: Optional[Callable[..., Dict[str, Any]]] = 
                     attrs = attrs_fn(*args, **kwargs) or {}
                 except Exception:
                     attrs = {}
-            attrs.setdefault("run_id", run_state["run_id"]) 
+            # Ensure run_id is present and safe
+            run_id = (run_state or {}).get("run_id")
+            if run_id is None:
+                run_id = str(uuid.uuid4())
+                if run_state is not None:
+                    run_state["run_id"] = run_id
+                    current_run.set(run_state)
+            attrs.setdefault("run_id", run_id)
 
             with tracer.start_span(func.__name__, attrs=attrs) as span:
                 result = func(*args, **kwargs)
@@ -106,9 +111,6 @@ def observe(tracer: Tracer, attrs_fn: Optional[Callable[..., Dict[str, Any]]] = 
                 except Exception:
                     pass
 
-            if created_state:
-                # End-of-run cleanup; callers can read current_run before it resets
-                current_run.set(None)
             return result
 
         wrapper.__name__ = getattr(func, "__name__", "wrapped")

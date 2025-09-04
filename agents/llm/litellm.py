@@ -43,8 +43,16 @@ class LiteLLM(BaseLLM):
         # Expected shape: resp.usage.prompt_tokens / completion_tokens (provider-dependent)
         try:
             usage = getattr(resp, "usage", None)
-            prompt_tokens = getattr(usage, "prompt_tokens", None) if usage is not None else None
-            completion_tokens = getattr(usage, "completion_tokens", None) if usage is not None else None
+            prompt_tokens = None
+            completion_tokens = None
+            if usage is not None:
+                # Attribute style
+                prompt_tokens = getattr(usage, "prompt_tokens", None)
+                completion_tokens = getattr(usage, "completion_tokens", None)
+            # Dict-style fallback if provider returns dict-like usage
+            if prompt_tokens is None and isinstance(usage, dict):
+                prompt_tokens = usage.get("prompt_tokens")
+                completion_tokens = usage.get("completion_tokens")
             # Call optional usage callback if provided on this instance
             usage_cb = getattr(self, "usage_callback", None)
             if callable(usage_cb):
