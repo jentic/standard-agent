@@ -9,8 +9,6 @@ Provides:
 """
 
 __all__ = [
-    "tracing",
-    "hooks",
     "storage",
     "metrics",
     "dataset",
