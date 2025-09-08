@@ -13,11 +13,18 @@ import sys
 from importlib import metadata as importlib_metadata
 from typing import Any, Dict
 
+# Load env vars from .env if present (for LANGFUSE_*, LLM creds, etc.)
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except Exception:
+    pass
+
 from .dataset import load_dataset
-from .hooks import enable_instrumentation
+from .instrumentation import instrument_agent, get_current_run_metrics, current_run
 from .metrics import aggregate, group_by
 from .storage import JsonlStorage, RunRecord, make_output_path
-from .tracing import JsonTracer, current_run
+from .otel_setup import setup_telemetry
 
 
 def compute_config_hash(config: Dict[str, Any]) -> str:
@@ -68,7 +75,7 @@ def redact_config(obj: Any) -> Any:
 
 def collect_runtime_env(agent: Any) -> Dict[str, Any]:
     pkg_versions: Dict[str, str] = {}
-    for pkg in ("litellm", "standard-agent", "jent ic", "structlog"):
+    for pkg in ("litellm", "standard-agent", "jentic", "structlog"):
         try:
             ver = importlib_metadata.version(pkg)
             pkg_versions[pkg] = ver
@@ -90,18 +97,21 @@ def cmd_run(args: argparse.Namespace) -> int:
     config = {}
     if args.config and Path(args.config).exists():
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
-    model = config.get("model") or os.getenv("LLM_MODEL") or "gpt-4o"
+    model = config.get("model") or os.getenv("LLM_MODEL")
+    if not model:
+        raise ValueError("No model specified")
     cfg_hash = compute_config_hash(config)
     out_path = Path(args.output) if args.output else make_output_path("./eval_runs", dataset_path.stem, short_hash(cfg_hash))
     spans_path = Path("./eval_runs/spans.jsonl")
 
-    tracer = JsonTracer(spans_path)
+    # Configure OpenTelemetry + Langfuse
+    setup_telemetry("standard-agent-eval")
     storage = JsonlStorage(out_path)
 
     agent = build_agent(args.agent, model=model)
     # Best-effort: pass llm if present
     llm = getattr(agent, "llm", None)
-    enable_instrumentation(agent, llm=llm, tracer=tracer)
+    instrument_agent(agent, llm)
 
     processed = 0
     successes = 0
@@ -111,20 +121,23 @@ def cmd_run(args: argparse.Namespace) -> int:
             break
         processed += 1
         try:
-            # reset per-run context
-            current_run.set({})
+            # reset per-run context and pre-populate metadata for span attributes
+            current_run.set({
+                "dataset_id": dataset_path.stem,
+                "item_id": str(item_id),
+                "agent_name": agent.__class__.__name__,
+                "config_hash": cfg_hash,
+            })
             result = agent.solve(goal)
-            run_state = current_run.get() or {}
-            token_na = bool(run_state.get("token_na"))
-            if token_na:
-                tokens_prompt = None
-                tokens_completion = None
-                tokens_total = None
-            else:
-                tokens_prompt = int(run_state.get("tokens_prompt_sum", 0))
-                tokens_completion = int(run_state.get("tokens_completion_sum", 0))
-                tokens_total = tokens_prompt + tokens_completion
-            time_ms = int(run_state.get("time_ms", 0))
+            m = get_current_run_metrics()
+            tokens_prompt = m.get("tokens_prompt")
+            tokens_completion = m.get("tokens_completion")
+            tokens_total = m.get("tokens_total")
+            time_ms = int(m.get("duration_ms", 0))
+            trace_ids = []
+            trace_id = current_run.get().get("trace_id") if current_run.get() else None
+            if trace_id:
+                trace_ids = [trace_id]
             success = bool(getattr(result, "success", False))
             successes += int(success)
             rec = RunRecord(
@@ -144,6 +157,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 tokens_total=tokens_total,
                 agent_config=redact_config(config) if config else None,
                 runtime_env=collect_runtime_env(agent),
+                trace_ids=trace_ids if trace_ids else None,
             )
             storage.append(rec)
         except Exception as e:
