@@ -1,4 +1,4 @@
-"""Non-intrusive instrumentation for Standard Agent using OpenTelemetry."""
+"""Non-intrusive instrumentation for Standard Agent using OpenTelemetry (OTel-only)."""
 
 from __future__ import annotations
 
@@ -7,15 +7,7 @@ import uuid
 from contextvars import ContextVar
 from typing import Any, Dict, Optional
 
-from opentelemetry import trace
-from .otel_setup import get_tracer, get_meter
-
-# Optional Langfuse Cloud integration (SDK-based)
-try:
-    from langfuse import observe as lf_observe  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    lf_observe = None  # type: ignore
-
+from .otel_setup import get_tracer
 
 # Per-run context for metrics aggregation
 current_run: ContextVar[Optional[Dict[str, Any]]] = ContextVar("current_run", default=None)
@@ -52,17 +44,9 @@ def instrument_agent(agent: Any, llm: Any) -> None:
                 for meta_key in ("dataset_id", "item_id", "agent_name", "config_hash"):
                     if meta_key in run_ctx and run_ctx[meta_key] is not None:
                         span.set_attribute(meta_key, str(run_ctx[meta_key]))
-
-                # If Langfuse SDK is available, also wrap the call to emit a Langfuse span
                 try:
-                    if lf_observe is not None:
-                        @lf_observe()
-                        def _call(goal_text: str):
-                            return original_solve(goal_text)
-
-                        result = _call(goal)
-                    else:
-                        result = original_solve(goal)
+                    # Call the original solve method within the OTel span
+                    result = original_solve(goal)
                 except Exception as e:
                     span.record_exception(e)
                     span.set_attribute("error", True)
