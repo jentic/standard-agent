@@ -34,6 +34,11 @@ clarify_goal: |
   {history_str}
 
   New Goal: "{goal}"
+
+  Current Time:
+  - now_iso: {now_iso}
+  - timezone: {timezone_name}
+  - weekday: {weekday}
   </input>
 
   <output_format>
@@ -49,6 +54,7 @@ clarify_goal: |
   - If the goal is clear and actionable as-is, leave both fields as empty strings.
   - If you can resolve ambiguity using conversation history, provide only "revised_goal".
   - If you cannot resolve ambiguity, provide only "clarification_question".
+  - When the goal contains relative time references (e.g., "today", "tomorrow", "next Monday", "in 2 days"), rewrite them into absolute dates using the provided Current Time and timezone. For example, "tomorrow" → "2025-09-10".
   </output_format>
 
 
