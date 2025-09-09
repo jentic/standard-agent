@@ -1,6 +1,6 @@
 # Evaluation (OpenTelemetry + Langfuse)
 
-This layer instruments Standard-Agent using OpenTelemetry and streams spans to Langfuse (Cloud or self-hosted). JSONL run records are still written for aggregation.
+This layer instruments Standard-Agent using OpenTelemetry. You can export OTLP traces to Langfuse (Cloud/self-host) or any OTel backend. JSONL run records are still written for aggregation.
 
 ## What is captured
 - `time_ms`: wall-clock duration of `agent.solve(goal)`
@@ -11,11 +11,19 @@ This layer instruments Standard-Agent using OpenTelemetry and streams spans to L
 
 ## Setup
 1) Install observability deps: `pip install -e ".[observability]"`
-2) Env (Cloud):
+2) Env (Langfuse Cloud OTLP):
+Option A (simple: auto-derive from LANGFUSE_*):
 ```
 LANGFUSE_PUBLIC_KEY=pk-...
 LANGFUSE_SECRET_KEY=sk-...
 LANGFUSE_HOST=https://cloud.langfuse.com
+OTEL_SERVICE_NAME=standard-agent-eval
+```
+Option B (advanced: set OTEL_* explicitly):
+```
+OTEL_EXPORTER_OTLP_ENDPOINT=https://cloud.langfuse.com/api/public/otel/v1/traces
+OTEL_EXPORTER_OTLP_HEADERS=authorization=Basic <base64(PUBLIC:SECRET)>
+OTEL_SERVICE_NAME=standard-agent-eval
 ```
 3) Run:
 ```
