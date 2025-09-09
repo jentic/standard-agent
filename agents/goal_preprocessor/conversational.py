@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Sequence, Dict, Any, Tuple
+from typing import Sequence, Dict, Any, Tuple, Callable, Optional
+import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from agents.goal_preprocessor.base import BaseGoalPreprocessor
 from agents.prompts import load_prompts
 from utils.observability import observe
@@ -25,16 +28,38 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
         - clarification_question: Question for user if goal is unclear, None otherwise
     """
 
-    @observe
-    def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
+    def __init__(self, *, llm, now_fn: Optional[Callable[[], datetime]] = None):  # type: ignore[override]
+        super().__init__(llm=llm)
+        self._now_fn: Optional[Callable[[], datetime]] = now_fn
 
+    def _now(self) -> datetime:
+        if self._now_fn:
+            return self._now_fn()
+        try:
+            tz_name = os.getenv("AGENT_TZ") or os.getenv("TZ")
+            tz = ZoneInfo(tz_name) if tz_name else datetime.now().astimezone().tzinfo  # type: ignore[assignment]
+        except Exception:
+            tz = datetime.now().astimezone().tzinfo  # type: ignore[assignment]
+        return datetime.now(tz=tz) if tz else datetime.now().astimezone()
+
+    @observe()
+    def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
+        ref_now = self._now()
+        tz_name = getattr(ref_now.tzinfo, "key", None) or (ref_now.tzname() or "")
         history_str = "\n".join(f"Goal: {item['goal']}\nResult: {item['result']}" for item in history)
-        prompt = _PROMPTS["clarify_goal"].format(history_str=history_str, goal=goal)
+        prompt = _PROMPTS["clarify_goal"].format(
+            history_str=history_str,
+            goal=goal,
+            now_iso=ref_now.isoformat(),
+            timezone_name=tz_name,
+            weekday=ref_now.strftime("%A"),
+        )
         response = self.llm.prompt_to_json(prompt)
 
         if response.get("revised_goal"):
-            logger.info("revised_goal", original_goal=goal, revised_goal=response["revised_goal"])
-            return response["revised_goal"], None
+            revised = response["revised_goal"]
+            logger.info("revised_goal", original_goal=goal, revised_goal=revised)
+            return revised, None
         
         if response.get("clarification_question"):
             logger.warning('clarification_question', clarification_question=response["clarification_question"])
