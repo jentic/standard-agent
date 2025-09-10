@@ -45,15 +45,16 @@ class LiteLLM(BaseLLM):
                 raise ValueError("LLM returned an empty response")
             return content
         except (IndexError, AttributeError) as e:
-            logger.error("malformed_llm_response",msg="LLM response was malformed.",error=str(e))
-            return ""
+            logger.error("malformed_llm_response", msg="LLM response was malformed", error=str(e))
+            raise ValueError("LLM returned malformed response") from e
 
     def prompt_to_json(self, content: str, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
         """
         Enhanced JSON prompting with automatic retry logic.
 
-        First attempts to use the base class implementation (JSON mode).
-        If that fails, retries with correction prompts up to max_retries times.
+        Handles two types of failures differently:
+        - ValueError (empty/malformed responses): Retry same prompt for transient issues
+        - JSONDecodeError (bad JSON syntax): Retry with correction prompt using actual failed content
 
         Args:
             content: The prompt content
@@ -65,6 +66,7 @@ class LiteLLM(BaseLLM):
 
         Raises:
             json.JSONDecodeError: If all retry attempts fail
+            ValueError: If LLM consistently returns empty/malformed responses
         """
 
         original_prompt = content
@@ -77,22 +79,23 @@ class LiteLLM(BaseLLM):
                 
                 return super().prompt_to_json(current_prompt, **kwargs)
 
-            except (json.JSONDecodeError, ValueError) as e:
+            except json.JSONDecodeError as e:
+                logger.warning("json_parse_failed", attempt=attempt, error=str(e))
                 if attempt >= max_retries:
                     logger.error("json_decode_failed", attempt=attempt, error=str(e), msg="Exceeded max retries for JSON parsing")
                     raise json.JSONDecodeError("Failed to get valid JSON after multiple retries.", raw_response, 0) from e
                 
-                try:
-                    bad_json_content = self.prompt(current_prompt, **kwargs)
-                except (json.JSONDecodeError, ValueError) as inner_e:
-                    bad_json_content = f"An error occurred: {str(inner_e)}"
-
+                # Use the failed JSON content for correction
                 current_prompt = JSON_CORRECTION_PROMPT.format(
                     original_prompt=original_prompt,
-                    bad_json=bad_json_content
+                    bad_json=raw_response
                 )
 
-                logger.warning("json_decode_failed", attempt=attempt, error=str(e))
+            except ValueError as e:
+                # Handle empty/malformed responses - retry same prompt for transient issues
+                logger.warning("empty_response_retry", attempt=attempt, error=str(e))
+                if attempt >= max_retries:
+                    raise
 
         # This should never be reached, but mypy requires it
         raise json.JSONDecodeError("Unexpected end of function", "", 0)
