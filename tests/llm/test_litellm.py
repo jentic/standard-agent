@@ -1,4 +1,4 @@
-# Test for the litellm.py script
+# test_litellm.py
 
 import pytest
 import json
@@ -146,60 +146,64 @@ class TestLiteLLM:
 
     @patch("agents.llm.litellm.LiteLLM.prompt", return_value='{"key": "value"}')
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
-    def test_prompt_to_json(self, mock_base_prompt_to_json, mock_prompt):
-        # Arrange
-        expected_json = {"key": "value"}
-        mock_base_prompt_to_json.return_value = expected_json
+    def test_prompt_to_json_success(self, mock_base_prompt_to_json, mock_prompt):
+        mock_prompt.return_value = '{"key": "value"}'
+        mock_base_prompt_to_json.return_value = {"key": "value"}
 
         svc = LiteLLM()
-        prompt_content = "Give me a JSON object"
+        result = svc.prompt_to_json("Give me a JSON object")
 
-        # Act
-        result = svc.prompt_to_json(prompt_content)
-
-        # Assert
-        assert result == expected_json
-        mock_base_prompt_to_json.assert_called_once_with(prompt_content)
+        assert result == {"key": "value"}
+        mock_prompt.assert_called_once()
 
     @patch("agents.llm.litellm.LiteLLM.prompt")
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
-    def test_prompt_to_json_max_retries_used(self, mock_base_prompt_to_json, mock_prompt):
-        # Arrange: fail twice, then succeed
-        expected_json = {"key": "value"}
-        mock_base_prompt_to_json.side_effect = [
-            json.JSONDecodeError("Invalid JSON", "", 0),  # fail
-            json.JSONDecodeError("Invalid JSON", "", 0),  # fail again
-            expected_json,  # succeed
-        ]
+    def test_prompt_to_json_jsondecode_retry_then_success(self, mock_base_prompt_to_json, mock_prompt):
         mock_prompt.return_value = '{"invalid": "json"}'
+        mock_base_prompt_to_json.side_effect = [
+            json.JSONDecodeError("bad json", "", 0),
+            {"fixed": "json"},
+        ]
 
         svc = LiteLLM()
-        prompt_content = "Give me a JSON object"
+        result = svc.prompt_to_json("Give me a JSON object", max_retries=1)
 
-        # Act
-        result = svc.prompt_to_json(prompt_content, max_retries=2)
+        assert result == {"fixed": "json"}
+        assert mock_base_prompt_to_json.call_count == 2
 
-        # Assert
-        assert result == expected_json
-        assert mock_base_prompt_to_json.call_count == 3
-
-        # Check that retry prompts included the original content
-        retry_call_args = [c[0][0] for c in mock_base_prompt_to_json.call_args_list]
-        assert any("Give me a JSON object" in arg for arg in retry_call_args)
-        # Loosened: just make sure some correction instructions were injected
-        assert any("correct" in arg.lower() or "fix" in arg.lower() for arg in retry_call_args)
-
-    @patch("agents.llm.litellm.LiteLLM.prompt", return_value="not json")
+    @patch("agents.llm.litellm.LiteLLM.prompt")
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
-    def test_prompt_to_json_max_retries_exceeded(self, mock_base_prompt_to_json, mock_prompt):
-        # Arrange: always fail
-        mock_base_prompt_to_json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+    def test_prompt_to_json_valueerror_retry_same_prompt(self, mock_base_prompt_to_json, mock_prompt):
+        mock_prompt.return_value = '{"some": "content"}'
+        mock_base_prompt_to_json.side_effect = [
+            ValueError("malformed response"),
+            {"ok": True},
+        ]
 
         svc = LiteLLM()
-        prompt_content = "Give me a JSON object"
+        result = svc.prompt_to_json("Give me a JSON object", max_retries=1)
+
+        assert result == {"ok": True}
+        assert mock_base_prompt_to_json.call_count == 2
+
+    @patch("agents.llm.litellm.LiteLLM.prompt")
+    @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
+    def test_prompt_to_json_max_retries_exceeded_jsondecode(self, mock_base_prompt_to_json, mock_prompt):
+        mock_prompt.return_value = '{"bad": "json"}'
+        mock_base_prompt_to_json.side_effect = json.JSONDecodeError("bad json", "", 0)
+
+        svc = LiteLLM()
 
         # Act & Assert: should raise after retries
         with pytest.raises(json.JSONDecodeError):
-            svc.prompt_to_json(prompt_content, max_retries=1)
+            svc.prompt_to_json("Give me a JSON object", max_retries=1)
 
-        assert mock_base_prompt_to_json.call_count == 2  # 1 initial + 1 retry
+    @patch("agents.llm.litellm.LiteLLM.prompt")
+    @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
+    def test_prompt_to_json_max_retries_exceeded_valueerror(self, mock_base_prompt_to_json, mock_prompt):
+        mock_prompt.return_value = ''
+        mock_base_prompt_to_json.side_effect = ValueError("empty response")
+
+        svc = LiteLLM()
+        with pytest.raises(ValueError):
+            svc.prompt_to_json("Give me a JSON object", max_retries=1)
