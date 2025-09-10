@@ -39,8 +39,13 @@ class LiteLLM(BaseLLM):
 
         resp = litellm.completion(**completion_kwargs)
         try:
-            return resp.choices[0].message.content.strip()
-        except (IndexError, AttributeError):
+            content= resp.choices[0].message.content.strip()
+            if not content: 
+                logger.error("empty_llm_response",msg = "LLM returned an empty response")
+                raise ValueError("LLM returned an empty response")
+            return content
+        except (IndexError, AttributeError) as e:
+            logger.error("malformed_llm_response",msg="LLM response was malformed.",error=str(e))
             return ""
 
     def prompt_to_json(self, content: str, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
@@ -64,16 +69,27 @@ class LiteLLM(BaseLLM):
 
         original_prompt = content
         current_prompt = content
+        raw_response = ""
 
         for attempt in range(max_retries + 1):
             try:
+                raw_response = self.prompt(current_prompt, **kwargs)
+                
                 return super().prompt_to_json(current_prompt, **kwargs)
 
-            except json.JSONDecodeError as e:
-                # Update prompt for next iteration
+            except (json.JSONDecodeError, ValueError) as e:
+                if attempt >= max_retries:
+                    logger.error("json_decode_failed", attempt=attempt, error=str(e), msg="Exceeded max retries for JSON parsing")
+                    raise json.JSONDecodeError("Failed to get valid JSON after multiple retries.", raw_response, 0) from e
+                
+                try:
+                    bad_json_content = self.prompt(current_prompt, **kwargs)
+                except (json.JSONDecodeError, ValueError) as inner_e:
+                    bad_json_content = f"An error occurred: {str(inner_e)}"
+
                 current_prompt = JSON_CORRECTION_PROMPT.format(
                     original_prompt=original_prompt,
-                    bad_json="The previous response was not valid JSON"
+                    bad_json=bad_json_content
                 )
 
                 logger.warning("json_decode_failed", attempt=attempt, error=str(e))
