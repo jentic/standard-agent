@@ -9,6 +9,15 @@ Requirements:
 - Includes error handling and helpful comments
 """
 
+import os
+import sys
+from dotenv import load_dotenv
+
+# Ensure project root is on sys.path so local imports work when running from examples/
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from agents.tools.base import ToolBase
 from typing import Any, Dict
 
@@ -71,3 +80,24 @@ class CalculatorTools:
 
     def execute(self, operation: str, a: Any, b: Any) -> Dict[str, Any]:
         return self.tool.run(operation, a, b)
+
+def cli():
+    """Simple command-line interface for testing calculator agent."""
+    print("Welcome to Calculator Agent!")
+    print("Supported operations: add, subtract, multiply, divide")
+    calc = CalculatorTools()
+    while True:
+        op = input("Operation (add/subtract/multiply/divide or 'quit'): ").strip()
+        if op.lower() == "quit":
+            print("Thank you for using Calculator Agent.")
+            break
+        a = input("First number: ").strip()
+        b = input("Second number: ").strip()
+        result = calc.execute(op, a, b)
+        if "error" in result:
+            print(f"Error: {result['error']}")
+        else:
+            print(f"Result: {result['result']}")
+
+if __name__ == "__main__":
+    cli()
