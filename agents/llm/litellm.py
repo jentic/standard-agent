@@ -74,7 +74,7 @@ class LiteLLM(BaseLLM):
 
         for attempt in range(max_retries + 1):
             try:
-                return super().prompt_to_json(current_prompt, **kwargs)  # Single call!
+                return super().prompt_to_json(current_prompt, **kwargs) 
             except json.JSONDecodeError as e:
                 logger.warning("json_parse_failed", attempt=attempt, error=str(e))
                 if attempt >= max_retries:
