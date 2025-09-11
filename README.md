@@ -27,7 +27,7 @@ It is deliberately small so it can be easily read and understood (whether by you
 
 *Standard Agent* excels when equipped with just-in-time tool loading, a paradigm that we advocate at [Jentic](https://jentic.com). This means dynamically loading (or "late-binding") tools at run-time depending on the specific goal or task at hand. This permits better context engineering, keeping the context uncluttered and the LLM focused on the tool details that matter, while eliminating practical limits on the number of tools that can be provided (here's a [blog post](https://jentic.com/blog/just-in-time-tooling) on the topic).
 
-We hope the community will benefit from *Standard Agent* in the following wyas:
+We hope the community will benefit from *Standard Agent* in the following ways:
 - A common project for reference implementations of common reasoning strategies (ReACT, ReWOO, LATS etc.)
 - An easy way to experiment with variations on reasoning strategies or new approaches
 - A way to perform apple-to-apple comparisons and evaluations of different reasoning strategies
