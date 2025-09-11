@@ -4,7 +4,7 @@ import pytest
 import json
 import os
 from unittest.mock import patch, MagicMock
-from agents.llm.litellm import LiteLLM
+from agents.llm.litellm import LiteLLM, JSON_CORRECTION_PROMPT
 
 class TestLiteLLM:
     # Tests default initialisation of LLM service with default model from environment variable
@@ -207,3 +207,71 @@ class TestLiteLLM:
         svc = LiteLLM()
         with pytest.raises(ValueError):
             svc.prompt_to_json("Give me a JSON object", max_retries=1)
+
+    def test_completion_raises_valueerror_for_empty_content(self):
+        svc = LiteLLM(model="test-model")
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = "   "
+        with patch("agents.llm.litellm.litellm.completion", return_value=mock_resp):
+            with pytest.raises(ValueError, match="empty response"):
+                svc.completion([{"role": "user", "content": "test"}])
+
+    def test_completion_raises_valueerror_for_malformed_response(self):
+        svc = LiteLLM(model="test-model")
+        # Simulate missing choices
+        mock_resp = MagicMock()
+        mock_resp.choices = []
+        with patch("agents.llm.litellm.litellm.completion", return_value=mock_resp):
+            with pytest.raises(ValueError, match="malformed response"):
+                svc.completion([{"role": "user", "content": "test"}])
+
+    @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
+    def test_prompt_to_json_uses_raw_content_when_available(self, mock_base_prompt_to_json):
+        from agents.llm.litellm import LiteLLM, JSON_CORRECTION_PROMPT
+        svc = LiteLLM()
+        class FakeError(json.JSONDecodeError):
+            def __init__(self):
+                super().__init__("bad json", "", 0)
+                self.raw_content = "RAW_JSON_ERROR_CONTENT"
+        # First call raises error with raw_content, second returns success
+        mock_base_prompt_to_json.side_effect = [FakeError(), {"fixed": True}]
+        result = svc.prompt_to_json("prompt", max_retries=1)
+        assert result == {"fixed": True}
+        # Check that the correction prompt used raw_content
+        correction_prompt = JSON_CORRECTION_PROMPT.format(
+            original_prompt="prompt",
+            bad_json="RAW_JSON_ERROR_CONTENT"
+        )
+        called_args = mock_base_prompt_to_json.call_args_list[1][0][0]
+        assert called_args == correction_prompt
+
+    @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
+    def test_prompt_to_json_fallback_when_raw_content_missing(self, mock_base_prompt_to_json):
+        svc = LiteLLM()
+        # Error without raw_content
+        err = json.JSONDecodeError("bad json", "", 0)
+        mock_base_prompt_to_json.side_effect = [err, {"fixed": True}]
+        result = svc.prompt_to_json("prompt", max_retries=1)
+        assert result == {"fixed": True}
+        correction_prompt = JSON_CORRECTION_PROMPT.format(
+            original_prompt="prompt",
+            bad_json="The previous response was not valid JSON"
+        )
+        called_args = mock_base_prompt_to_json.call_args_list[1][0][0]
+        assert called_args == correction_prompt
+
+    @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
+    def test_prompt_to_json_correction_prompt_content_differs_by_raw_availability(self, mock_base_prompt_to_json):
+        svc = LiteLLM()
+        class FakeError(json.JSONDecodeError):
+            def __init__(self):
+                super().__init__("bad json", "", 0)
+                self.raw_content = "RAW_JSON_ERROR_CONTENT"
+        # First with raw_content, then without
+        mock_base_prompt_to_json.side_effect = [FakeError(), json.JSONDecodeError("bad json", "", 0), {"fixed": True}]
+        svc.prompt_to_json("prompt", max_retries=2)
+        # Check both correction prompts
+        prompt1 = mock_base_prompt_to_json.call_args_list[1][0][0]
+        prompt2 = mock_base_prompt_to_json.call_args_list[2][0][0]
+        assert "RAW_JSON_ERROR_CONTENT" in prompt1
+        assert "The previous response was not valid JSON" in prompt2
