@@ -55,6 +55,7 @@ class LiteLLM(BaseLLM):
                 completion_tokens = usage.get("completion_tokens")
             # Call optional usage callback if provided on this instance
             usage_cb = getattr(self, "usage_callback", None)
+
             if callable(usage_cb):
                 usage_cb(prompt_tokens if isinstance(prompt_tokens, int) else None,
                          completion_tokens if isinstance(completion_tokens, int) else None)
