@@ -154,7 +154,7 @@ class TestLiteLLM:
         result = svc.prompt_to_json("Give me a JSON object")
 
         assert result == {"key": "value"}
-        mock_prompt.assert_called_once()
+        mock_base_prompt_to_json.assert_called_once()
 
     @patch("agents.llm.litellm.LiteLLM.prompt")
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
