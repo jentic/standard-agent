@@ -39,9 +39,9 @@ class LiteLLM(BaseLLM):
 
         resp = litellm.completion(**completion_kwargs)
         try:
-            content= resp.choices[0].message.content.strip()
-            if not content: 
-                logger.error("empty_llm_response",msg = "LLM returned an empty response")
+            content = resp.choices[0].message.content.strip()
+            if not content:
+                logger.error("empty_llm_response", msg="LLM returned an empty response")
                 raise ValueError("LLM returned an empty response")
             return content
         except (IndexError, AttributeError) as e:
@@ -71,24 +71,24 @@ class LiteLLM(BaseLLM):
 
         original_prompt = content
         current_prompt = content
-        raw_response = ""
 
         for attempt in range(max_retries + 1):
             try:
-                raw_response = self.prompt(current_prompt, **kwargs)
-                
-                return super().prompt_to_json(current_prompt, **kwargs)
-
+                return super().prompt_to_json(current_prompt, **kwargs)  # Single call!
             except json.JSONDecodeError as e:
                 logger.warning("json_parse_failed", attempt=attempt, error=str(e))
                 if attempt >= max_retries:
                     logger.error("json_decode_failed", attempt=attempt, error=str(e), msg="Exceeded max retries for JSON parsing")
-                    raise json.JSONDecodeError("Failed to get valid JSON after multiple retries.", raw_response, 0) from e
-                
-                # Use the failed JSON content for correction
+                    raise
+
+                if hasattr(e, 'raw_content'): #Use raw content if available, else fallback to generic
+                    bad_json_content = e.raw_content  # Exact failed content
+                else:
+                    bad_json_content = "The previous response was not valid JSON"  # Fallback
+
                 current_prompt = JSON_CORRECTION_PROMPT.format(
                     original_prompt=original_prompt,
-                    bad_json=raw_response
+                    bad_json=bad_json_content
                 )
 
             except ValueError as e:
