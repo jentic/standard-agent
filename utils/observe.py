@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional
 import time
 import os
 import hashlib
+import json
 
 
 def _default_span_name(fn: Callable[..., Any]) -> str:
@@ -86,6 +87,48 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
             except Exception:
                 pass
             return []
+
+        def _is_reasoning_result(obj: Any) -> bool:
+            try:
+                # Lazy import to avoid hard dependency/cycles
+                from agents.reasoner.base import ReasoningResult  # type: ignore
+                return isinstance(obj, ReasoningResult)
+            except Exception:
+                # Fallback duck-typing if import unavailable
+                try:
+                    if isinstance(obj, dict):
+                        return "final_answer" in obj
+                    return hasattr(obj, "final_answer")
+                except Exception:
+                    return False
+
+        def _set_output(span: Any, result: Any, is_llm: bool) -> None:
+            # Only set generic 'output' on non-LLM spans
+            if is_llm:
+                return
+            try:
+                if _is_reasoning_result(result):
+                    fa = None
+                    try:
+                        fa = result.get("final_answer") if isinstance(result, dict) else getattr(result, "final_answer")
+                    except Exception:
+                        pass
+                    if isinstance(fa, str):
+                        span.set_attribute("output", fa)  # type: ignore[attr-defined]
+                        return
+                if isinstance(result, dict):
+                    try:
+                        span.set_attribute("output", json.dumps(result, ensure_ascii=False, default=str))  # type: ignore[attr-defined]
+                    except Exception:
+                        span.set_attribute("output", str(result))  # type: ignore[attr-defined]
+                    return
+                if isinstance(result, str):
+                    span.set_attribute("output", result)  # type: ignore[attr-defined]
+                    return
+                # Generic objects and sequences (e.g., Deque[Step])
+                span.set_attribute("output", str(result))  # type: ignore[attr-defined]
+            except Exception:
+                pass
 
         def _capture_result_fields(span: Any, result: Any) -> None:
             try:
@@ -174,12 +217,11 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
                             iter_val = _result_int(result, ("iterations", "turns", "steps"))
                             if iter_val is not None:
                                 span.set_attribute("sa.result_iterations", iter_val)  # type: ignore[attr-defined]
-                            if hasattr(result, "final_answer"):
-                                fa = getattr(result, "final_answer")
+                            # ReasoningResult preview if available
+                            try:
+                                fa = getattr(result, "final_answer") if hasattr(result, "final_answer") else None
                                 if isinstance(fa, str):
-                                    # Always store a short preview
                                     span.set_attribute("sa.result_final_preview", _maybe_truncate(fa))  # type: ignore[attr-defined]
-                                    # Optionally store a bounded full result
                                     if os.getenv("SA_OBSERVE_FULL_RESULT", "").strip().lower() in ("1", "true", "yes", "on"):  # pragma: no cover
                                         cap = 8192
                                         truncated = fa if len(fa) <= cap else fa[:cap]
@@ -191,9 +233,10 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
                                             span.set_attribute("sa.result_final_sha256", digest)  # type: ignore[attr-defined]
                                         except Exception:
                                             pass
-                                    # Populate generic 'output' for non-LLM spans
-                                    if not llm:
-                                        span.set_attribute("output", _maybe_truncate(fa))  # type: ignore[attr-defined]
+                            except Exception:
+                                pass
+                            # Populate generic 'output' according to type rules
+                            _set_output(span, result, llm)
                             _capture_result_fields(span, result)
                         except Exception:
                             pass
