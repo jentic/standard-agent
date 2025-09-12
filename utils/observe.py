@@ -114,8 +114,19 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
                     except Exception:
                         pass
                     if isinstance(fa, str):
-                        span.set_attribute("output", fa)  # type: ignore[attr-defined]
-                        return
+                        # If final_answer is present but empty, prefer transcript fallback
+                        if fa:
+                            span.set_attribute("output", fa)  # type: ignore[attr-defined]
+                            return
+                        # Fallback to transcript if available
+                        try:
+                            tr = result.get("transcript") if isinstance(result, dict) else getattr(result, "transcript", None)
+                            if isinstance(tr, str) and tr:
+                                span.set_attribute("output", tr)  # type: ignore[attr-defined]
+                                return
+                        except Exception:
+                            pass
+                        # Last resort fallthrough to str(result) below
                 if isinstance(result, dict):
                     try:
                         span.set_attribute("output", json.dumps(result, ensure_ascii=False, default=str))  # type: ignore[attr-defined]
@@ -196,13 +207,24 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
                         # Best-effort: bind args to capture a 'goal' param if present
                         try:
                             bound = signature(fn).bind_partial(*args, **kwargs)
-                            goal_val = bound.arguments.get("goal")
-                            if isinstance(goal_val, str):
-                                # Record full goal as requested (no truncation)
-                                span.set_attribute("sa.goal", goal_val)  # type: ignore[attr-defined]
-                            # Populate generic 'input' for non-LLM spans
-                            if not llm and isinstance(goal_val, str):
-                                span.set_attribute("input", goal_val)  # type: ignore[attr-defined]
+                            if llm:
+                                # For LLM spans, record the full prompt input
+                                msgs = bound.arguments.get("messages")
+                                if msgs is not None:
+                                    try:
+                                        span.set_attribute("input", json.dumps(msgs, ensure_ascii=False, default=str))  # type: ignore[attr-defined]
+                                    except Exception:
+                                        span.set_attribute("input", str(msgs))  # type: ignore[attr-defined]
+                                else:
+                                    content = bound.arguments.get("content")
+                                    if isinstance(content, str):
+                                        span.set_attribute("input", content)  # type: ignore[attr-defined]
+                            else:
+                                goal_val = bound.arguments.get("goal")
+                                if isinstance(goal_val, str):
+                                    # Record full goal as requested (no truncation)
+                                    span.set_attribute("sa.goal", goal_val)  # type: ignore[attr-defined]
+                                    span.set_attribute("input", goal_val)  # type: ignore[attr-defined]
                         except Exception:
                             pass
 
@@ -241,6 +263,12 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
                         except Exception:
                             pass
 
+                        # For LLM spans, set full model output as 'output'
+                        if llm:
+                            try:
+                                span.set_attribute("output", result if isinstance(result, str) else str(result))  # type: ignore[attr-defined]
+                            except Exception:
+                                pass
                         return result
                     except Exception as e:  # pragma: no cover - passthrough with metadata
                         try:

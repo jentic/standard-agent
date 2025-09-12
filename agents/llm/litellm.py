@@ -70,7 +70,6 @@ class LiteLLM(BaseLLM):
         except (IndexError, AttributeError):
             return ""
 
-    @observe
     def prompt_to_json(self, content: str, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
         """
         Enhanced JSON prompting with automatic retry logic.
