@@ -20,7 +20,7 @@ def _default_span_name(fn: Callable[..., Any]) -> str:
     return qualname
 
 
-def observe(_fn: Optional[Callable[..., Any]] = None) -> Callable[..., Any]:
+def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> Callable[..., Any]:
     """Minimal, vendor-neutral tracing decorator.
 
     Usage:
@@ -44,76 +44,101 @@ def observe(_fn: Optional[Callable[..., Any]] = None) -> Callable[..., Any]:
                 return value if len(value) <= limit else value[:limit] + "…"
             return value
 
-        if iscoroutinefunction(fn):
+        def _is_sensitive(name: str) -> bool:
+            lowered = name.lower()
+            return any(k in lowered for k in ("key", "secret", "token", "password", "auth", "credential"))
 
-            @wraps(fn)
-            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+        def _result_bool(result: Any, names: tuple[str, ...]) -> Optional[bool]:
+            for n in names:
                 try:
-                    # Lazy import to avoid hard dependency when observability is not installed
-                    from opentelemetry import trace  # type: ignore
-                    from opentelemetry.trace import Status, StatusCode  # type: ignore
-
-                    tracer = trace.get_tracer("standard-agent")
-                    t0 = time.perf_counter()
-                    with tracer.start_as_current_span(span_name) as span:  # type: ignore[assignment]
-                        try:
-                            # Best-effort: bind args to capture a 'goal' param if present
-                            try:
-                                bound = signature(fn).bind_partial(*args, **kwargs)
-                                goal_val = bound.arguments.get("goal")
-                                if isinstance(goal_val, str):
-                                    # Record full goal as requested (no truncation)
-                                    span.set_attribute("sa.goal", goal_val)  # type: ignore[attr-defined]
-                            except Exception:
-                                pass
-
-                            result = await fn(*args, **kwargs)
-
-                            # Attach basic outcome fields if present
-                            try:
-                                if hasattr(result, "success"):
-                                    span.set_attribute("sa.result_success", bool(getattr(result, "success")))  # type: ignore[attr-defined]
-                                if hasattr(result, "iterations"):
-                                    span.set_attribute("sa.result_iterations", int(getattr(result, "iterations")))  # type: ignore[attr-defined]
-                                if hasattr(result, "final_answer"):
-                                    fa = getattr(result, "final_answer")
-                                    if isinstance(fa, str):
-                                        # Always store a short preview
-                                        span.set_attribute("sa.result_final_preview", _maybe_truncate(fa))  # type: ignore[attr-defined]
-                                        # Optionally store a bounded full result
-                                        if os.getenv("SA_OBSERVE_FULL_RESULT", "").strip().lower() in ("1", "true", "yes", "on"):  # pragma: no cover
-                                            cap = 8192
-                                            truncated = fa if len(fa) <= cap else fa[:cap]
-                                            span.set_attribute("sa.result_final_full", truncated)  # type: ignore[attr-defined]
-                                            span.set_attribute("sa.result_final_full_len", len(fa))  # type: ignore[attr-defined]
-                                            span.set_attribute("sa.result_final_full_truncated", len(fa) > cap)  # type: ignore[attr-defined]
-                                            try:
-                                                digest = hashlib.sha256(fa.encode("utf-8")).hexdigest()
-                                                span.set_attribute("sa.result_final_sha256", digest)  # type: ignore[attr-defined]
-                                            except Exception:
-                                                pass
-                            except Exception:
-                                pass
-
-                            return result
-                        except Exception as e:  # pragma: no cover - passthrough with metadata
-                            try:
-                                span.record_exception(e)  # type: ignore[attr-defined]
-                                span.set_status(Status(StatusCode.ERROR))  # type: ignore[attr-defined]
-                            finally:
-                                pass
-                            raise
-                        finally:
-                            try:
-                                duration_ms = int((time.perf_counter() - t0) * 1000)
-                                span.set_attribute("sa.duration_ms", duration_ms)  # type: ignore[attr-defined]
-                            except Exception:
-                                pass
+                    if isinstance(result, dict) and n in result:
+                        v = result.get(n)
+                    else:
+                        v = getattr(result, n)
+                    if isinstance(v, bool):
+                        return v
                 except Exception:
-                    # If OpenTelemetry isn't available or any tracing issue occurs, just run the function
-                    return await fn(*args, **kwargs)
+                    continue
+            return None
 
-            return async_wrapper
+        def _result_int(result: Any, names: tuple[str, ...]) -> Optional[int]:
+            for n in names:
+                try:
+                    if isinstance(result, dict) and n in result:
+                        v = result.get(n)
+                    else:
+                        v = getattr(result, n)
+                    if isinstance(v, int):
+                        return v
+                    if isinstance(v, float):
+                        return int(v)
+                except Exception:
+                    continue
+            return None
+
+        def _iter_result_fields(result: Any) -> list[tuple[str, Any]]:
+            try:
+                if isinstance(result, dict):
+                    return list(result.items())
+                data = getattr(result, "__dict__", None)
+                if isinstance(data, dict):
+                    return list(data.items())
+            except Exception:
+                pass
+            return []
+
+        def _capture_result_fields(span: Any, result: Any) -> None:
+            try:
+                items = _iter_result_fields(result)
+                if not items:
+                    return
+                captured = 0
+                for name, value in items:
+                    # Skip the core stable fields; they are handled separately
+                    if name in {"success", "iterations", "turns", "steps", "final_answer"}:
+                        continue
+                    if _is_sensitive(name):
+                        span.set_attribute(f"sa.result.fields.{name}", "[REDACTED]")  # type: ignore[attr-defined]
+                    else:
+                        span.set_attribute(f"sa.result.fields.{name}", _maybe_truncate(str(value)))  # type: ignore[attr-defined]
+                    captured += 1
+                span.set_attribute("sa.result_fields_captured", captured)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
+        def _render_messages(messages: Any, cap_chars: int = 2000, cap_items: int = 8) -> str:
+            try:
+                if not isinstance(messages, list):
+                    return _maybe_truncate(str(messages), cap_chars)
+                parts: list[str] = []
+                total = 0
+                for i, m in enumerate(messages):
+                    if i >= cap_items:
+                        parts.append("…")
+                        break
+                    if isinstance(m, dict):
+                        role = str(m.get("role", ""))
+                        content = str(m.get("content", ""))
+                    else:
+                        role = getattr(m, "role", "")
+                        content = getattr(m, "content", "")
+                        content = str(content)
+                    snippet = f"{role}: {content}"
+                    if total + len(snippet) > cap_chars:
+                        remaining = max(0, cap_chars - total)
+                        snippet = snippet[:remaining] + "…"
+                        parts.append(snippet)
+                        break
+                    parts.append(snippet)
+                    total += len(snippet)
+                return "\n".join(parts)
+            except Exception:
+                return _maybe_truncate(repr(messages), cap_chars)
+
+        # If the function is async, return it unchanged (no tracing) to keep the
+        # implementation simple. We can add async support later when needed.
+        if iscoroutinefunction(fn):
+            return fn
 
         @wraps(fn)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -132,6 +157,9 @@ def observe(_fn: Optional[Callable[..., Any]] = None) -> Callable[..., Any]:
                             if isinstance(goal_val, str):
                                 # Record full goal as requested (no truncation)
                                 span.set_attribute("sa.goal", goal_val)  # type: ignore[attr-defined]
+                            # Populate generic 'input' for non-LLM spans
+                            if not llm and isinstance(goal_val, str):
+                                span.set_attribute("input", goal_val)  # type: ignore[attr-defined]
                         except Exception:
                             pass
 
@@ -139,10 +167,13 @@ def observe(_fn: Optional[Callable[..., Any]] = None) -> Callable[..., Any]:
 
                         # Attach basic outcome fields if present
                         try:
-                            if hasattr(result, "success"):
-                                span.set_attribute("sa.result_success", bool(getattr(result, "success")))  # type: ignore[attr-defined]
-                            if hasattr(result, "iterations"):
-                                span.set_attribute("sa.result_iterations", int(getattr(result, "iterations")))  # type: ignore[attr-defined]
+                            success_val = _result_bool(result, ("success",))
+                            if success_val is not None:
+                                span.set_attribute("sa.result_success", success_val)  # type: ignore[attr-defined]
+
+                            iter_val = _result_int(result, ("iterations", "turns", "steps"))
+                            if iter_val is not None:
+                                span.set_attribute("sa.result_iterations", iter_val)  # type: ignore[attr-defined]
                             if hasattr(result, "final_answer"):
                                 fa = getattr(result, "final_answer")
                                 if isinstance(fa, str):
@@ -160,6 +191,10 @@ def observe(_fn: Optional[Callable[..., Any]] = None) -> Callable[..., Any]:
                                             span.set_attribute("sa.result_final_sha256", digest)  # type: ignore[attr-defined]
                                         except Exception:
                                             pass
+                                    # Populate generic 'output' for non-LLM spans
+                                    if not llm:
+                                        span.set_attribute("output", _maybe_truncate(fa))  # type: ignore[attr-defined]
+                            _capture_result_fields(span, result)
                         except Exception:
                             pass
 

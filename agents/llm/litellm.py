@@ -19,7 +19,7 @@ class LiteLLM(BaseLLM):
         super().__init__(model=model, temperature=temperature)
         self.max_tokens = max_tokens
 
-    @observe
+    @observe(llm=True)
     def completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
         # Merge default parameters with provided kwargs
         effective_temperature = kwargs.get("temperature", self.temperature)
