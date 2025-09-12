@@ -15,6 +15,7 @@ from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.jentic import JenticTool
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError)
+from utils.observe import observe
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -75,6 +76,7 @@ class ReWOOReasoner(BaseReasoner):
         self.max_retries = max_retries
         self.top_k = top_k
 
+    @observe
     def run(self, goal: str) -> ReasoningResult:
         state = ReasonerState(goal=goal)
 

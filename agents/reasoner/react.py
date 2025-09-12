@@ -9,6 +9,8 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolExecutionError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import ToolSelectionError
+from utils.observe import observe
+
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -32,6 +34,7 @@ class ReACTReasoner(BaseReasoner):
         self.max_turns = max_turns
         self.top_k = top_k
 
+    @observe
     def run(self, goal: str) -> ReasoningResult:
         logger.info("ReACT reasoner started", goal=goal, max_turns=self.max_turns)
 
