@@ -107,6 +107,7 @@ class ReWOOReasoner(BaseReasoner):
         success = not state.plan
         return ReasoningResult(iterations=iterations, success=success, transcript=transcript, tool_calls=state.tool_calls)
 
+    @observe
     def _plan(self, goal: str) -> Deque[Step]:
         generated_plan = (self.llm.prompt(_PROMPTS["plan"].format(goal=goal)) or "").strip("`").lstrip("markdown").strip()
         logger.info("plan_generated", goal=goal, plan=generated_plan)
@@ -156,6 +157,7 @@ class ReWOOReasoner(BaseReasoner):
             logger.info("plan_step", step_text=s.text, output_key=s.output_key, input_keys=s.input_keys)
         return steps
 
+    @observe
     def _execute(self, step: Step, state: ReasonerState) -> None:
         step.status = StepStatus.RUNNING
 
@@ -184,6 +186,7 @@ class ReWOOReasoner(BaseReasoner):
         state.history.append(f"Executed step: {step.text} -> {step.result}")
         logger.info("step_executed", step_text=step.text, step_type=step_type, result=str(step.result)[:100] if step.result is not None else None)
 
+    @observe
     def _select_tool(self, step: Step) -> ToolBase:
         suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")
         if suggestion and suggestion.get("action") in ("change_tool", "retry_params"):
@@ -205,6 +208,7 @@ class ReWOOReasoner(BaseReasoner):
 
         return self.tools.load(selected_tool)
 
+    @observe
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
         suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
         if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
@@ -225,6 +229,7 @@ class ReWOOReasoner(BaseReasoner):
         except (json.JSONDecodeError, TypeError, ValueError) as e:
             raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step.text}': {e}", tool) from e
 
+    @observe
     def _reflect(self, error: Exception, step: Step, state: ReasonerState) -> None:
         logger.info("step_error_recovery", error_type=error.__class__.__name__, step_text=step.text, retry_count=step.retry_count)
         step.status = StepStatus.FAILED

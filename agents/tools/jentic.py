@@ -13,6 +13,7 @@ from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolError, ToolNotFoundError, ToolExecutionError, ToolCredentialsMissingError
 
 from utils.logger import get_logger
+from utils.observe import observe
 logger = get_logger(__name__)
 
 
@@ -79,6 +80,7 @@ class JenticClient(JustInTimeToolingBase):
             filter_by_credentials = filter_by_credentials_env_val == "true"
         self._filter_by_credentials = bool(filter_by_credentials)
 
+    @observe
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
         """
         Search for workflows and operations matching a query.
@@ -89,6 +91,7 @@ class JenticClient(JustInTimeToolingBase):
         return [JenticTool(result.model_dump(exclude_none=False)) for result in response.results] if response.results else []
 
 
+    @observe
     def load(self, tool: ToolBase) -> ToolBase:
         """
         Load the detailed definition for a specific tool.
@@ -108,6 +111,7 @@ class JenticClient(JustInTimeToolingBase):
         return JenticTool(result.model_dump(exclude_none=False))
 
 
+    @observe
     def execute(self, tool: ToolBase, parameters: Dict[str, Any]) -> Any:
         """
         Execute a tool with given parameters.

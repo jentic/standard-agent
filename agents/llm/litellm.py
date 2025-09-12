@@ -4,6 +4,7 @@ import json
 import litellm
 
 from utils.logger import get_logger
+from utils.observe import observe
 logger = get_logger(__name__)
 
 class LiteLLM(BaseLLM):
@@ -18,6 +19,7 @@ class LiteLLM(BaseLLM):
         super().__init__(model=model, temperature=temperature)
         self.max_tokens = max_tokens
 
+    @observe
     def completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
         # Merge default parameters with provided kwargs
         effective_temperature = kwargs.get("temperature", self.temperature)
@@ -68,6 +70,7 @@ class LiteLLM(BaseLLM):
         except (IndexError, AttributeError):
             return ""
 
+    @observe
     def prompt_to_json(self, content: str, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
         """
         Enhanced JSON prompting with automatic retry logic.

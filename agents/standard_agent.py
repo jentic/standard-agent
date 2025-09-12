@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from  collections.abc import MutableMapping
 from  collections import deque
-from traceback import print_tb
 
 from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
