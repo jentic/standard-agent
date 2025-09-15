@@ -189,6 +189,41 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
             except Exception:
                 return _maybe_truncate(repr(messages), cap_chars)
 
+        def _serialize_input_value(val: Any) -> Any:
+            try:
+                if isinstance(val, (str, int, float, bool)) or val is None:
+                    return val
+                if isinstance(val, bytes):
+                    return f"<bytes len={len(val)}>"
+                # Prefer human-readable fields if present
+                text_attr = getattr(val, "text", None)
+                if isinstance(text_attr, str) and text_attr:
+                    return text_attr
+                get_summary = getattr(val, "get_summary", None)
+                if callable(get_summary):
+                    try:
+                        return str(get_summary())
+                    except Exception:
+                        pass
+                # For containers, rely on json.dumps default=str below
+                return val
+            except Exception:
+                return str(val)
+
+        def _build_inputs_object(bound_args: dict[str, Any]) -> dict[str, Any]:
+            inputs: dict[str, Any] = {}
+            for name, value in bound_args.items():
+                if name in ("self", "cls"):
+                    continue
+                try:
+                    if _is_sensitive(name):
+                        inputs[name] = "[REDACTED]"
+                    else:
+                        inputs[name] = _serialize_input_value(value)
+                except Exception:
+                    inputs[name] = str(value)
+            return inputs
+
         # If the function is async, return it unchanged (no tracing) to keep the
         # implementation simple. We can add async support later when needed.
         if iscoroutinefunction(fn):
@@ -220,11 +255,16 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
                                     if isinstance(content, str):
                                         span.set_attribute("input", content)  # type: ignore[attr-defined]
                             else:
+                                # Build a JSON object of all non-sensitive bound args
+                                inputs_obj = _build_inputs_object(bound.arguments)
+                                try:
+                                    span.set_attribute("input", json.dumps(inputs_obj, ensure_ascii=False, default=str))  # type: ignore[attr-defined]
+                                except Exception:
+                                    span.set_attribute("input", str(inputs_obj))  # type: ignore[attr-defined]
+                                # Keep sa.goal for convenience if present
                                 goal_val = bound.arguments.get("goal")
                                 if isinstance(goal_val, str):
-                                    # Record full goal as requested (no truncation)
                                     span.set_attribute("sa.goal", goal_val)  # type: ignore[attr-defined]
-                                    span.set_attribute("input", goal_val)  # type: ignore[attr-defined]
                         except Exception:
                             pass
 
