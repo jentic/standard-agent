@@ -1,399 +1,190 @@
+"""Simple, minimal tracing decorator for Standard Agent."""
+
 from __future__ import annotations
 
 from functools import wraps
-from inspect import iscoroutinefunction, signature
+from inspect import signature
 from typing import Any, Callable, Optional
 from contextvars import ContextVar
 import time
-import os
-import hashlib
-import json
 
 
-def _default_span_name(fn: Callable[..., Any]) -> str:
-    """Compute a readable default span name from the function's qualname.
-
-    Example: module.Class.method or module.function
-    """
-    module = getattr(fn, "__module__", None) or ""
-    qualname = getattr(fn, "__qualname__", getattr(fn, "__name__", "anonymous"))
-    if module:
-        return f"{module}.{qualname}"
-    return qualname
-
-
-def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> Callable[..., Any]:
-    """Minimal, vendor-neutral tracing decorator.
-
+def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False, root: bool = False) -> Callable[..., Any]:
+    """Minimal tracing decorator.
+    
     Usage:
-      @observe
-      def fn(...): ...
-
-      @observe()
-      async def afn(...): ...
-
-    - No arguments required. It auto-names spans using module + qualname.
-    - Works whether OpenTelemetry is installed/configured or not.
-      If OTel is unavailable, it's a no-op with near-zero overhead.
-    - Records exceptions to the span and sets error status when OTel is present.
+        @observe
+        def my_function(): ...
+        
+        @observe(llm=True) 
+        def llm_call(): ...
+        
+        @observe(root=True)
+        def agent_solve(): ...
+    
+    - Auto-names spans from function module.qualname
+    - Records timing, exceptions, basic I/O
+    - Tracks token usage when llm=True
+    - Aggregates total tokens when root=True
+    - No-op if OpenTelemetry unavailable
     """
-
+    
     def _decorate(fn: Callable[..., Any]) -> Callable[..., Any]:
-        span_name = _default_span_name(fn)
-
-        def _maybe_truncate(value: Any, limit: int = 200) -> Any:
-            if isinstance(value, str):
-                return value if len(value) <= limit else value[:limit] + "…"
-            return value
-
-        def _is_sensitive(name: str) -> bool:
-            lowered = name.lower()
-            return any(k in lowered for k in ("key", "secret", "token", "password", "auth", "credential"))
-
-        def _result_bool(result: Any, names: tuple[str, ...]) -> Optional[bool]:
-            for n in names:
-                try:
-                    if isinstance(result, dict) and n in result:
-                        v = result.get(n)
-                    else:
-                        v = getattr(result, n)
-                    if isinstance(v, bool):
-                        return v
-                except Exception:
-                    continue
-            return None
-
-        def _result_int(result: Any, names: tuple[str, ...]) -> Optional[int]:
-            for n in names:
-                try:
-                    if isinstance(result, dict) and n in result:
-                        v = result.get(n)
-                    else:
-                        v = getattr(result, n)
-                    if isinstance(v, int):
-                        return v
-                    if isinstance(v, float):
-                        return int(v)
-                except Exception:
-                    continue
-            return None
-
-        def _iter_result_fields(result: Any) -> list[tuple[str, Any]]:
-            try:
-                if isinstance(result, dict):
-                    return list(result.items())
-                data = getattr(result, "__dict__", None)
-                if isinstance(data, dict):
-                    return list(data.items())
-            except Exception:
-                pass
-            return []
-
-        def _is_reasoning_result(obj: Any) -> bool:
-            try:
-                # Lazy import to avoid hard dependency/cycles
-                from agents.reasoner.base import ReasoningResult  # type: ignore
-                return isinstance(obj, ReasoningResult)
-            except Exception:
-                # Fallback duck-typing if import unavailable
-                try:
-                    if isinstance(obj, dict):
-                        return "final_answer" in obj
-                    return hasattr(obj, "final_answer")
-                except Exception:
-                    return False
-
-        def _set_output(span: Any, result: Any, is_llm: bool) -> None:
-            # Only set generic 'output' on non-LLM spans
-            if is_llm:
-                return
-            try:
-                if _is_reasoning_result(result):
-                    fa = None
-                    try:
-                        fa = result.get("final_answer") if isinstance(result, dict) else getattr(result, "final_answer")
-                    except Exception:
-                        pass
-                    if isinstance(fa, str):
-                        # If final_answer is present but empty, prefer transcript fallback
-                        if fa:
-                            span.set_attribute("output", fa)  # type: ignore[attr-defined]
-                            return
-                        # Fallback to transcript if available
-                        try:
-                            tr = result.get("transcript") if isinstance(result, dict) else getattr(result, "transcript", None)
-                            if isinstance(tr, str) and tr:
-                                span.set_attribute("output", tr)  # type: ignore[attr-defined]
-                                return
-                        except Exception:
-                            pass
-                        # Last resort fallthrough to str(result) below
-                if isinstance(result, dict):
-                    try:
-                        span.set_attribute("output", json.dumps(result, ensure_ascii=False, default=str))  # type: ignore[attr-defined]
-                    except Exception:
-                        span.set_attribute("output", str(result))  # type: ignore[attr-defined]
-                    return
-                if isinstance(result, str):
-                    span.set_attribute("output", result)  # type: ignore[attr-defined]
-                    return
-                # Generic objects and sequences (e.g., Deque[Step])
-                span.set_attribute("output", str(result))  # type: ignore[attr-defined]
-            except Exception:
-                pass
-
-        def _capture_result_fields(span: Any, result: Any) -> None:
-            try:
-                items = _iter_result_fields(result)
-                if not items:
-                    return
-                captured = 0
-                for name, value in items:
-                    # Skip the core stable fields; they are handled separately
-                    if name in {"success", "iterations", "turns", "steps", "final_answer"}:
-                        continue
-                    if _is_sensitive(name):
-                        span.set_attribute(f"sa.result.fields.{name}", "[REDACTED]")  # type: ignore[attr-defined]
-                    else:
-                        span.set_attribute(f"sa.result.fields.{name}", _maybe_truncate(str(value)))  # type: ignore[attr-defined]
-                    captured += 1
-                span.set_attribute("sa.result_fields_captured", captured)  # type: ignore[attr-defined]
-            except Exception:
-                pass
-
-        def _render_messages(messages: Any, cap_chars: int = 2000, cap_items: int = 8) -> str:
-            try:
-                if not isinstance(messages, list):
-                    return _maybe_truncate(str(messages), cap_chars)
-                parts: list[str] = []
-                total = 0
-                for i, m in enumerate(messages):
-                    if i >= cap_items:
-                        parts.append("…")
-                        break
-                    if isinstance(m, dict):
-                        role = str(m.get("role", ""))
-                        content = str(m.get("content", ""))
-                    else:
-                        role = getattr(m, "role", "")
-                        content = getattr(m, "content", "")
-                        content = str(content)
-                    snippet = f"{role}: {content}"
-                    if total + len(snippet) > cap_chars:
-                        remaining = max(0, cap_chars - total)
-                        snippet = snippet[:remaining] + "…"
-                        parts.append(snippet)
-                        break
-                    parts.append(snippet)
-                    total += len(snippet)
-                return "\n".join(parts)
-            except Exception:
-                return _maybe_truncate(repr(messages), cap_chars)
-
-        def _serialize_input_value(val: Any) -> Any:
-            try:
-                if isinstance(val, (str, int, float, bool)) or val is None:
-                    return val
-                if isinstance(val, bytes):
-                    return f"<bytes len={len(val)}>"
-                # Prefer human-readable fields if present
-                text_attr = getattr(val, "text", None)
-                if isinstance(text_attr, str) and text_attr:
-                    return text_attr
-                get_summary = getattr(val, "get_summary", None)
-                if callable(get_summary):
-                    try:
-                        return str(get_summary())
-                    except Exception:
-                        pass
-                # For containers, rely on json.dumps default=str below
-                return val
-            except Exception:
-                return str(val)
-
-        def _build_inputs_object(bound_args: dict[str, Any]) -> dict[str, Any]:
-            inputs: dict[str, Any] = {}
-            for name, value in bound_args.items():
-                if name in ("self", "cls"):
-                    continue
-                try:
-                    if _is_sensitive(name):
-                        inputs[name] = "[REDACTED]"
-                    else:
-                        inputs[name] = _serialize_input_value(value)
-                except Exception:
-                    inputs[name] = str(value)
-            return inputs
-
-        # If the function is async, return it unchanged (no tracing) to keep the
-        # implementation simple. We can add async support later when needed.
-        if iscoroutinefunction(fn):
-            return fn
-
+        # Create span name from module.Class.method
+        module = getattr(fn, "__module__", "") or ""
+        qualname = getattr(fn, "__qualname__", fn.__name__)
+        span_name = f"{module}.{qualname}" if module else qualname
+        
         @wraps(fn)
-        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
-                from opentelemetry import trace  # type: ignore
-                from opentelemetry.trace import Status, StatusCode  # type: ignore
-
+                from opentelemetry import trace
                 tracer = trace.get_tracer("standard-agent")
-                t0 = time.perf_counter()
-                with tracer.start_as_current_span(span_name) as span:  # type: ignore[assignment]
-                    # Start a token accumulator for root agent.solve spans if not active
-                    try:
-                        if not llm:
-                            qual = getattr(fn, "__qualname__", "")
-                            if isinstance(qual, str) and qual.endswith(".solve"):
-                                _ensure_token_accumulator(span)
-                    except Exception:
-                        pass
-                    try:
-                        # Best-effort: bind args to capture a 'goal' param if present
-                        try:
-                            bound = signature(fn).bind_partial(*args, **kwargs)
-                            if llm:
-                                # For LLM spans, record the full prompt input
-                                msgs = bound.arguments.get("messages")
-                                if msgs is not None:
-                                    try:
-                                        span.set_attribute("input", json.dumps(msgs, ensure_ascii=False, default=str))  # type: ignore[attr-defined]
-                                    except Exception:
-                                        span.set_attribute("input", str(msgs))  # type: ignore[attr-defined]
-                                else:
-                                    content = bound.arguments.get("content")
-                                    if isinstance(content, str):
-                                        span.set_attribute("input", content)  # type: ignore[attr-defined]
-                            else:
-                                # Build a JSON object of all non-sensitive bound args
-                                inputs_obj = _build_inputs_object(bound.arguments)
-                                try:
-                                    span.set_attribute("input", json.dumps(inputs_obj, ensure_ascii=False, default=str))  # type: ignore[attr-defined]
-                                except Exception:
-                                    span.set_attribute("input", str(inputs_obj))  # type: ignore[attr-defined]
-                                # Keep sa.goal for convenience if present
-                                goal_val = bound.arguments.get("goal")
-                                if isinstance(goal_val, str):
-                                    span.set_attribute("sa.goal", goal_val)  # type: ignore[attr-defined]
-                        except Exception:
-                            pass
-
-                        result = fn(*args, **kwargs)
-
-                        # Attach basic outcome fields if present
-                        try:
-                            success_val = _result_bool(result, ("success",))
-                            if success_val is not None:
-                                span.set_attribute("sa.result_success", success_val)  # type: ignore[attr-defined]
-
-                            iter_val = _result_int(result, ("iterations", "turns", "steps"))
-                            if iter_val is not None:
-                                span.set_attribute("sa.result_iterations", iter_val)  # type: ignore[attr-defined]
-                            # ReasoningResult preview if available
-                            try:
-                                fa = getattr(result, "final_answer") if hasattr(result, "final_answer") else None
-                                if isinstance(fa, str):
-                                    span.set_attribute("sa.result_final_preview", _maybe_truncate(fa))  # type: ignore[attr-defined]
-                                    if os.getenv("SA_OBSERVE_FULL_RESULT", "").strip().lower() in ("1", "true", "yes", "on"):  # pragma: no cover
-                                        cap = 8192
-                                        truncated = fa if len(fa) <= cap else fa[:cap]
-                                        span.set_attribute("sa.result_final_full", truncated)  # type: ignore[attr-defined]
-                                        span.set_attribute("sa.result_final_full_len", len(fa))  # type: ignore[attr-defined]
-                                        span.set_attribute("sa.result_final_full_truncated", len(fa) > cap)  # type: ignore[attr-defined]
-                                        try:
-                                            digest = hashlib.sha256(fa.encode("utf-8")).hexdigest()
-                                            span.set_attribute("sa.result_final_sha256", digest)  # type: ignore[attr-defined]
-                                        except Exception:
-                                            pass
-                            except Exception:
-                                pass
-                            # Populate generic 'output' according to type rules
-                            _set_output(span, result, llm)
-                            _capture_result_fields(span, result)
-                        except Exception:
-                            pass
-
-                        # For LLM spans, handle BaseLLM.LLMResponse specially
-                        if llm:
-                            try:
-                                from agents.llm.base_llm import BaseLLM  # type: ignore
-                                if isinstance(result, BaseLLM.LLMResponse):
-                                    span.set_attribute("output", result.text)  # type: ignore[attr-defined]
-                                    if isinstance(result.prompt_tokens, int):
-                                        span.set_attribute("sa.tokens.prompt", result.prompt_tokens)  # type: ignore[attr-defined]
-                                    if isinstance(result.completion_tokens, int):
-                                        span.set_attribute("sa.tokens.completion", result.completion_tokens)  # type: ignore[attr-defined]
-                                    if isinstance(result.total_tokens, int):
-                                        span.set_attribute("sa.tokens.total", result.total_tokens)  # type: ignore[attr-defined]
-                                        accumulate_tokens(result.total_tokens)
-                                else:
-                                    span.set_attribute("output", result if isinstance(result, str) else str(result))  # type: ignore[attr-defined]
-                            except Exception:
-                                pass
-                        return result
-                    except Exception as e:  # pragma: no cover - passthrough with metadata
-                        try:
-                            span.record_exception(e)  # type: ignore[attr-defined]
-                            span.set_status(Status(StatusCode.ERROR))  # type: ignore[attr-defined]
-                        finally:
-                            pass
-                        raise
-                    finally:
-                        try:
-                            duration_ms = int((time.perf_counter() - t0) * 1000)
-                            span.set_attribute("sa.duration_ms", duration_ms)  # type: ignore[attr-defined]
-                            # If this span owns the token accumulator, emit total and clear
-                            _finalize_token_accumulator(span)
-                        except Exception:
-                            pass
             except Exception:
-                # No OTel at runtime (or misconfigured): act as a no-op decorator
+                # NoOp:  No OTel available - just run the function
                 return fn(*args, **kwargs)
-
-        return sync_wrapper
-
+            
+            start_time = time.perf_counter()
+            
+            with tracer.start_as_current_span(span_name) as span:
+                try:
+                    # Start token accumulator for root spans
+                    if root:
+                        _start_token_accumulator(span)
+                    
+                    # Capture basic input
+                    _capture_input(span, fn, args, kwargs, llm)
+                    
+                    # Run the function
+                    result = fn(*args, **kwargs)
+                    
+                    # Capture output based on function type
+                    if llm:
+                        _capture_llm_output(span, result)
+                    else:
+                        _capture_output(span, result)
+                    
+                    return result
+                    
+                except Exception as e:
+                    span.record_exception(e)
+                    span.set_status(trace.Status(trace.StatusCode.ERROR))
+                    raise
+                    
+                finally:
+                    duration_ms = int((time.perf_counter() - start_time) * 1000)
+                    span.set_attribute("sa.duration_ms", duration_ms)
+                    
+                    # Finalize token accumulator for root spans
+                    if root:
+                        _finalize_token_accumulator(span)
+        
+        return wrapper
+    
     # Support both @observe and @observe() forms
     if callable(_fn):
         return _decorate(_fn)
     return _decorate
 
 
-_token_accumulator: ContextVar[Optional[int]] = ContextVar("sa_token_accumulator", default=None)
-_token_owner_span_id: ContextVar[Optional[int]] = ContextVar("sa_token_owner_span_id", default=None)
+def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool) -> None:
+    """Capture function inputs - goal for regular functions, messages for LLM."""
+    try:
+        bound = signature(fn).bind_partial(*args, **kwargs)
+        
+        if llm:
+            # For LLM calls, capture messages
+            messages = bound.arguments.get("messages")
+            if messages:
+                span.set_attribute("input", str(messages)[:2000])
+        else:
+            # For regular functions, capture goal if present
+            goal = bound.arguments.get("goal")
+            if isinstance(goal, str):
+                span.set_attribute("sa.goal", goal)
+                span.set_attribute("input", goal)
+    except Exception:
+        pass
 
 
-def _ensure_token_accumulator(current_span: Any) -> None:
+def _capture_output(span: Any, result: Any) -> None:
+    """Capture regular function outputs."""
+    try:
+        # Handle common result attributes
+        if hasattr(result, 'success'):
+            span.set_attribute("sa.result_success", bool(result.success))
+        if hasattr(result, 'iterations'):
+            span.set_attribute("sa.result_iterations", int(result.iterations))
+        if hasattr(result, 'final_answer'):
+            preview = str(result.final_answer)[:200]
+            span.set_attribute("sa.result_final_preview", preview)
+        
+        # Set generic output
+        span.set_attribute("output", str(result)[:1000])
+    except Exception:
+        pass
+
+
+def _capture_llm_output(span: Any, result: Any) -> None:
+    """Capture LLM function outputs and handle token tracking."""
+    try:
+        # Handle LLMResponse with tokens
+        try:
+            from agents.llm.base_llm import BaseLLM
+            if isinstance(result, BaseLLM.LLMResponse):
+                span.set_attribute("output", result.text)
+                
+                # Set per-call token attributes
+                if isinstance(result.prompt_tokens, int):
+                    span.set_attribute("sa.tokens.prompt", result.prompt_tokens)
+                if isinstance(result.completion_tokens, int):
+                    span.set_attribute("sa.tokens.completion", result.completion_tokens)
+                if isinstance(result.total_tokens, int):
+                    span.set_attribute("sa.tokens.total", result.total_tokens)
+                    _accumulate_tokens(result.total_tokens)
+                return
+        except Exception:
+            pass
+        
+        # Fallback for non-LLMResponse
+        span.set_attribute("output", str(result))
+    except Exception:
+        pass
+
+
+# Token accumulation for root spans
+_token_accumulator: ContextVar[Optional[int]] = ContextVar("tokens", default=None)
+_token_owner: ContextVar[Optional[int]] = ContextVar("owner", default=None)
+
+
+def _start_token_accumulator(span: Any) -> None:
+    """Start token accumulation for root solve spans."""
     try:
         if _token_accumulator.get() is None:
             _token_accumulator.set(0)
-            _token_owner_span_id.set(id(current_span))
+            _token_owner.set(id(span))
     except Exception:
         pass
 
 
-def _finalize_token_accumulator(current_span: Any) -> None:
+def _accumulate_tokens(tokens: int) -> None:
+    """Add tokens to the current accumulator."""
     try:
-        owner_id = _token_owner_span_id.get()
-        if owner_id is None or owner_id != id(current_span):
-            return
-        total = _token_accumulator.get()
-        if isinstance(total, int) and total > 0:
-            try:
-                current_span.set_attribute("sa.tokens.total", total)  # type: ignore[attr-defined]
-            except Exception:
-                pass
-        _token_accumulator.set(None)
-        _token_owner_span_id.set(None)
-    except Exception:
-        pass
-
-
-def accumulate_tokens(delta: Optional[int]) -> None:
-    try:
-        if not isinstance(delta, int):
-            return
         current = _token_accumulator.get()
         if isinstance(current, int):
-            _token_accumulator.set(current + delta)
+            _token_accumulator.set(current + tokens)
     except Exception:
         pass
 
+
+def _finalize_token_accumulator(span: Any) -> None:
+    """Emit total tokens and clear accumulator."""
+    try:
+        if _token_owner.get() == id(span):
+            total = _token_accumulator.get()
+            if isinstance(total, int) and total > 0:
+                span.set_attribute("sa.tokens.total", total)
+            _token_accumulator.set(None)
+            _token_owner.set(None)
+    except Exception:
+        pass
