@@ -15,7 +15,7 @@ from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.jentic import JenticTool
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError)
-from utils.observe import observe
+from utils.observability import observe
 
 from utils.logger import get_logger
 logger = get_logger(__name__)

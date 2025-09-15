@@ -17,7 +17,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from agents.prebuilt import ReACTAgent, ReWOOAgent
 from agents.standard_agent import StandardAgent
 from utils.logger import get_logger
-from evaluation.otel_setup import setup_telemetry
+from utils.observability import setup_telemetry
 
 logger = get_logger(__name__)
 

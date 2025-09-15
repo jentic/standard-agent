@@ -24,7 +24,7 @@ from .dataset import load_dataset
 from .instrumentation import instrument_agent, get_current_run_metrics, current_run
 from .metrics import aggregate, group_by
 from .storage import JsonlStorage, RunRecord, make_output_path
-from .otel_setup import setup_telemetry
+from utils.observability import setup_telemetry
 
 
 def compute_config_hash(config: Dict[str, Any]) -> str:

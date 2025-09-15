@@ -9,7 +9,7 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolExecutionError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import ToolSelectionError
-from utils.observe import observe
+from utils.observability import observe
 
 
 from utils.logger import get_logger

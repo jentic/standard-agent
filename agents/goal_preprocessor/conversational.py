@@ -5,7 +5,7 @@ from agents.goal_preprocessor.base import BaseGoalPreprocessor
 from agents.prompts import load_prompts
 
 from utils.logger import get_logger
-from utils.observe import observe
+from utils.observability import observe
 logger = get_logger(__name__)
 
 _PROMPTS = load_prompts("goal_preprocessors/conversational", required_prompts=["clarify_goal"])

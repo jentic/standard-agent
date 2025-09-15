@@ -13,7 +13,7 @@ from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolError, ToolNotFoundError, ToolExecutionError, ToolCredentialsMissingError
 
 from utils.logger import get_logger
-from utils.observe import observe
+from utils.observability import observe
 logger = get_logger(__name__)
 
 

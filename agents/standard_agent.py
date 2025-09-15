@@ -20,7 +20,7 @@ from  uuid import uuid4
 import time
 from  enum import Enum
 from utils.logger import get_logger
-from utils.observe import observe
+from utils.observability import observe
 
 logger = get_logger(__name__)
 
