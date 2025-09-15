@@ -7,6 +7,6 @@ This module provides vendor-neutral tracing and telemetry infrastructure:
 """
 
 from .observe import observe
-from .otel_setup import setup_telemetry, get_tracer, get_meter
+from .otel_setup import setup_telemetry, get_tracer, get_meter, TelemetryTarget
 
-__all__ = ["observe", "setup_telemetry", "get_tracer", "get_meter"]
+__all__ = ["observe", "setup_telemetry", "get_tracer", "get_meter", "TelemetryTarget"]

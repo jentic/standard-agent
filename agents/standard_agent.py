@@ -71,7 +71,7 @@ class StandardAgent:
     def state(self) -> AgentState:
         return self._state
 
-    @observe
+    @observe(root=True)
     def solve(self, goal: str) -> ReasoningResult:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
