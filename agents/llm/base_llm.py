@@ -8,6 +8,7 @@ import os
 from textwrap import dedent
 from typing import List, Dict, Any
 
+from agents.llm.exceptions import JSONParseError
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -106,4 +107,7 @@ class BaseLLM(ABC):
         kwargs_with_json.setdefault("response_format", {"type": "json_object"})
         raw_response = self.prompt(content, **kwargs_with_json)
         cleaned_response = self._fence_pattern.sub(lambda m: m.group(1).strip(), raw_response)
-        return json.loads(cleaned_response)
+        try:
+            return json.loads(cleaned_response)
+        except json.JSONDecodeError as e:
+            raise JSONParseError(e.msg, e.doc, e.pos, cleaned_response) from e
