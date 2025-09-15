@@ -93,7 +93,7 @@ class LiteLLM(BaseLLM):
 
             except ValueError as e:
                 # Handle empty/malformed responses - retry same prompt for transient issues
-                logger.warning("empty_response_retry", attempt=attempt, error=str(e))
+                logger.warning("empty/malformed_response_retry", attempt=attempt, error=str(e))
                 if attempt >= max_retries:
                     raise
 
