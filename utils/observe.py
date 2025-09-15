@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import wraps
 from inspect import iscoroutinefunction, signature
 from typing import Any, Callable, Optional
+from contextvars import ContextVar
 import time
 import os
 import hashlib
@@ -238,6 +239,14 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
                 tracer = trace.get_tracer("standard-agent")
                 t0 = time.perf_counter()
                 with tracer.start_as_current_span(span_name) as span:  # type: ignore[assignment]
+                    # Start a token accumulator for root agent.solve spans if not active
+                    try:
+                        if not llm:
+                            qual = getattr(fn, "__qualname__", "")
+                            if isinstance(qual, str) and qual.endswith(".solve"):
+                                _ensure_token_accumulator(span)
+                    except Exception:
+                        pass
                     try:
                         # Best-effort: bind args to capture a 'goal' param if present
                         try:
@@ -303,10 +312,21 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
                         except Exception:
                             pass
 
-                        # For LLM spans, set full model output as 'output'
+                        # For LLM spans, handle BaseLLM.LLMResponse specially
                         if llm:
                             try:
-                                span.set_attribute("output", result if isinstance(result, str) else str(result))  # type: ignore[attr-defined]
+                                from agents.llm.base_llm import BaseLLM  # type: ignore
+                                if isinstance(result, BaseLLM.LLMResponse):
+                                    span.set_attribute("output", result.text)  # type: ignore[attr-defined]
+                                    if isinstance(result.prompt_tokens, int):
+                                        span.set_attribute("sa.tokens.prompt", result.prompt_tokens)  # type: ignore[attr-defined]
+                                    if isinstance(result.completion_tokens, int):
+                                        span.set_attribute("sa.tokens.completion", result.completion_tokens)  # type: ignore[attr-defined]
+                                    if isinstance(result.total_tokens, int):
+                                        span.set_attribute("sa.tokens.total", result.total_tokens)  # type: ignore[attr-defined]
+                                        accumulate_tokens(result.total_tokens)
+                                else:
+                                    span.set_attribute("output", result if isinstance(result, str) else str(result))  # type: ignore[attr-defined]
                             except Exception:
                                 pass
                         return result
@@ -321,6 +341,8 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
                         try:
                             duration_ms = int((time.perf_counter() - t0) * 1000)
                             span.set_attribute("sa.duration_ms", duration_ms)  # type: ignore[attr-defined]
+                            # If this span owns the token accumulator, emit total and clear
+                            _finalize_token_accumulator(span)
                         except Exception:
                             pass
             except Exception:
@@ -334,4 +356,44 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False) -> C
         return _decorate(_fn)
     return _decorate
 
+
+_token_accumulator: ContextVar[Optional[int]] = ContextVar("sa_token_accumulator", default=None)
+_token_owner_span_id: ContextVar[Optional[int]] = ContextVar("sa_token_owner_span_id", default=None)
+
+
+def _ensure_token_accumulator(current_span: Any) -> None:
+    try:
+        if _token_accumulator.get() is None:
+            _token_accumulator.set(0)
+            _token_owner_span_id.set(id(current_span))
+    except Exception:
+        pass
+
+
+def _finalize_token_accumulator(current_span: Any) -> None:
+    try:
+        owner_id = _token_owner_span_id.get()
+        if owner_id is None or owner_id != id(current_span):
+            return
+        total = _token_accumulator.get()
+        if isinstance(total, int) and total > 0:
+            try:
+                current_span.set_attribute("sa.tokens.total", total)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        _token_accumulator.set(None)
+        _token_owner_span_id.set(None)
+    except Exception:
+        pass
+
+
+def accumulate_tokens(delta: Optional[int]) -> None:
+    try:
+        if not isinstance(delta, int):
+            return
+        current = _token_accumulator.get()
+        if isinstance(current, int):
+            _token_accumulator.set(current + delta)
+    except Exception:
+        pass
 

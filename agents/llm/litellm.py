@@ -20,7 +20,7 @@ class LiteLLM(BaseLLM):
         self.max_tokens = max_tokens
 
     @observe(llm=True)
-    def completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def completion(self, messages: List[Dict[str, str]], **kwargs) -> BaseLLM.LLMResponse:
         # Merge default parameters with provided kwargs
         effective_temperature = kwargs.get("temperature", self.temperature)
         effective_max_tokens = kwargs.get("max_tokens", self.max_tokens)
@@ -41,34 +41,52 @@ class LiteLLM(BaseLLM):
 
         resp = litellm.completion(**completion_kwargs)
 
-        # Notify eval layer about per-call token usage if available
-        # Expected shape: resp.usage.prompt_tokens / completion_tokens (provider-dependent)
+        # Extract usage/token counts across providers
+        prompt_tokens = None
+        completion_tokens = None
+        total_tokens = None
         try:
             usage = getattr(resp, "usage", None)
-            prompt_tokens = None
-            completion_tokens = None
+            if usage is None and isinstance(resp, dict):
+                usage = resp.get("usage")
             if usage is not None:
-                # Attribute style
                 prompt_tokens = getattr(usage, "prompt_tokens", None)
                 completion_tokens = getattr(usage, "completion_tokens", None)
-            # Dict-style fallback if provider returns dict-like usage
-            if prompt_tokens is None and isinstance(usage, dict):
-                prompt_tokens = usage.get("prompt_tokens")
-                completion_tokens = usage.get("completion_tokens")
-            # Call optional usage callback if provided on this instance
-            usage_cb = getattr(self, "usage_callback", None)
-
-            if callable(usage_cb):
-                usage_cb(prompt_tokens if isinstance(prompt_tokens, int) else None,
-                         completion_tokens if isinstance(completion_tokens, int) else None)
+                total_tokens = getattr(usage, "total_tokens", None)
+                if prompt_tokens is None:
+                    prompt_tokens = getattr(usage, "input_tokens", None)
+                if completion_tokens is None:
+                    completion_tokens = getattr(usage, "output_tokens", None)
+            if isinstance(usage, dict):
+                if prompt_tokens is None:
+                    prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
+                if completion_tokens is None:
+                    completion_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
+                if total_tokens is None:
+                    total_tokens = usage.get("total_tokens")
         except Exception:
-            # Never fail the main call due to usage accounting
             pass
 
         try:
-            return resp.choices[0].message.content.strip()
+            text = resp.choices[0].message.content.strip()
         except (IndexError, AttributeError):
-            return ""
+            text = ""
+
+        # Compute total if missing
+        if not isinstance(total_tokens, int):
+            total = 0
+            if isinstance(prompt_tokens, int):
+                total += prompt_tokens
+            if isinstance(completion_tokens, int):
+                total += completion_tokens
+            total_tokens = total if total > 0 else None
+
+        return BaseLLM.LLMResponse(
+            text=text,
+            prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
+            completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
+            total_tokens=total_tokens if isinstance(total_tokens, int) else None,
+        )
 
     def prompt_to_json(self, content: str, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
         """
