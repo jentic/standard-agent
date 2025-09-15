@@ -41,45 +41,13 @@ class LiteLLM(BaseLLM):
 
         resp = litellm.completion(**completion_kwargs)
 
-        # Extract usage/token counts across providers
-        prompt_tokens = None
-        completion_tokens = None
-        total_tokens = None
-        try:
-            usage = getattr(resp, "usage", None)
-            if usage is None and isinstance(resp, dict):
-                usage = resp.get("usage")
-            if usage is not None:
-                prompt_tokens = getattr(usage, "prompt_tokens", None)
-                completion_tokens = getattr(usage, "completion_tokens", None)
-                total_tokens = getattr(usage, "total_tokens", None)
-                if prompt_tokens is None:
-                    prompt_tokens = getattr(usage, "input_tokens", None)
-                if completion_tokens is None:
-                    completion_tokens = getattr(usage, "output_tokens", None)
-            if isinstance(usage, dict):
-                if prompt_tokens is None:
-                    prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
-                if completion_tokens is None:
-                    completion_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
-                if total_tokens is None:
-                    total_tokens = usage.get("total_tokens")
-        except Exception:
-            pass
-
+        text = ""
         try:
             text = resp.choices[0].message.content.strip()
         except (IndexError, AttributeError):
-            text = ""
+            pass
 
-        # Compute total if missing
-        if not isinstance(total_tokens, int):
-            total = 0
-            if isinstance(prompt_tokens, int):
-                total += prompt_tokens
-            if isinstance(completion_tokens, int):
-                total += completion_tokens
-            total_tokens = total if total > 0 else None
+        prompt_tokens, completion_tokens, total_tokens = self._extract_token_usage(resp)
 
         return BaseLLM.LLMResponse(
             text=text,
@@ -125,3 +93,36 @@ class LiteLLM(BaseLLM):
 
         # This should never be reached, but mypy requires it
         raise json.JSONDecodeError("Unexpected end of function", "", 0)
+
+
+    def _extract_token_usage(self, resp: Any) -> tuple[int | None, int | None, int | None]:
+        """Extract token usage from provider response with fallbacks for different providers."""
+        def _get_token(obj: Any, *keys: str) -> int | None:
+            for key in keys:
+                if hasattr(obj, key):
+                    val = getattr(obj, key, None)
+
+                elif isinstance(obj, dict):
+                    val = obj.get(key)
+                else:
+                    continue
+                if isinstance(val, int):
+                    return val
+            return None
+
+        try:
+            usage = getattr(resp, "usage", None) or (resp.get("usage") if isinstance(resp, dict) else None)
+            if usage is None:
+                return None, None, None
+
+            prompt_tokens = _get_token(usage, "prompt_tokens", "input_tokens")
+            completion_tokens = _get_token(usage, "completion_tokens", "output_tokens")
+            total_tokens = _get_token(usage, "total_tokens")
+
+            # Compute total if missing but components available
+            if total_tokens is None and prompt_tokens is not None and completion_tokens is not None:
+                total_tokens = prompt_tokens + completion_tokens
+
+            return prompt_tokens, completion_tokens, total_tokens
+        except Exception:
+            return None, None, None
