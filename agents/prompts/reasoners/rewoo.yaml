@@ -192,7 +192,7 @@ param_gen: |
     3. **CRITICAL** Check STEP text for quantity constraints (e.g., "send 3 articles", "post 2 items").
     4. **CRITICAL** Map values to SCHEMA keys using exact names. Do not invent or rename keys.
     5. **CRITICAL** Use only keys listed in ALLOWED_KEYS. Omit any key you cannot populate truthfully.
-    6. Unnecessary placeholders are strictly forbidden.
+    6. Placeholders for unknown values are strictly forbidden: ex "<UNKNOWN>", etc. 
     7. If a key is in REQUIRED_KEYS and you cannot find a real value:
        • If SCHEMA type is "string": set value to "" (empty string).
        • Otherwise: omit the key (do NOT fabricate or cast).
