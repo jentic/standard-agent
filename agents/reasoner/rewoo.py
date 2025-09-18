@@ -204,14 +204,13 @@ class ReWOOReasoner(BaseReasoner):
         return self.tools.load(selected_tool)
 
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
-        if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
-            logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
-            param_schema = tool.get_parameters() or {}
-            return {k: v for k, v in suggestion["params"].items() if k in param_schema}
-
         try:
             param_schema = tool.get_parameters() or {}
+            suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
+            if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
+                logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
+                return {k: v for k, v in suggestion["params"].items() if k in param_schema}
+
             prompt = _PROMPTS["param_gen"].format(
                 step=step.text,
                 tool_schema=json.dumps(param_schema, ensure_ascii=False),
@@ -220,7 +219,7 @@ class ReWOOReasoner(BaseReasoner):
             )
             params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
             return {k: v for k, v in (params_raw or {}).items() if k in param_schema}
-        except (json.JSONDecodeError, TypeError, ValueError) as e:
+        except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
             raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step.text}': {e}", tool) from e
 
     def _reflect(self, error: Exception, step: Step, state: ReasonerState) -> None:
