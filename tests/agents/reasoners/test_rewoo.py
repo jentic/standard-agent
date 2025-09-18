@@ -1,6 +1,8 @@
 from agents.memory.dict_memory import DictMemory
-from agents.reasoner.rewoo import ReWOOReasoner
+from agents.reasoner.rewoo import ReWOOReasoner, Step
+from agents.reasoner.exceptions import ParameterGenerationError
 from typing import Any, Dict, List
+import pytest
 
 from tests.conftest import DummyLLM, DummyTools, DummyTool, CaptureTools
 from agents.tools.exceptions import ToolExecutionError
@@ -146,6 +148,79 @@ def test_rewoo_does_not_record_tool_call_on_selection_error():
 
     # No tool call recorded on selection error
     assert result.tool_calls == []
+
+
+def test_rewoo_param_gen_non_dict_raises_parameter_generation_error():
+    # Directly exercise _generate_params: LLM returns a list -> should raise ParameterGenerationError
+    llm = DummyLLM(
+        text_queue=[],
+        json_queue=[[["x"]]],  # non-dict JSON output from LLM
+    )
+    tools = DummyTools([DummyTool("t1", "Tool One", schema={"a": {}})])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+
+    step = Step(text="act")
+    tool = DummyTool("t1", "Tool One", schema={"a": {}})
+
+    with pytest.raises(ParameterGenerationError) as exc:
+        reasoner._generate_params(step, tool, inputs={})
+    msg = str(exc.value)
+    assert "Failed to generate valid JSON parameters for step" in msg
+    assert "list' object has no attribute 'items" in msg
+
+
+def test_rewoo_param_gen_non_dict_triggers_reflection():
+    # Full run: param_gen returns list, which should be caught and trigger reflection (no crash)
+    plan_text = "- act (output: k1)"
+    llm = DummyLLM(
+        text_queue=[
+            plan_text,  # plan
+            "TOOL",    # classify
+            "t1",      # select
+        ],
+        json_queue=[
+            [["x"]],                     # param_gen returns non-dict → error
+            {"action": "give_up"},      # reflection decision
+        ],
+    )
+    tools = DummyTools([DummyTool("t1", "Tool One", schema={"a": {}})])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_retries=2)
+    result = reasoner.run("goal")
+
+    assert result.tool_calls == []
+    assert "Reflection decision" in result.transcript
+
+
+def test_rewoo_reflector_suggested_params_non_dict_triggers_param_error():
+    # First execution fails → reflection suggests retry_params with non-dict params (list)
+    # Next attempt should raise ParameterGenerationError from suggestion branch and reflect again.
+    plan_text = "- act (output: k1)"
+    t1 = DummyTool("t1", "Tool One", schema={"a": {}})
+    llm = DummyLLM(
+        text_queue=[
+            plan_text,  # plan
+            "TOOL",    # classify step 1
+            "t1",      # select
+            "TOOL",    # classify retried step
+        ],
+        json_queue=[
+            {},  # initial param_gen (dict) so we reach execute and fail
+            {"action": "retry_params", "params": [["x"]]},  # reflection suggests non-dict params
+            {"action": "give_up"},  # second reflection after ParameterGenerationError
+        ],
+    )
+    tools = DummyTools([t1], failures={"t1": ToolExecutionError("boom", t1)})
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_retries=2)
+
+    result = reasoner.run("goal")
+
+    # First attempt failed to execute; second attempt failed at param gen from suggestion; no successful tool calls
+    assert result.tool_calls == []
+    # Two reflections should have been recorded in the transcript (initial failure, then param error)
+    assert result.transcript.count("Reflection decision") >= 2
 
 
 def test_rewoo_plan_raises_on_duplicate_output_key():

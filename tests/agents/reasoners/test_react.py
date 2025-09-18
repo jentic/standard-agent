@@ -2,7 +2,8 @@ from typing import Any, Dict
 
 from agents.reasoner.react import ReACTReasoner
 from agents.memory.dict_memory import DictMemory
-
+from agents.reasoner.exceptions import ParameterGenerationError
+import pytest
 # Reuse test doubles from conftest in this package
 from tests.conftest import DummyLLM, DummyTools, DummyTool
 
@@ -135,6 +136,40 @@ def test_react_tool_selection_error_is_logged_and_no_tool_call_recorded():
     # No successful tool calls should be recorded
     assert result.tool_calls == []
     assert "ToolSelectionError" in result.transcript
+
+
+def test_react_param_gen_non_dict_raises_parameter_generation_error():
+    # Direct call: param_gen returns a list, should raise ParameterGenerationError
+    llm = DummyLLM()
+    tools = DummyTools([DummyTool("t1", "Tool One", schema={"a": {}})])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory)
+
+    llm.json_queue = [[["x"]]]
+
+    tool = DummyTool("t1", "Tool One", schema={"a": {}})
+    with pytest.raises(ParameterGenerationError) as exc:
+        reasoner._generate_params(tool, transcript="t", step_text="do")
+    assert "Failed to generate valid JSON parameters for step" in str(exc.value)
+
+
+def test_react_param_gen_non_dict_during_run_logs_and_no_tool_call():
+    # Full run: THINK->ACT with non-dict param_gen, then THINK->STOP; no tool call should be recorded
+    llm = DummyLLM(
+        json_queue=[
+            {"step_type": "ACT", "text": "do"},
+            [["x"]],  # param_gen returns list
+            {"step_type": "STOP", "text": "done"},
+        ],
+        text_queue=["t1"],
+    )
+    tools = DummyTools([DummyTool("t1", "Tool One", schema={"a": {}})])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=3)
+    result = reasoner.run("goal")
+
+    assert result.tool_calls == []
+    assert "ParameterGenerationError" in result.transcript
 
 
 def test_react_think_invalid_output_falls_back_to_default_and_counts_turn():

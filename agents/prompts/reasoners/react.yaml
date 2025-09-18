@@ -102,20 +102,41 @@ param_gen: |
   </data_extraction_rules>
 
   <instructions>
-  1. Extract actual values using the rules
-  2. CRITICAL: Check STEP text for quantity constraints
-  3. Format content appropriately for the target API
-  4. Generate valid parameters using only ALLOWED_KEYS
-  5. CRITICAL: Only use parameters documented in the SCHEMA
+  1. Analyze MEMORY for relevant data structures.
+  2. Extract actual values using the data extraction rules.
+  3. **CRITICAL** Check STEP text for quantity constraints (e.g., "send 3 articles", "post 2 items").
+  4. **CRITICAL** Map values to SCHEMA keys using exact names. Do not invent or rename keys.
+  5. **CRITICAL** Use only keys listed in ALLOWED_KEYS. Omit any key you cannot populate truthfully.
+  6. Placeholders for unknown values are strictly forbidden: ex "<UNKNOWN>", etc.
+  7. If a key is in REQUIRED_KEYS and you cannot find a real value:
+    • If SCHEMA type is "string": set value to "" (empty string).
+    • Otherwise: omit the key (do NOT fabricate or cast).
   </instructions>
 
   <constraints>
-  - Output ONLY valid JSON - no markdown or commentary
-  - Use only keys from ALLOWED_KEYS
-  - Extract actual data values from DATA
+  - Output MUST be a single JSON object at the top level (no arrays/scalars).
+  - Output ONLY valid JSON: double-quoted keys and strings, no comments, no markdown, no backticks.
+  - Keys MUST be a subset of ALLOWED_KEYS.
+  - Absolutely NO placeholders
   </constraints>
-
+  
   <output_format>
-  Valid JSON object starting with {{ and ending with }}
+  A single JSON object with only ALLOWED_KEYS. Example:
+  {{"parameter1": "value1", "count": 2}}
   </output_format>
+  
+  <bad_examples>
+  ["value1", "value2"]           // Bad: top-level array
+  "value"                        // Bad: scalar
+  {{parameter1: value1}}           // Bad: invalid JSON (unquoted)
+  ```json {{ "a": 1 }} ```         // Bad: fenced code block
+  </bad_examples>
+
+  <self_check>
+  Before responding, verify ALL of the following:
+  - Top-level is a JSON object (starts with {{ and ends with }}).
+  - All keys are from ALLOWED_KEYS only.
+  - JSON is syntactically valid and parsable.
+  If any check fails, regenerate your answer to satisfy all constraints.
+  </self_check>
 
