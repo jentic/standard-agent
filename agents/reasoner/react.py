@@ -8,7 +8,8 @@ from agents.reasoner.base import BaseReasoner, ReasoningResult
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolExecutionError, ToolCredentialsMissingError
-from agents.reasoner.exceptions import ToolSelectionError
+from agents.reasoner.exceptions import ToolSelectionError, ParameterGenerationError
+
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -75,6 +76,9 @@ class ReACTReasoner(BaseReasoner):
                     if tid: failed_tool_ids.append(tid)
                     reasoning_trace.append(f"OBSERVATION: ERROR: ToolExecutionError:{f' tool_id={tid}' if tid else ''} {exc}")
                     logger.error("tool_execution_failed", error=str(exc))
+                except ParameterGenerationError as exc:
+                    reasoning_trace.append(f"OBSERVATION: ERROR: ParameterGenerationError: {str(exc)}")
+                    logger.warning("param_generation_failed", error=str(exc))
                 except Exception as exc:
                     reasoning_trace.append(f"OBSERVATION: ERROR: UnexpectedError: {str(exc)}")
                     logger.error("tool_unexpected_error", error=str(exc), exc_info=True)
@@ -131,18 +135,20 @@ class ReACTReasoner(BaseReasoner):
         schema = tool.get_parameters() or {}
         allowed_keys = ",".join(schema.keys()) if isinstance(schema, dict) else ""
         data: Dict[str, Any] = {"reasoning trace": transcript}
-
-        params_raw = self.llm.prompt_to_json(
-            _PROMPTS["param_gen"].format(
-                step=step_text,
-                data=json.dumps(data, ensure_ascii=False),
-                schema=json.dumps(schema, ensure_ascii=False),
-                allowed_keys=allowed_keys,
-            ),
-            max_retries=2,
-        ) or {}
-        params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
-        logger.info("params_generated", tool_id=tool.id, params=params)
-        return params
+        try:
+            params_raw = self.llm.prompt_to_json(
+                _PROMPTS["param_gen"].format(
+                    step=step_text,
+                    data=json.dumps(data, ensure_ascii=False),
+                    schema=json.dumps(schema, ensure_ascii=False),
+                    allowed_keys=allowed_keys,
+                ),
+                max_retries=2,
+            ) or {}
+            params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
+            logger.info("params_generated", tool_id=tool.id, params=params)
+            return params
+        except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
+            raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step_text}': {e}", tool) from e
 
 
