@@ -46,6 +46,10 @@ class JenticTool(ToolBase):
     def __str__(self) -> str:
         """Short string description for logging purposes."""
         return f"JenticTool({self.id}, {self.name})"
+    
+    def __repr__(self) -> str:
+        """Unambiguous representation for debugging and observability."""
+        return f"JenticTool({self.id!r}, {self.name!r})"
 
     def get_summary(self) -> str:
         """Return summary information for LLM tool selection."""
