@@ -146,7 +146,7 @@ class ReACTReasoner(BaseReasoner):
                 ),
                 max_retries=2,
             ) or {}
-            params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in param_schema.get_allowed_keys()}
+            params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in allowed_keys}
             logger.info("params_generated", tool_id=tool.id, params=params)
             return params
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
