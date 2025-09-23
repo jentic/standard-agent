@@ -10,6 +10,7 @@ from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolExecutionError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import ToolSelectionError, ParameterGenerationError
 
+from models.tool_input_schema import ToolInputSchema
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -132,20 +133,20 @@ class ReACTReasoner(BaseReasoner):
         return self.tools.load(selected_tool)
 
     def _generate_params(self, tool: ToolBase, transcript: str, step_text: str) -> Dict[str, Any]:
-        schema = tool.get_parameters() or {}
-        allowed_keys = ",".join(schema.keys()) if isinstance(schema, dict) else ""
+        param_schema = ToolInputSchema(tool.get_parameters() or {})
+        allowed_keys = param_schema.get_allowed_keys()
         data: Dict[str, Any] = {"reasoning trace": transcript}
         try:
             params_raw = self.llm.prompt_to_json(
                 _PROMPTS["param_gen"].format(
                     step=step_text,
                     data=json.dumps(data, ensure_ascii=False),
-                    schema=json.dumps(schema, ensure_ascii=False),
-                    allowed_keys=allowed_keys,
+                    schema=param_schema.to_string(),
+                    allowed_keys=",".join(allowed_keys),
                 ),
                 max_retries=2,
             ) or {}
-            params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
+            params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in param_schema.get_allowed_keys()}
             logger.info("params_generated", tool_id=tool.id, params=params)
             return params
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:

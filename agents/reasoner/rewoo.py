@@ -16,6 +16,8 @@ from agents.tools.jentic import JenticTool
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError)
 
+from models.tool_input_schema import ToolInputSchema
+
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -205,20 +207,21 @@ class ReWOOReasoner(BaseReasoner):
 
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            param_schema = tool.get_parameters() or {}
+            param_schema = ToolInputSchema(tool.get_parameters() or {})
+            allowed_keys = param_schema.get_allowed_keys()
             suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
             if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
                 logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
-                return {k: v for k, v in suggestion["params"].items() if k in param_schema}
+                return {k: v for k, v in suggestion["params"].items() if k in allowed_keys}
 
             prompt = _PROMPTS["param_gen"].format(
                 step=step.text,
-                tool_schema=json.dumps(param_schema, ensure_ascii=False),
+                tool_schema=param_schema.to_string(),
                 step_inputs=json.dumps(inputs, ensure_ascii=False),
-                allowed_keys=",".join(param_schema.keys()),
+                allowed_keys=",".join(allowed_keys),
             )
             params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
-            return {k: v for k, v in (params_raw or {}).items() if k in param_schema}
+            return {k: v for k, v in (params_raw or {}).items() if k in allowed_keys}
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
             raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step.text}': {e}", tool) from e
 
