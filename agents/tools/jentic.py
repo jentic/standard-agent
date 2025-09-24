@@ -39,7 +39,7 @@ class JenticTool(ToolBase):
         self.api_name = schema.get('api_name', 'unknown')
         self.method = schema.get('method')  # For operations
         self.path = schema.get('path')      # For operations
-        self.required = schema.get('inputs', {}).get('required', []),
+        self.required = schema.get('inputs', {}).get('required', [])
         self._parameters = schema.get('inputs', {}).get('properties', None)
 
     def __str__(self) -> str:
@@ -60,6 +60,13 @@ class JenticTool(ToolBase):
     def get_parameters(self) -> Dict[str, Any]:
         """Return detailed parameter schema for LLM parameter generation."""
         return self._parameters
+
+    def get_required_parameters(self) -> List[str]:
+        """Return list of required parameter names that exist in the schema properties."""
+        if not self.required or not self._parameters:
+            return []
+        # Filter to only include required fields that actually exist in properties
+        return [key for key in self.required if key in self._parameters]
 
 
 class JenticClient(JustInTimeToolingBase):

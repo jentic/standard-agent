@@ -133,8 +133,11 @@ class ReACTReasoner(BaseReasoner):
         return self.tools.load(selected_tool)
 
     def _generate_params(self, tool: ToolBase, transcript: str, step_text: str) -> Dict[str, Any]:
+
         param_schema = ToolInputSchema(tool.get_parameters() or {})
         allowed_keys = param_schema.get_allowed_keys()
+        required_keys = tool.get_required_parameters() if hasattr(tool, 'get_required_parameters') else []
+
         data: Dict[str, Any] = {"reasoning trace": transcript}
         try:
             params_raw = self.llm.prompt_to_json(
@@ -143,12 +146,23 @@ class ReACTReasoner(BaseReasoner):
                     data=json.dumps(data, ensure_ascii=False),
                     schema=param_schema.to_string(),
                     allowed_keys=",".join(allowed_keys),
+                    required_keys=",".join(required_keys),
                 ),
                 max_retries=2,
             ) or {}
-            params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in allowed_keys}
-            logger.info("params_generated", tool_id=tool.id, params=params)
-            return params
+            final_params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in param_schema.get_allowed_keys()}
+            
+            missing_required_parameter = [key for key in required_keys if key not in final_params]
+            if missing_required_parameter:
+                logger.warning("missing_required_parameters", step_text=step_text, tool_id=tool.id, missing_parameters=missing_required_parameter, generated_parameters=final_params, required_parameters=required_keys)
+                raise ParameterGenerationError(
+                    f"Parameters for step '{step_text}' are missing required parameters: {', '.join(missing_required_parameter)}. "
+                    f"Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution.", tool
+                )
+            
+            logger.info("params_generated", tool_id=tool.id, params=final_params)
+            return final_params
+
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
             raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step_text}': {e}", tool) from e
 

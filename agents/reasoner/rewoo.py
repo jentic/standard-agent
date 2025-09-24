@@ -209,19 +209,33 @@ class ReWOOReasoner(BaseReasoner):
         try:
             param_schema = ToolInputSchema(tool.get_parameters() or {})
             allowed_keys = param_schema.get_allowed_keys()
+            required_keys = tool.get_required_parameters() if hasattr(tool, 'get_required_parameters') else []
+            
+            # Get params from either reflector suggestion or LLM generation
             suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
             if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
                 logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
-                return {k: v for k, v in suggestion["params"].items() if k in allowed_keys}
-
-            prompt = _PROMPTS["param_gen"].format(
-                step=step.text,
-                tool_schema=param_schema.to_string(),
-                step_inputs=json.dumps(inputs, ensure_ascii=False),
-                allowed_keys=",".join(allowed_keys),
-            )
-            params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
-            return {k: v for k, v in (params_raw or {}).items() if k in allowed_keys}
+                final_params = {k: v for k, v in suggestion["params"].items() if k in allowed_keys}
+            else:
+                prompt = _PROMPTS["param_gen"].format(
+                    step=step.text,
+                    tool_schema=param_schema.to_string(),
+                    step_inputs=json.dumps(inputs, ensure_ascii=False),
+                    allowed_keys=",".join(allowed_keys),
+                    required_keys=",".join(required_keys),
+                )
+                params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
+                final_params = {k: v for k, v in (params_raw or {}).items() if k in allowed_keys}
+            
+            missing_required_parameter = [key for key in required_keys if key not in final_params]
+            if missing_required_parameter:
+                logger.warning("missing_required_parameters", step_text=step.text, tool_id=tool.id, missing_parameters=missing_required_parameter, generated_parameters=final_params, required_parameters=required_keys)
+                raise ParameterGenerationError(
+                    f"Parameters for step '{step.text}' are missing required parameters: {', '.join(missing_required_parameter)}. "
+                    f"Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution.", tool
+                )
+            logger.info("params_generated", tool_id=tool.id, params=final_params)
+            return final_params
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
             raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step.text}': {e}", tool) from e
 
