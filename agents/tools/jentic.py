@@ -57,16 +57,41 @@ class JenticTool(ToolBase):
     def get_details(self) -> str:
         return json.dumps(self._schema, indent=4)
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_input_schema(self) -> Dict[str, Any]:
         """Return detailed parameter schema for LLM parameter generation."""
         return self._parameters
 
-    def get_required_parameters(self) -> List[str]:
+    def get_required_input_keys(self) -> List[str]:
         """Return list of required parameter names that exist in the schema properties."""
         if not self.required or not self._parameters:
             return []
+        
         # Filter to only include required fields that actually exist in properties
+        if isinstance(self._parameters, list):
+            # If parameters is a list, we need to check each schema for required keys
+            required_keys = set()
+            for schema in self._parameters:
+                for param in schema:
+                    if param in self.required:
+                        required_keys.add(param)
+            return list(required_keys)
+
         return [key for key in self.required if key in self._parameters]
+    
+    def get_allowed_input_keys(self) -> List[str]:
+        """Return list of allowed parameter names that exist in the schema properties."""
+        if not self._parameters:
+            return []
+        
+        if isinstance(self._parameters, list):
+            # If parameters is a list, we need to check each schema for allowed keys
+            allowed_keys = set()
+            for schema in self._parameters:
+                for param in schema:
+                    allowed_keys.add(param)
+            return list(allowed_keys)
+
+        return list(self._parameters.keys())
 
 
 class JenticClient(JustInTimeToolingBase):

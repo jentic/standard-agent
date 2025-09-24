@@ -10,8 +10,6 @@ from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolExecutionError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import ToolSelectionError, ParameterGenerationError
 
-from models.tool_input_schema import ToolInputSchema
-
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -133,10 +131,9 @@ class ReACTReasoner(BaseReasoner):
         return self.tools.load(selected_tool)
 
     def _generate_params(self, tool: ToolBase, transcript: str, step_text: str) -> Dict[str, Any]:
-
-        param_schema = ToolInputSchema(tool.get_parameters() or {})
-        allowed_keys = param_schema.get_allowed_keys()
-        required_keys = tool.get_required_parameters() if hasattr(tool, 'get_required_parameters') else []
+        param_schema = tool.get_input_schema()
+        allowed_keys = tool.get_allowed_input_keys()
+        required_keys = tool.get_required_input_keys()
 
         data: Dict[str, Any] = {"reasoning trace": transcript}
         try:
@@ -144,13 +141,13 @@ class ReACTReasoner(BaseReasoner):
                 _PROMPTS["param_gen"].format(
                     step=step_text,
                     data=json.dumps(data, ensure_ascii=False),
-                    schema=param_schema.to_string(),
+                    schema=json.dumps(param_schema, ensure_ascii=False),
                     allowed_keys=",".join(allowed_keys),
                     required_keys=",".join(required_keys),
                 ),
                 max_retries=2,
             ) or {}
-            final_params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in param_schema.get_allowed_keys()}
+            final_params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in allowed_keys}
             
             missing_required_parameter = [key for key in required_keys if key not in final_params]
             if missing_required_parameter:

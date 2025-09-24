@@ -16,8 +16,6 @@ from agents.tools.jentic import JenticTool
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError)
 
-from models.tool_input_schema import ToolInputSchema
-
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -207,9 +205,9 @@ class ReWOOReasoner(BaseReasoner):
 
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            param_schema = ToolInputSchema(tool.get_parameters() or {})
-            allowed_keys = param_schema.get_allowed_keys()
-            required_keys = tool.get_required_parameters() if hasattr(tool, 'get_required_parameters') else []
+            param_schema = tool.get_input_schema()
+            allowed_keys = tool.get_allowed_input_keys()
+            required_keys = tool.get_required_input_keys()
             
             # Get params from either reflector suggestion or LLM generation
             suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
@@ -219,7 +217,7 @@ class ReWOOReasoner(BaseReasoner):
             else:
                 prompt = _PROMPTS["param_gen"].format(
                     step=step.text,
-                    tool_schema=param_schema.to_string(),
+                    tool_schema=json.dumps(param_schema, ensure_ascii=False),
                     step_inputs=json.dumps(inputs, ensure_ascii=False),
                     allowed_keys=",".join(allowed_keys),
                     required_keys=",".join(required_keys),
