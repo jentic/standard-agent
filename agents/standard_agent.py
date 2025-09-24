@@ -71,6 +71,12 @@ class StandardAgent:
 
     def solve(self, goal: str) -> ReasoningResult:
         """Solves a goal synchronously (library-style API)."""
+        
+        if goal is None:
+            raise ValueError("Goal cannot be None")
+        if not goal or not goal.strip():
+            raise ValueError("Goal cannot be empty or whitespace")
+        
         run_id = uuid4().hex
         start_time = time.perf_counter()
 
