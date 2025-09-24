@@ -139,6 +139,63 @@ class TestJenticTool:
         parameters = tool.get_parameters()
         assert parameters == None
 
+    def test_get_required_parameters_with_valid_required_fields(self):
+        """
+        Tests get_required_parameters returns required fields that exist in properties.
+        """
+        tool = JenticTool(WORKFLOW_SCHEMA)
+        required_params = tool.get_required_parameters()
+        assert required_params == ['param1']
+
+    def test_get_required_parameters_filters_invalid_fields(self):
+        """
+        Tests get_required_parameters filters out required fields that don't exist in properties.
+        """
+        schema_with_invalid_required = {
+            'workflow_id': 'wf_test',
+            'inputs': {
+                'required': ['param1', 'nonexistent_param'],
+                'properties': {
+                    'param1': {'type': 'string'},
+                    'param2': {'type': 'integer'}
+                }
+            }
+        }
+        tool = JenticTool(schema_with_invalid_required)
+        required_params = tool.get_required_parameters()
+        assert required_params == ['param1']  # nonexistent_param filtered out
+
+    def test_get_required_parameters_empty_required(self):
+        """
+        Tests get_required_parameters returns empty list when no required fields.
+        """
+        tool = JenticTool(OPERATION_SCHEMA)  # has empty required array
+        required_params = tool.get_required_parameters()
+        assert required_params == []
+
+    def test_get_required_parameters_no_inputs(self):
+        """
+        Tests get_required_parameters returns empty list when no inputs section.
+        """
+        tool = JenticTool(EMPTY_SCHEMA)
+        required_params = tool.get_required_parameters()
+        assert required_params == []
+
+    def test_get_required_parameters_no_properties(self):
+        """
+        Tests get_required_parameters returns empty list when no properties section.
+        """
+        schema_no_properties = {
+            'workflow_id': 'wf_test',
+            'inputs': {
+                'required': ['param1']
+                # no properties section
+            }
+        }
+        tool = JenticTool(schema_no_properties)
+        required_params = tool.get_required_parameters()
+        assert required_params == []
+
 
 @pytest.fixture
 def mock_jentic_sdk():
