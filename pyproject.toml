@@ -1,6 +1,6 @@
 [project]
 name = "standard-agent"
-version = "0.1.4"
+version = "0.1.5"
 description = "A simple, modular library for building AI agents—with a composable core and plug‑in components."
 requires-python = ">=3.11"
 readme = "README.md"
