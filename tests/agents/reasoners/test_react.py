@@ -264,3 +264,161 @@ def test_react_returning_failed_tool_id_again_triggers_selection_error():
     assert "ToolSelectionError" in result.transcript
 
 
+def test_react_generate_params_with_required_params_success():
+    """Test _generate_params succeeds when all required parameters are generated."""
+    from typing import List
+    
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return ["param1"]
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param2": "value2"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithRequired("t1", "Tool One")
+    
+    result = reasoner._generate_params(tool, transcript="test transcript", step_text="test step")
+    assert result == {"param1": "value1", "param2": "value2"}
+
+
+def test_react_generate_params_missing_required_params_raises_error():
+    """Test _generate_params raises ParameterGenerationError when required parameters are missing."""
+    from typing import List
+    
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return ["param1", "param2"]
+    
+    llm = DummyLLM(json_queue=[{"param2": "value2"}])  # missing param1
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithRequired("t1", "Tool One")
+    
+    with pytest.raises(ParameterGenerationError) as exc:
+        reasoner._generate_params(tool, transcript="test transcript", step_text="test step")
+    
+    error_msg = str(exc.value)
+    assert "missing required parameters: param1" in error_msg
+    assert "Generated parameters: {'param2': 'value2'}" in error_msg
+    assert "Tool 't1' requires these parameters" in error_msg
+
+
+def test_react_generate_params_no_required_params_backward_compatibility():
+    """Test _generate_params works with tools that don't have get_required_parameters method."""
+    tool = DummyTool("t1", "Tool One", schema={"param1": {}})
+    # DummyTool doesn't have get_required_parameters method
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory)
+    
+    result = reasoner._generate_params(tool, transcript="test transcript", step_text="test step")
+    assert result == {"param1": "value1"}
+
+
+def test_react_generate_params_empty_required_params():
+    """Test _generate_params works when tool has empty required parameters list."""
+    from typing import List
+    
+    class ToolWithEmptyRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return []
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithEmptyRequired("t1", "Tool One")
+    
+    result = reasoner._generate_params(tool, transcript="test transcript", step_text="test step")
+    assert result == {"param1": "value1"}
+
+
+def test_react_required_params_full_integration():
+    """Test required parameter validation in full ReACT run."""
+    from typing import List
+    
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"required_param": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return ["required_param"]
+    
+    t1 = ToolWithRequired("t1", "Tool One")
+    
+    llm = DummyLLM(
+        json_queue=[
+            {"step_type": "ACT", "text": "do something"},
+            {},  # LLM generates empty params, missing required_param
+            {"step_type": "STOP", "text": "final answer"},
+        ],
+        text_queue=[
+            "t1",
+        ],
+    )
+    
+    tools = DummyTools([t1])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=5)
+    
+    result = reasoner.run("goal")
+    
+    # Should fail due to ParameterGenerationError, no tool call recorded
+    assert result.tool_calls == []
+    assert "ParameterGenerationError" in result.transcript
+    assert "missing required parameters: required_param" in result.transcript
+
+
+def test_react_required_params_success_integration():
+    """Test successful required parameter validation in full ReACT run."""
+    from typing import List
+    
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"required_param": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return ["required_param"]
+    
+    t1 = ToolWithRequired("t1", "Tool One")
+    
+    llm = DummyLLM(
+        json_queue=[
+            {"step_type": "ACT", "text": "do something"},
+            {"required_param": "value1"},  # LLM generates required param
+            {"step_type": "STOP", "text": "final answer"},
+        ],
+        text_queue=[
+            "t1",
+        ],
+    )
+    
+    tools = DummyTools([t1])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=5)
+    
+    result = reasoner.run("goal")
+    
+    # Should succeed with tool call recorded
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0]["tool_id"] == "t1"
+    assert "ACT_EXECUTED:" in result.transcript
+    assert "FINAL ANSWER:" in result.transcript
+
+

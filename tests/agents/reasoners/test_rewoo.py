@@ -475,3 +475,180 @@ def test_rewoo_tool_credentials_missing_logs_unauthorized_and_continues():
     assert result.tool_calls == []
 
 
+def test_rewoo_generate_params_with_required_params_success():
+    """Test _generate_params succeeds when all required parameters are generated."""
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return ["param1"]
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param2": "value2"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    step = Step(text="test step")
+    tool = ToolWithRequired("t1", "Tool One")
+    
+    result = reasoner._generate_params(step, tool, inputs={})
+    assert result == {"param1": "value1", "param2": "value2"}
+
+
+def test_rewoo_generate_params_missing_required_params_raises_error():
+    """Test _generate_params raises ParameterGenerationError when required parameters are missing."""
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return ["param1", "param2"]
+    
+    llm = DummyLLM(json_queue=[{"param2": "value2"}])  # missing param1
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    step = Step(text="test step")
+    tool = ToolWithRequired("t1", "Tool One")
+    
+    with pytest.raises(ParameterGenerationError) as exc:
+        reasoner._generate_params(step, tool, inputs={})
+    
+    error_msg = str(exc.value)
+    assert "missing required parameters: param1" in error_msg
+    assert "Generated parameters: {'param2': 'value2'}" in error_msg
+    assert "Tool 't1' requires these parameters" in error_msg
+
+
+def test_rewoo_generate_params_no_required_params_backward_compatibility():
+    """Test _generate_params works with tools that don't have get_required_parameters method."""
+    tool = DummyTool("t1", "Tool One", schema={"param1": {}})
+    # DummyTool doesn't have get_required_parameters method
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    step = Step(text="test step")
+    
+    result = reasoner._generate_params(step, tool, inputs={})
+    assert result == {"param1": "value1"}
+
+
+def test_rewoo_generate_params_empty_required_params():
+    """Test _generate_params works when tool has empty required parameters list."""
+    class ToolWithEmptyRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return []
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    step = Step(text="test step")
+    tool = ToolWithEmptyRequired("t1", "Tool One")
+    
+    result = reasoner._generate_params(step, tool, inputs={})
+    assert result == {"param1": "value1"}
+
+
+def test_rewoo_generate_params_reflector_suggested_params_missing_required():
+    """Test _generate_params validates reflector-suggested params for required fields."""
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return ["param1", "param2"]
+    
+    llm = DummyLLM(json_queue=[])  # No LLM calls expected since using reflector params
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    # Set up reflector suggestion with missing required param
+    step = Step(text="test step")
+    memory[f"rewoo_reflector_suggestion:{step.text}"] = {
+        "action": "retry_params",
+        "params": {"param2": "value2"}  # missing param1
+    }
+    
+    tool = ToolWithRequired("t1", "Tool One")
+    
+    with pytest.raises(ParameterGenerationError) as exc:
+        reasoner._generate_params(step, tool, inputs={})
+    
+    error_msg = str(exc.value)
+    assert "missing required parameters: param1" in error_msg
+    assert "Generated parameters: {'param2': 'value2'}" in error_msg
+
+
+def test_rewoo_generate_params_reflector_suggested_params_success():
+    """Test _generate_params succeeds with valid reflector-suggested params."""
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return ["param1"]
+    
+    llm = DummyLLM(json_queue=[])  # No LLM calls expected
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    # Set up reflector suggestion with all required params
+    step = Step(text="test step")
+    memory[f"rewoo_reflector_suggestion:{step.text}"] = {
+        "action": "retry_params", 
+        "params": {"param1": "value1", "param2": "value2"}
+    }
+    
+    tool = ToolWithRequired("t1", "Tool One")
+    
+    result = reasoner._generate_params(step, tool, inputs={})
+    assert result == {"param1": "value1", "param2": "value2"}
+
+
+def test_rewoo_required_params_full_integration():
+    """Test required parameter validation in full ReWOO run."""
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"required_param": {}})
+        
+        def get_required_parameters(self) -> List[str]:
+            return ["required_param"]
+    
+    plan_text = "- do something (output: k1)"
+    t1 = ToolWithRequired("t1", "Tool One")
+    
+    llm = DummyLLM(
+        text_queue=[
+            plan_text,
+            "TOOL",
+            "t1",
+        ],
+        json_queue=[
+            {},  # LLM generates empty params, missing required_param
+            {"action": "give_up"},  # reflection gives up
+        ],
+    )
+    
+    tools = DummyTools([t1])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_retries=1)
+    
+    result = reasoner.run("goal")
+    
+    # Should trigger reflection due to ParameterGenerationError
+    assert result.tool_calls == []
+    assert "Reflection decision" in result.transcript
+
+
