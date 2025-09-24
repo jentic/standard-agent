@@ -133,6 +133,7 @@ class ReACTReasoner(BaseReasoner):
 
     def _generate_params(self, tool: ToolBase, transcript: str, step_text: str) -> Dict[str, Any]:
         schema = tool.get_parameters() or {}
+        required_keys = tool.get_required_parameters() if hasattr(tool, 'get_required_parameters') else []
         allowed_keys = ",".join(schema.keys()) if isinstance(schema, dict) else ""
         data: Dict[str, Any] = {"reasoning trace": transcript}
         try:
@@ -142,12 +143,22 @@ class ReACTReasoner(BaseReasoner):
                     data=json.dumps(data, ensure_ascii=False),
                     schema=json.dumps(schema, ensure_ascii=False),
                     allowed_keys=allowed_keys,
+                    required_keys=",".join(required_keys),
                 ),
                 max_retries=2,
             ) or {}
-            params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
-            logger.info("params_generated", tool_id=tool.id, params=params)
-            return params
+            final_params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
+            
+            missing_required_parameter = [key for key in required_keys if key not in final_params]
+            if missing_required_parameter:
+                logger.warning("missing_required_parameters", step_text=step_text, tool_id=tool.id, missing_parameters=missing_required_parameter, generated_parameters=final_params, required_parameters=required_keys)
+                raise ParameterGenerationError(
+                    f"Parameters for step '{step_text}' are missing required parameters: {', '.join(missing_required_parameter)}. "
+                    f"Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution.", tool
+                )
+            
+            logger.info("params_generated", tool_id=tool.id, params=final_params)
+            return final_params
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
             raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step_text}': {e}", tool) from e
 

@@ -90,6 +90,7 @@ param_gen: |
   DATA: {data}
   SCHEMA: {schema}
   ALLOWED_KEYS: {allowed_keys}
+  REQUIRED_KEYS: {required_keys}
   </input>
 
   <data_extraction_rules>
@@ -102,21 +103,23 @@ param_gen: |
   </data_extraction_rules>
 
   <instructions>
-  1. Analyze MEMORY for relevant data structures.
+  1. Analyze DATA for relevant data structures.
   2. Extract actual values using the data extraction rules.
   3. **CRITICAL** Check STEP text for quantity constraints (e.g., "send 3 articles", "post 2 items").
   4. **CRITICAL** Map values to SCHEMA keys using exact names. Do not invent or rename keys.
   5. **CRITICAL** Use only keys listed in ALLOWED_KEYS. Omit any key you cannot populate truthfully.
-  6. Placeholders for unknown values are strictly forbidden: ex "<UNKNOWN>", etc.
+  6. **CRITICAL** All keys in REQUIRED_KEYS must be included in your output. These are mandatory parameters for successful API execution.
   7. If a key is in REQUIRED_KEYS and you cannot find a real value:
     • If SCHEMA type is "string": set value to "" (empty string).
     • Otherwise: omit the key (do NOT fabricate or cast).
+  8. Placeholders for unknown values are strictly forbidden: ex "<UNKNOWN>", etc.
   </instructions>
 
   <constraints>
   - Output MUST be a single JSON object at the top level (no arrays/scalars).
   - Output ONLY valid JSON: double-quoted keys and strings, no comments, no markdown, no backticks.
   - Keys MUST be a subset of ALLOWED_KEYS.
+  - All keys in REQUIRED_KEYS must be present in the output.
   - Absolutely NO placeholders
   </constraints>
   
