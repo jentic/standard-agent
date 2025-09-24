@@ -54,7 +54,7 @@ class TestJenticTool:
         assert tool.name == 'Test Workflow'
         assert tool.description == 'A test workflow for unit tests.'
         assert tool.api_name == 'test_api'
-        assert tool.required == (['param1'],)
+        assert tool.required == (['param1'])
         assert tool.get_parameters() == {
             'param1': {'type': 'string'},
             'param2': {'type': 'integer'}
