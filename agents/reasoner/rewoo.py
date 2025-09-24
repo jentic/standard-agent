@@ -224,7 +224,6 @@ class ReWOOReasoner(BaseReasoner):
                 params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
                 final_params = {k: v for k, v in (params_raw or {}).items() if k in param_schema}
             
-            # Single validation point for required parameters
             missing_required_parameter = [key for key in required_keys if key not in final_params]
             if missing_required_parameter:
                 logger.warning("missing_required_parameters", step_text=step.text, tool_id=tool.id, missing_parameters=missing_required_parameter, generated_parameters=final_params, required_parameters=required_keys)
