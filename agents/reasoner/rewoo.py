@@ -14,7 +14,7 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.jentic import JenticTool
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
-from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError)
+from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError, UnknownParameterError, MissingParameterError)
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -224,13 +224,16 @@ class ReWOOReasoner(BaseReasoner):
                 params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
                 final_params = {k: v for k, v in (params_raw or {}).items() if k in param_schema}
             
-            missing_required_parameter = [key for key in required_keys if key not in final_params]
-            if missing_required_parameter:
-                logger.warning("missing_required_parameters", step_text=step.text, tool_id=tool.id, missing_parameters=missing_required_parameter, generated_parameters=final_params, required_parameters=required_keys)
-                raise ParameterGenerationError(
-                    f"Parameters for step '{step.text}' are missing required parameters: {', '.join(missing_required_parameter)}. "
-                    f"Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution.", tool
-                )
+            unknown_params = [k for k, v in final_params.items() if v == "<UNKNOWN>"]
+            if unknown_params:
+                logger.warning("parameters_marked_unknown", step_text=step.text, tool_id=tool.id, unknown_parameters=unknown_params, generated_parameters=final_params, required_parameters=required_keys)
+                raise UnknownParameterError(tool, unknown_params, step.text, final_params)
+            
+            missing_params = [key for key in required_keys if key not in final_params]
+            if missing_params:
+                logger.warning("missing_required_parameters", step_text=step.text, tool_id=tool.id, missing_parameters=missing_params, generated_parameters=final_params, required_parameters=required_keys)
+                raise MissingParameterError(tool, missing_params, step.text, final_params)
+            
             logger.info("params_generated", tool_id=tool.id, params=final_params)
             return final_params
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:

@@ -194,7 +194,9 @@ param_gen: |
     4. **CRITICAL** Map values to SCHEMA keys using exact names. Do not invent or rename keys.
     5. **CRITICAL** Use only keys listed in ALLOWED_KEYS. Omit any key you cannot populate truthfully.
     6. **CRITICAL** All keys in REQUIRED_KEYS must be included in your output. These are mandatory parameters for successful API execution.
-    7. Placeholders for unknown values are strictly forbidden: ex "<UNKNOWN>", etc. 
+    7. **CRITICAL** For credential/authentication parameters (like "key", "token", "api_key", "authorization"), use empty string "" when no value is available in the data.
+    8. **CRITICAL** For required data parameters where you cannot find real values in the available data, use "<UNKNOWN>" to explicitly indicate missing information.
+    9. Never fabricate, guess, or make up parameter values - be honest about what data is missing.
     </instructions>
 
     <constraints>
@@ -202,7 +204,7 @@ param_gen: |
     - Output ONLY valid JSON: double-quoted keys and strings, no comments, no markdown, no backticks.
     - Keys MUST be a subset of ALLOWED_KEYS.
     - All keys in REQUIRED_KEYS must be present in the output.
-    - Absolutely NO placeholders
+    - Use "<UNKNOWN>" only for required data parameters when real values cannot be found.
     </constraints>
   
     <output_format>
