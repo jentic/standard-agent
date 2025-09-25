@@ -617,6 +617,53 @@ def test_rewoo_generate_params_reflector_suggested_params_success():
     assert result == {"param1": "value1", "param2": "value2"}
 
 
+def test_rewoo_generate_params_unknown_required_params_raises_error():
+    """Test _generate_params raises ParameterGenerationError when LLM returns <UNKNOWN> for required params."""
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            # Include both param1 (required) and param2 (optional) in schema so both pass filtering
+            super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
+        def get_required_parameters(self) -> List[str]:
+            return ["param1"]
+    
+    llm = DummyLLM(json_queue=[{"param1": "<UNKNOWN>", "param2": "value2"}])
+    tool = ToolWithRequired("t1", "Tool One")
+    reasoner = ReWOOReasoner(llm=llm, tools=[tool], memory=DictMemory())
+    step = Step(text="test step")
+    
+    with pytest.raises(ParameterGenerationError) as exc:
+        reasoner._generate_params(step, tool, inputs={})
+    
+    error_msg = str(exc.value)
+    assert "LLM indicated missing data using <UNKNOWN> for parameters: param1" in error_msg
+    assert "Generated parameters: {'param1': '<UNKNOWN>', 'param2': 'value2'}" in error_msg
+    assert "Tool 't1' requires these parameters" in error_msg
+
+
+def test_rewoo_generate_params_combined_unknown_and_missing_params_raises_error():
+    """Test _generate_params raises ParameterGenerationError with both unknown and missing required params."""
+    class ToolWithRequired(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            # Only required params in schema; param4 will be filtered out
+            super().__init__(tool_id, name, schema={"param1": {}, "param2": {}, "param3": {}})
+        def get_required_parameters(self) -> List[str]:
+            return ["param1", "param2", "param3"]
+    
+    llm = DummyLLM(json_queue=[{"param1": "<UNKNOWN>", "param4": "value4"}])  # param1 is unknown, param2&3 missing
+    tool = ToolWithRequired("t1", "Tool One")
+    reasoner = ReWOOReasoner(llm=llm, tools=[tool], memory=DictMemory())
+    step = Step(text="test step")
+    
+    with pytest.raises(ParameterGenerationError) as exc:
+        reasoner._generate_params(step, tool, inputs={})
+    
+    error_msg = str(exc.value)
+    assert "LLM indicated missing data using <UNKNOWN> for parameters: param1" in error_msg
+    assert "Missing required parameters: param2, param3" in error_msg
+    assert "Generated parameters: {'param1': '<UNKNOWN>'}" in error_msg  # param4 filtered out
+    assert "Tool 't1' requires these parameters" in error_msg
+
+
 def test_rewoo_required_params_full_integration():
     """Test required parameter validation in full ReWOO run."""
     class ToolWithRequired(DummyTool):

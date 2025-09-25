@@ -153,7 +153,7 @@ class ReACTReasoner(BaseReasoner):
             
             if unknown_params or missing_params:
                 error_message_parts = []
-                if unknown_params: error_message_parts.append(f"LLM indicated missing data for parameters: {', '.join(unknown_params)}")
+                if unknown_params: error_message_parts.append(f"LLM indicated missing data using <UNKNOWN> for parameters: {', '.join(unknown_params)}")
                 if missing_params: error_message_parts.append(f"Missing required parameters: {', '.join(missing_params)}")
 
                 param_gen_error = f"{' | '.join(error_message_parts)} in step '{step_text}'. Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution."
