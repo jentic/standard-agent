@@ -57,7 +57,7 @@ class JenticTool(ToolBase):
     def get_details(self) -> str:
         return json.dumps(self._schema, indent=4)
 
-    def get_input_schema(self) -> Dict[str, Any]:
+    def get_input_schema(self) -> Dict[str, Any] | list[dict]:
         """Return detailed parameter schema for LLM parameter generation."""
         return self._parameters
 

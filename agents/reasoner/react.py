@@ -132,8 +132,14 @@ class ReACTReasoner(BaseReasoner):
 
     def _generate_params(self, tool: ToolBase, transcript: str, step_text: str) -> Dict[str, Any]:
         param_schema = tool.get_input_schema()
-        allowed_keys = tool.get_allowed_input_keys()
-        required_keys = tool.get_required_input_keys()
+
+        allowed_keys = []
+        if hasattr(tool, 'get_allowed_input_keys'):
+            allowed_keys = tool.get_allowed_input_keys()
+        elif isinstance(param_schema, dict):
+            allowed_keys = param_schema.keys()
+
+        required_keys = tool.get_required_input_keys() if hasattr(tool, 'get_required_input_keys') else []
 
         data: Dict[str, Any] = {"reasoning trace": transcript}
         try:

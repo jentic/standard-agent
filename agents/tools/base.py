@@ -25,20 +25,9 @@ class ToolBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_input_schema(self) -> Dict[str, Any] | list[dict]:
+    def get_input_schema(self) -> Dict[str, Any]:
         """Return detailed parameter schema for LLM parameter generation."""
         raise NotImplementedError
-    
-    @abstractmethod
-    def get_required_input_keys(self) -> List[str]:
-        """Return list of required parameter names that exist in the schema properties."""
-        raise NotImplementedError
-    
-    @abstractmethod
-    def get_allowed_input_keys(self) -> List[str]:
-        """Return list of allowed parameter names that exist in the schema properties."""
-        raise NotImplementedError
-
 
 class JustInTimeToolingBase(ABC):
     """Abstract contract for a tool-providing backend."""
