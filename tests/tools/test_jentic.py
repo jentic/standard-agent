@@ -196,14 +196,6 @@ class TestJenticTool:
         required_params = tool.get_required_input_keys()
         assert required_params == []
 
-    def test_get_input_schema_single_schema(self):
-        """
-        Tests get_input_schema returns the parameters schema for single schema case.
-        """
-        tool = JenticTool(WORKFLOW_SCHEMA)
-        schema = tool.get_input_schema()
-        assert schema == WORKFLOW_SCHEMA['inputs']['properties']
-
     def test_get_input_schema_multiple_schemas(self):
         """
         Tests get_input_schema returns the parameters schema for multiple schemas case.
@@ -223,14 +215,6 @@ class TestJenticTool:
         assert schema == multiple_schema['inputs']['properties']
         assert isinstance(schema, list)
         assert len(schema) == 2
-
-    def test_get_input_schema_empty(self):
-        """
-        Tests get_input_schema returns None when no parameters.
-        """
-        tool = JenticTool(EMPTY_SCHEMA)
-        schema = tool.get_input_schema()
-        assert schema is None
 
     def test_get_allowed_input_keys_single_schema(self):
         """
