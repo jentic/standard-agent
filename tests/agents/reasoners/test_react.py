@@ -308,7 +308,7 @@ def test_react_generate_params_missing_required_params_raises_error():
         reasoner._generate_params(tool, transcript="test transcript", step_text="test step")
     
     error_msg = str(exc.value)
-    assert "missing required parameters: param1" in error_msg
+    assert "Missing required parameters: param1" in error_msg
     assert "Generated parameters: {'param2': 'value2'}" in error_msg
     assert "Tool 't1' requires these parameters" in error_msg
 
@@ -382,7 +382,7 @@ def test_react_required_params_full_integration():
     # Should fail due to ParameterGenerationError, no tool call recorded
     assert result.tool_calls == []
     assert "ParameterGenerationError" in result.transcript
-    assert "missing required parameters: required_param" in result.transcript
+    assert "Missing required parameters: required_param" in result.transcript
 
 
 def test_react_required_params_success_integration():

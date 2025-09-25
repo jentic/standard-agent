@@ -517,7 +517,7 @@ def test_rewoo_generate_params_missing_required_params_raises_error():
         reasoner._generate_params(step, tool, inputs={})
     
     error_msg = str(exc.value)
-    assert "missing required parameters: param1" in error_msg
+    assert "Missing required parameters: param1" in error_msg
     assert "Generated parameters: {'param2': 'value2'}" in error_msg
     assert "Tool 't1' requires these parameters" in error_msg
 
@@ -586,7 +586,7 @@ def test_rewoo_generate_params_reflector_suggested_params_missing_required():
         reasoner._generate_params(step, tool, inputs={})
     
     error_msg = str(exc.value)
-    assert "missing required parameters: param1" in error_msg
+    assert "Missing required parameters: param1" in error_msg
     assert "Generated parameters: {'param2': 'value2'}" in error_msg
 
 
