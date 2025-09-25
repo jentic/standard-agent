@@ -272,7 +272,7 @@ def test_react_generate_params_with_required_params_success():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_input_keys(self) -> List[str]:
             return ["param1"]
     
     llm = DummyLLM(json_queue=[{"param1": "value1", "param2": "value2"}])
@@ -294,7 +294,7 @@ def test_react_generate_params_missing_required_params_raises_error():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_input_keys(self) -> List[str]:
             return ["param1", "param2"]
     
     llm = DummyLLM(json_queue=[{"param2": "value2"}])  # missing param1
@@ -314,9 +314,9 @@ def test_react_generate_params_missing_required_params_raises_error():
 
 
 def test_react_generate_params_no_required_params_backward_compatibility():
-    """Test _generate_params works with tools that don't have get_required_parameters method."""
+    """Test _generate_params works with tools that don't have get_required_input_keys method."""
     tool = DummyTool("t1", "Tool One", schema={"param1": {}})
-    # DummyTool doesn't have get_required_parameters method
+    # DummyTool doesn't have get_required_input_keys method
     
     llm = DummyLLM(json_queue=[{"param1": "value1"}])
     tools = DummyTools([])
@@ -335,7 +335,7 @@ def test_react_generate_params_empty_required_params():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_input_keys(self) -> List[str]:
             return []
     
     llm = DummyLLM(json_queue=[{"param1": "value1"}])
@@ -357,7 +357,7 @@ def test_react_required_params_full_integration():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"required_param": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_input_keys(self) -> List[str]:
             return ["required_param"]
     
     t1 = ToolWithRequired("t1", "Tool One")
@@ -393,7 +393,7 @@ def test_react_required_params_success_integration():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"required_param": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_input_keys(self) -> List[str]:
             return ["required_param"]
     
     t1 = ToolWithRequired("t1", "Tool One")
