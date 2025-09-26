@@ -17,6 +17,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from agents.prebuilt import ReACTAgent, ReWOOAgent
 from agents.standard_agent import StandardAgent
 from utils.logger import get_logger
+from utils.observability import setup_telemetry, TelemetryTarget
 
 logger = get_logger(__name__)
 
@@ -219,6 +220,7 @@ def configure_slack_handlers(app: App, runtime: SlackAgentRuntime) -> None:
 
 def main() -> None:
     load_dotenv()
+    setup_telemetry(service_name=os.getenv("OTEL_SERVICE_NAME", "standard-agent"),target=TelemetryTarget.LANGFUSE)
     config = SlackConfig.from_env()
     runtime = SlackAgentRuntime()
     if os.getenv("JENTIC_AGENT_API_KEY"):

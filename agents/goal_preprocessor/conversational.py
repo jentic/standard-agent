@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Sequence, Dict, Any, Tuple
 from agents.goal_preprocessor.base import BaseGoalPreprocessor
 from agents.prompts import load_prompts
-
+from utils.observability import observe
 from utils.logger import get_logger
+
 logger = get_logger(__name__)
 
 _PROMPTS = load_prompts("goal_preprocessors/conversational", required_prompts=["clarify_goal"])
@@ -24,6 +25,7 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
         - clarification_question: Question for user if goal is unclear, None otherwise
     """
 
+    @observe
     def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
 
         history_str = "\n".join(f"Goal: {item['goal']}\nResult: {item['result']}" for item in history)

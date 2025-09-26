@@ -11,7 +11,7 @@ from jentic import Jentic
 from jentic.lib.models import SearchRequest, LoadRequest, ExecutionRequest
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolError, ToolNotFoundError, ToolExecutionError, ToolCredentialsMissingError
-
+from utils.observability import observe
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -45,6 +45,10 @@ class JenticTool(ToolBase):
     def __str__(self) -> str:
         """Short string description for logging purposes."""
         return f"JenticTool({self.id}, {self.name})"
+
+    def __repr__(self) -> str:
+        """Unambiguous representation for debugging and observability."""
+        return f"JenticTool({self.id!r}, {self.name!r})"
 
     def get_summary(self) -> str:
         """Return summary information for LLM tool selection."""
@@ -86,6 +90,7 @@ class JenticClient(JustInTimeToolingBase):
             filter_by_credentials = filter_by_credentials_env_val == "true"
         self._filter_by_credentials = bool(filter_by_credentials)
 
+    @observe
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
         """
         Search for workflows and operations matching a query.
@@ -95,7 +100,7 @@ class JenticClient(JustInTimeToolingBase):
         response = asyncio.run(self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=self._filter_by_credentials,)))
         return [JenticTool(result.model_dump(exclude_none=False)) for result in response.results] if response.results else []
 
-
+    @observe
     def load(self, tool: ToolBase) -> ToolBase:
         """
         Load the detailed definition for a specific tool.
@@ -114,7 +119,7 @@ class JenticClient(JustInTimeToolingBase):
             raise ToolNotFoundError("Requested tool could not be loaded", tool)
         return JenticTool(result.model_dump(exclude_none=False))
 
-
+    @observe
     def execute(self, tool: ToolBase, parameters: Dict[str, Any]) -> Any:
         """
         Execute a tool with given parameters.
