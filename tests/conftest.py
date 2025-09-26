@@ -48,7 +48,7 @@ class DummyTool(ToolBase):
     def get_summary(self) -> str:
         return self._summary
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_input_schema(self) -> Dict[str, Any] | list[dict]:
         return self._schema
 
     def get_details(self) -> Dict[str, Any]:
