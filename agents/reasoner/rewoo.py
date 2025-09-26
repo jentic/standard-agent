@@ -224,13 +224,18 @@ class ReWOOReasoner(BaseReasoner):
                 params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
                 final_params = {k: v for k, v in (params_raw or {}).items() if k in param_schema}
             
-            missing_required_parameter = [key for key in required_keys if key not in final_params]
-            if missing_required_parameter:
-                logger.warning("missing_required_parameters", step_text=step.text, tool_id=tool.id, missing_parameters=missing_required_parameter, generated_parameters=final_params, required_parameters=required_keys)
-                raise ParameterGenerationError(
-                    f"Parameters for step '{step.text}' are missing required parameters: {', '.join(missing_required_parameter)}. "
-                    f"Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution.", tool
-                )
+            unknown_params = [key for key, val in final_params.items() if val == "<UNKNOWN>"]
+            missing_params = [key for key in required_keys if key not in final_params]
+            
+            if unknown_params or missing_params:
+                error_message_parts = []
+                if unknown_params: error_message_parts.append(f"LLM indicated missing data using <UNKNOWN> for parameters: {', '.join(unknown_params)}")
+                if missing_params: error_message_parts.append(f"Missing required parameters: {', '.join(missing_params)}")
+
+                param_gen_error = f"{' | '.join(error_message_parts)} in step '{step.text}'. Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution."
+                logger.error("parameter_generation_failed", error = param_gen_error, step_text=step.text, tool_id=tool.id, generated_parameters=final_params, required_parameters=required_keys)
+                raise ParameterGenerationError(param_gen_error, tool)
+            
             logger.info("params_generated", tool_id=tool.id, params=final_params)
             return final_params
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
