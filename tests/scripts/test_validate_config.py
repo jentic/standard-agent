@@ -1,4 +1,3 @@
-import pytest
 from scripts.validate_config import check_agent_env_vars
 
 
