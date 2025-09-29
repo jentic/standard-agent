@@ -211,13 +211,14 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
 def _capture_output(span: Any, result: Any) -> None:
     """Capture regular outputs."""
     try:
-        # Handle common result attributes
         if hasattr(result, 'success'):
             span.set_attribute("result_success", bool(result.success))
         if hasattr(result, 'iterations'):
             span.set_attribute("total_iterations", int(result.iterations))
         if hasattr(result, 'final_answer'):
             span.set_attribute("output", str(result.final_answer)[:8124])
+        else:
+            span.set_attribute("output", str(result)[:8124])
 
     except Exception:
         pass
