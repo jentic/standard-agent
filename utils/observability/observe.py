@@ -95,7 +95,7 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
     try:
         bound = signature(fn).bind_partial(*args, **kwargs)
 
-        # LLM path: capture messages only
+        # LLM path: capture messages only (longer cap for prompt visibility)
         if llm:
             messages = bound.arguments.get("messages")
             if messages is not None:
@@ -103,11 +103,18 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
                     msg_json = json.dumps(messages, ensure_ascii=False, separators=(",", ":"))
                 except Exception:
                     msg_json = str(messages)
-                span.set_attribute("input", msg_json[:8124])
+                LLM_INPUT_MAX = 12288  # ~12KB
+                span.set_attribute("input", msg_json[:LLM_INPUT_MAX])
             return
 
 
-        def preview(value: Any, *, scalar_limit: int = 8124, collection_limit: int = 20) -> Any:
+        # Targeted secret redaction (do not match generic 'key')
+        secret_key_re = re.compile(
+            r"^(api(?:_|-)?key|access(?:_|-)?token|refresh(?:_|-)?token|client(?:_|-)?secret|secret|password|authorization|bearer|cookie|set(?:_|-)?cookie|private(?:_|-)?key|ssh(?:_|-)?key)$",
+            re.IGNORECASE,
+        )
+
+        def preview(value: Any, *, scalar_limit: int = 512, collection_limit: int = 20) -> Any:
             try:
                 if value is None:
                     return None
@@ -119,7 +126,13 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
                     out = {}
                     for k, v in list(value.items())[:collection_limit]:
                         key_str = str(k)
-                        out[key_str] = preview(v, scalar_limit=scalar_limit, collection_limit=collection_limit)
+                        pv = preview(v, scalar_limit=scalar_limit, collection_limit=collection_limit)
+                        if secret_key_re.match(key_str):
+                            if isinstance(pv, str):
+                                pv = "<redacted>"
+                            else:
+                                pv = "<redacted>"
+                        out[key_str] = pv
                     return out
                 if isinstance(value, (list, tuple, set)):
                     items = list(value)
@@ -173,7 +186,10 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
                 sanitized = {}
                 for k, v in value.items():
                     k_str = str(k)
-                    sanitized[k_str] = v
+                    if secret_key_re.match(k_str):
+                        sanitized[k_str] = "<redacted>"
+                    else:
+                        sanitized[k_str] = v
                 inputs_preview[str(name)] = preview(sanitized)
             else:
                 inputs_preview[str(name)] = preview(value)
@@ -183,7 +199,7 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
         except Exception:
             input_json = str(inputs_preview)
 
-        MAX_INPUT_CHARS = 8124
+        MAX_INPUT_CHARS = 6144
         clipped = input_json[:MAX_INPUT_CHARS]
         if len(input_json) > MAX_INPUT_CHARS:
             clipped = clipped + "...(truncated)"
