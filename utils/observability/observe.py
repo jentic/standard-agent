@@ -96,7 +96,7 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
             # For LLM calls, capture messages
             messages = bound.arguments.get("messages")
             if messages:
-                span.set_attribute("input", str(messages)[:2000])
+                span.set_attribute("input", str(messages)[:8192])
         else:
             # For regular functions, capture goal if present
             goal = bound.arguments.get("goal")
