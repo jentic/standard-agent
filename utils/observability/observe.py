@@ -6,6 +6,9 @@ from functools import wraps
 from inspect import signature
 from typing import Any, Callable, Optional
 from contextvars import ContextVar
+from dataclasses import is_dataclass, asdict
+import json
+import re
 import time
 
 
@@ -88,21 +91,103 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False, root
 
 
 def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool) -> None:
-    """Capture function inputs - goal for regular functions, messages for LLM."""
+    """Capture function inputs dynamically with safe previews and caps."""
     try:
         bound = signature(fn).bind_partial(*args, **kwargs)
-        
+
+        # LLM path: capture messages only
         if llm:
-            # For LLM calls, capture messages
             messages = bound.arguments.get("messages")
-            if messages:
-                span.set_attribute("input", str(messages)[:8192])
-        else:
-            # For regular functions, capture goal if present
-            goal = bound.arguments.get("goal")
-            if isinstance(goal, str):
-                span.set_attribute("sa.goal", goal)
-                span.set_attribute("input", goal)
+            if messages is not None:
+                try:
+                    msg_json = json.dumps(messages, ensure_ascii=False, separators=(",", ":"))
+                except Exception:
+                    msg_json = str(messages)
+                span.set_attribute("input", msg_json[:8124])
+            return
+
+
+        def preview(value: Any, *, scalar_limit: int = 8124, collection_limit: int = 20) -> Any:
+            try:
+                if value is None:
+                    return None
+                if isinstance(value, (bool, int, float)):
+                    return value
+                if isinstance(value, str):
+                    return value[:scalar_limit]
+                if isinstance(value, dict):
+                    out = {}
+                    for k, v in list(value.items())[:collection_limit]:
+                        key_str = str(k)
+                        out[key_str] = preview(v, scalar_limit=scalar_limit, collection_limit=collection_limit)
+                    return out
+                if isinstance(value, (list, tuple, set)):
+                    items = list(value)
+                    return [preview(v, scalar_limit=scalar_limit, collection_limit=collection_limit) for v in items[:collection_limit]]
+                if is_dataclass(value):
+                    return preview(asdict(value), scalar_limit=scalar_limit, collection_limit=collection_limit)
+                # step-like summary
+                if hasattr(value, "text") or hasattr(value, "output_key"):
+                    data = {}
+                    if hasattr(value, "text"):
+                        data["text"] = str(getattr(value, "text"))[:scalar_limit]
+                    if hasattr(value, "output_key"):
+                        ok = getattr(value, "output_key")
+                        data["output_key"] = str(ok)[:scalar_limit] if ok is not None else None
+                    return data if data else repr(value)[:scalar_limit]
+                # tool-like summary
+                if hasattr(value, "id") or hasattr(value, "name"):
+                    data = {}
+                    if hasattr(value, "id"):
+                        data["id"] = str(getattr(value, "id"))[:scalar_limit]
+                    if hasattr(value, "name"):
+                        data["name"] = str(getattr(value, "name"))[:scalar_limit]
+                    if not data and hasattr(value, "get_summary") and callable(getattr(value, "get_summary")):
+                        try:
+                            data["summary"] = str(value.get_summary())[:scalar_limit]
+                        except Exception:
+                            pass
+                    return data if data else repr(value)[:scalar_limit]
+                # pydantic-like
+                if hasattr(value, "model_dump") and callable(getattr(value, "model_dump")):
+                    try:
+                        return preview(value.model_dump(), scalar_limit=scalar_limit, collection_limit=collection_limit)
+                    except Exception:
+                        pass
+                if hasattr(value, "dict") and callable(getattr(value, "dict")):
+                    try:
+                        return preview(value.dict(), scalar_limit=scalar_limit, collection_limit=collection_limit)
+                    except Exception:
+                        pass
+                return repr(value)[:scalar_limit]
+            except Exception:
+                return repr(value)[:scalar_limit]
+
+        inputs_preview: dict[str, Any] = {}
+        for name, value in bound.arguments.items():
+            # Exclude instance/class references which add no signal and can be huge
+            if str(name) in {"self", "cls"}:
+                continue
+            # Redact obvious secret keys at top-level dicts
+            if isinstance(value, dict):
+                sanitized = {}
+                for k, v in value.items():
+                    k_str = str(k)
+                    sanitized[k_str] = v
+                inputs_preview[str(name)] = preview(sanitized)
+            else:
+                inputs_preview[str(name)] = preview(value)
+
+        try:
+            input_json = json.dumps(inputs_preview, ensure_ascii=False, separators=(",", ":"))
+        except Exception:
+            input_json = str(inputs_preview)
+
+        MAX_INPUT_CHARS = 8124
+        clipped = input_json[:MAX_INPUT_CHARS]
+        if len(input_json) > MAX_INPUT_CHARS:
+            clipped = clipped + "...(truncated)"
+        span.set_attribute("input", clipped)
     except Exception:
         pass
 
