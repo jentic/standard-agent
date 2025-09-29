@@ -76,7 +76,7 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False, root
                     
                 finally:
                     duration_ms = int((time.perf_counter() - start_time) * 1000)
-                    span.set_attribute("sa.duration_ms", duration_ms)
+                    span.set_attribute("goal_duration_ms", duration_ms)
                     
                     # Finalize token accumulator for root spans
                     if root:
@@ -209,19 +209,16 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
 
 
 def _capture_output(span: Any, result: Any) -> None:
-    """Capture regular function outputs."""
+    """Capture regular outputs."""
     try:
         # Handle common result attributes
         if hasattr(result, 'success'):
-            span.set_attribute("sa.result_success", bool(result.success))
+            span.set_attribute("result_success", bool(result.success))
         if hasattr(result, 'iterations'):
-            span.set_attribute("sa.result_iterations", int(result.iterations))
+            span.set_attribute("total_iterations", int(result.iterations))
         if hasattr(result, 'final_answer'):
-            preview = str(result.final_answer)[:200]
-            span.set_attribute("sa.result_final_preview", preview)
-        
-        # Set generic output
-        span.set_attribute("output", str(result)[:1000])
+            span.set_attribute("output", str(result.final_answer)[:8124])
+
     except Exception:
         pass
 

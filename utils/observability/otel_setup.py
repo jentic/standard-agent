@@ -14,8 +14,6 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
-
-
 class TelemetryTarget(str, Enum):
     """Supported telemetry export targets."""
     LANGFUSE = "langfuse"
