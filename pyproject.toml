@@ -23,6 +23,7 @@ dev = [
     "pytest-mock",
     "ruff",
     "mypy",
+    "python-dotenv>=1.0.0",
 ]
 
 [build-system]
