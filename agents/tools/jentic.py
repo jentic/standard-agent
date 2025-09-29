@@ -57,11 +57,11 @@ class JenticTool(ToolBase):
     def get_details(self) -> str:
         return json.dumps(self._schema, indent=4)
 
-    def get_input_schema(self) -> Dict[str, Any] | list[dict]:
+    def get_parameter_schema(self) -> Dict[str, Any] | list[dict]:
         """Return detailed parameter schema for LLM parameter generation."""
         return self._parameters
 
-    def get_required_input_keys(self) -> List[str]:
+    def get_required_parameter_keys(self) -> List[str]:
         """Return list of required parameter names that exist in the schema properties."""
         if not self.required or not self._parameters:
             return []
@@ -78,7 +78,7 @@ class JenticTool(ToolBase):
 
         return [key for key in self.required if key in self._parameters]
     
-    def get_allowed_input_keys(self) -> List[str]:
+    def get_parameter_keys(self) -> List[str]:
         """Return list of allowed parameter names that exist in the schema properties."""
         if not self._parameters:
             return []

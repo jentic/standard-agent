@@ -55,7 +55,7 @@ class TestJenticTool:
         assert tool.description == 'A test workflow for unit tests.'
         assert tool.api_name == 'test_api'
         assert tool.required == (['param1'])
-        assert tool.get_input_schema() == {
+        assert tool.get_parameter_schema() == {
             'param1': {'type': 'string'},
             'param2': {'type': 'integer'}
         }
@@ -72,7 +72,7 @@ class TestJenticTool:
         assert tool.method == 'GET'
         assert tool.path == '/test/path'
         assert tool.api_name == 'test_api'
-        assert tool.get_input_schema() == {'query_param': {'type': 'string'}}
+        assert tool.get_parameter_schema() == {'query_param': {'type': 'string'}}
 
     def test_init_with_empty_schema(self):
         """
@@ -115,41 +115,41 @@ class TestJenticTool:
         details = tool.get_details()
         assert json.loads(details) == OPERATION_SCHEMA
 
-    def test_get_input_schema_workflow(self):
+    def test_get_parameter_schema_workflow(self):
         """
-        Tests that get_input_schema returns the parameters from the schema.
+        Tests that get_parameter_schema returns the parameters from the schema.
         """
         tool = JenticTool(WORKFLOW_SCHEMA)
-        parameters = tool.get_input_schema()
+        parameters = tool.get_parameter_schema()
         assert parameters == WORKFLOW_SCHEMA['inputs']['properties']
 
-    def test_get_input_schema_operation(self):
+    def test_get_parameter_schema_operation(self):
         """
-        Tests that get_input_schema returns the parameters from the schema.
+        Tests that get_parameter_schema returns the parameters from the schema.
         """
         tool = JenticTool(OPERATION_SCHEMA)
-        parameters = tool.get_input_schema()
+        parameters = tool.get_parameter_schema()
         assert parameters == OPERATION_SCHEMA['inputs']['properties']
 
-    def test_get_input_schema_empty(self):
+    def test_get_parameter_schema_empty(self):
         """
-        Tests that get_input_schema returns an empty dictionary when the schema has no parameters.
+        Tests that get_parameter_schema returns an empty dictionary when the schema has no parameters.
         """
         tool = JenticTool(EMPTY_SCHEMA)
-        parameters = tool.get_input_schema()
+        parameters = tool.get_parameter_schema()
         assert parameters == None
 
-    def test_get_required_input_keys_with_valid_required_fields(self):
+    def test_get_required_parameter_keys_with_valid_required_fields(self):
         """
-        Tests get_required_input_keys returns required fields that exist in properties.
+        Tests get_required_parameter_keys returns required fields that exist in properties.
         """
         tool = JenticTool(WORKFLOW_SCHEMA)
-        required_params = tool.get_required_input_keys()
+        required_params = tool.get_required_parameter_keys()
         assert required_params == ['param1']
 
-    def test_get_required_input_keys_filters_invalid_fields(self):
+    def test_get_required_parameter_keys_filters_invalid_fields(self):
         """
-        Tests get_required_input_keys filters out required fields that don't exist in properties.
+        Tests get_required_parameter_keys filters out required fields that don't exist in properties.
         """
         schema_with_invalid_required = {
             'workflow_id': 'wf_test',
@@ -162,28 +162,28 @@ class TestJenticTool:
             }
         }
         tool = JenticTool(schema_with_invalid_required)
-        required_params = tool.get_required_input_keys()
+        required_params = tool.get_required_parameter_keys()
         assert required_params == ['param1']  # nonexistent_param filtered out
 
-    def test_get_required_input_keys_empty_required(self):
+    def test_get_required_parameter_keys_empty_required(self):
         """
-        Tests get_required_input_keys returns empty list when no required fields.
+        Tests get_required_parameter_keys returns empty list when no required fields.
         """
         tool = JenticTool(OPERATION_SCHEMA)  # has empty required array
-        required_params = tool.get_required_input_keys()
+        required_params = tool.get_required_parameter_keys()
         assert required_params == []
 
-    def test_get_required_input_keys_no_inputs(self):
+    def test_get_required_parameter_keys_no_inputs(self):
         """
-        Tests get_required_input_keys returns empty list when no inputs section.
+        Tests get_required_parameter_keys returns empty list when no inputs section.
         """
         tool = JenticTool(EMPTY_SCHEMA)
-        required_params = tool.get_required_input_keys()
+        required_params = tool.get_required_parameter_keys()
         assert required_params == []
 
-    def test_get_required_input_keys_no_properties(self):
+    def test_get_required_parameter_keys_no_properties(self):
         """
-        Tests get_required_input_keys returns empty list when no properties section.
+        Tests get_required_parameter_keys returns empty list when no properties section.
         """
         schema_no_properties = {
             'workflow_id': 'wf_test',
@@ -193,12 +193,12 @@ class TestJenticTool:
             }
         }
         tool = JenticTool(schema_no_properties)
-        required_params = tool.get_required_input_keys()
+        required_params = tool.get_required_parameter_keys()
         assert required_params == []
 
-    def test_get_input_schema_multiple_schemas(self):
+    def test_get_parameter_schema_multiple_schemas(self):
         """
-        Tests get_input_schema returns the parameters schema for multiple schemas case.
+        Tests get_parameter_schema returns the parameters schema for multiple schemas case.
         """
         multiple_schema = {
             'workflow_id': 'wf_multi',
@@ -211,22 +211,22 @@ class TestJenticTool:
             }
         }
         tool = JenticTool(multiple_schema)
-        schema = tool.get_input_schema()
+        schema = tool.get_parameter_schema()
         assert schema == multiple_schema['inputs']['properties']
         assert isinstance(schema, list)
         assert len(schema) == 2
 
-    def test_get_allowed_input_keys_single_schema(self):
+    def test_get_parameter_keys_single_schema(self):
         """
-        Tests get_allowed_input_keys returns all parameter keys for single schema.
+        Tests get_parameter_keys returns all parameter keys for single schema.
         """
         tool = JenticTool(WORKFLOW_SCHEMA)
-        allowed_keys = tool.get_allowed_input_keys()
+        allowed_keys = tool.get_parameter_keys()
         assert set(allowed_keys) == {'param1', 'param2'}
 
-    def test_get_allowed_input_keys_multiple_schemas(self):
+    def test_get_parameter_keys_multiple_schemas(self):
         """
-        Tests get_allowed_input_keys returns union of all parameter keys for multiple schemas.
+        Tests get_parameter_keys returns union of all parameter keys for multiple schemas.
         """
         multiple_schema = {
             'workflow_id': 'wf_multi',
@@ -239,28 +239,28 @@ class TestJenticTool:
             }
         }
         tool = JenticTool(multiple_schema)
-        allowed_keys = tool.get_allowed_input_keys()
+        allowed_keys = tool.get_parameter_keys()
         assert set(allowed_keys) == {'param1', 'param2', 'param3', 'param4'}
 
-    def test_get_allowed_input_keys_empty(self):
+    def test_get_parameter_keys_empty(self):
         """
-        Tests get_allowed_input_keys returns empty list when no parameters.
+        Tests get_parameter_keys returns empty list when no parameters.
         """
         tool = JenticTool(EMPTY_SCHEMA)
-        allowed_keys = tool.get_allowed_input_keys()
+        allowed_keys = tool.get_parameter_keys()
         assert allowed_keys == []
 
-    def test_get_allowed_input_keys_operation_schema(self):
+    def test_get_parameter_keys_operation_schema(self):
         """
-        Tests get_allowed_input_keys works with operation schema.
+        Tests get_parameter_keys works with operation schema.
         """
         tool = JenticTool(OPERATION_SCHEMA)
-        allowed_keys = tool.get_allowed_input_keys()
+        allowed_keys = tool.get_parameter_keys()
         assert allowed_keys == ['query_param']
 
-    def test_get_required_input_keys_multiple_schemas(self):
+    def test_get_required_parameter_keys_multiple_schemas(self):
         """
-        Tests get_required_input_keys works with multiple schemas.
+        Tests get_required_parameter_keys works with multiple schemas.
         """
         multiple_schema = {
             'workflow_id': 'wf_multi',
@@ -273,12 +273,12 @@ class TestJenticTool:
             }
         }
         tool = JenticTool(multiple_schema)
-        required_keys = tool.get_required_input_keys()
+        required_keys = tool.get_required_parameter_keys()
         assert set(required_keys) == {'param1', 'param3'}
 
-    def test_get_required_input_keys_multiple_schemas_partial_match(self):
+    def test_get_required_parameter_keys_multiple_schemas_partial_match(self):
         """
-        Tests get_required_input_keys filters out required fields that don't exist in any schema.
+        Tests get_required_parameter_keys filters out required fields that don't exist in any schema.
         """
         multiple_schema = {
             'workflow_id': 'wf_multi',
@@ -291,12 +291,12 @@ class TestJenticTool:
             }
         }
         tool = JenticTool(multiple_schema)
-        required_keys = tool.get_required_input_keys()
+        required_keys = tool.get_required_parameter_keys()
         assert required_keys == ['param1']  # nonexistent_param filtered out
 
-    def test_get_required_input_keys_multiple_schemas_no_required(self):
+    def test_get_required_parameter_keys_multiple_schemas_no_required(self):
         """
-        Tests get_required_input_keys returns empty list when no required fields in multiple schemas.
+        Tests get_required_parameter_keys returns empty list when no required fields in multiple schemas.
         """
         multiple_schema = {
             'workflow_id': 'wf_multi',
@@ -309,7 +309,7 @@ class TestJenticTool:
             }
         }
         tool = JenticTool(multiple_schema)
-        required_keys = tool.get_required_input_keys()
+        required_keys = tool.get_required_parameter_keys()
         assert required_keys == []
 
 

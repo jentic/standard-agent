@@ -205,15 +205,15 @@ class ReWOOReasoner(BaseReasoner):
 
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            param_schema = tool.get_input_schema()
+            param_schema = tool.get_parameter_schema()
 
             allowed_keys = []
-            if hasattr(tool, 'get_allowed_input_keys'):
-                allowed_keys = tool.get_allowed_input_keys()
+            if hasattr(tool, 'get_parameter_keys'):
+                allowed_keys = tool.get_parameter_keys()
             elif isinstance(param_schema, dict):
                 allowed_keys = param_schema.keys()
 
-            required_keys = tool.get_required_input_keys() if hasattr(tool, 'get_required_input_keys') else []
+            required_keys = tool.get_required_parameter_keys() if hasattr(tool, 'get_required_parameter_keys') else []
             
             # Get params from either reflector suggestion or LLM generation
             suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
