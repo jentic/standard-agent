@@ -70,6 +70,14 @@ See [.env.example](./.env.example) for the complete configuration template with 
 - **Tool Provider**: `JENTIC_AGENT_API_KEY` for turn-key access to capabilities based on 1500+ APIs (get yours at [jentic.com](https://jentic.com))
 
 
+#### Test Configuration:
+To test if .env file is correctly configured
+```bash
+# Run the validation script
+python scripts/validate_config.py
+```
+
+
 ### Usage Examples
 
 *Standard Agent* includes pre-built agent classes for a quick-start, but you can also compose your own agent from scratch. Both approaches are shown below.
