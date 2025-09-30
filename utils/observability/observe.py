@@ -105,9 +105,9 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
                 span.set_attribute("input", msg_str[:MAX_LLM_PROMPT_BYTES])
             return
 
-        # BASIC redaction candidate keys
-        SECRET_KEYS = {"api_key", "apikey", "access_token", "accesstoken", "refresh_token","client_secret", "secret", "password",
-                       "authorization", "bearer", "cookie", "set_cookie", "private_key", "ssh_key"}
+        # BASIC redaction candidate keys (normalized: lowercase, no _ or -)
+        SECRET_KEYS = {"apikey", "accesstoken", "refreshtoken", "clientsecret", "secret", "password", "authorization",
+                       "bearer", "cookie", "setcookie", "privatekey", "sshkey"}
         
         def _safe_preview(val: Any, max_len: int = MAX_STRING_PREVIEW) -> Any:
             """Create safe preview of a value with truncation markers."""
