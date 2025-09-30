@@ -10,7 +10,7 @@ from dataclasses import is_dataclass, asdict
 import json
 import time
 
-# ── Observability Attribute Size Limits ─────────────────────────────────────
+# Observability Attribute Size Limit
 # These caps prevent trace backend explosions and keep spans readable.
 # Most trace systems have 8-16KB attribute limits.
 
@@ -187,7 +187,7 @@ def _capture_llm_output(span: Any, result: Any) -> None:
         pass
 
 
-# ── Token Accumulation ──────────────────────────────────────────────────────
+# Token Accumulation
 # Root spans start a token counter; child LLM calls increment it; root finalizes total.
 
 _tokens: ContextVar[Optional[int]] = ContextVar("tokens", default=None)
