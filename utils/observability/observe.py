@@ -96,21 +96,19 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
             return
 
         # BASIC redaction candidate keys
-        SECRET_KEYS = {"api_key", "apikey", "access_token", "accesstoken", "refresh_token",
-                       "client_secret", "secret", "password", "authorization", "bearer",
-                       "cookie", "set_cookie", "private_key", "ssh_key"}
+        SECRET_KEYS = {"api_key", "apikey", "access_token", "accesstoken", "refresh_token","client_secret", "secret", "password",
+                       "authorization", "bearer", "cookie", "set_cookie", "private_key", "ssh_key"}
         
         def _safe_preview(val: Any, max_len: int = 512) -> Any:
-            """Create safe preview of any value."""
+            """Create safe preview of a value"""
             if val is None or isinstance(val, (bool, int, float)):
                 return val
             if isinstance(val, str):
                 return val[:max_len]
             if isinstance(val, dict):
                 return {
-                    str(k): ("<redacted>" if str(k).lower().replace("_", "").replace("-", "") in SECRET_KEYS
-                            else _safe_preview(v, max_len))
-                        for k, v in list(val.items())[:20]
+                    str(k): ("<redacted>" if str(k).lower().replace("_", "").replace("-", "") in SECRET_KEYS else _safe_preview(v, max_len))
+                    for k, v in list(val.items())[:20]
                 }
             if isinstance(val, (list, tuple)):
                 return [_safe_preview(v, max_len) for v in list(val)[:20]]
