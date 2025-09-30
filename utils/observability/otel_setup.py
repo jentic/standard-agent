@@ -5,12 +5,11 @@ from __future__ import annotations
 import os
 import base64
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Optional
 
-from opentelemetry import trace, metrics
+from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
@@ -20,8 +19,8 @@ class TelemetryTarget(str, Enum):
     OTEL = "otel"
 
 
-def setup_telemetry(service_name: str = "standard-agent", target: TelemetryTarget = TelemetryTarget.OTEL) -> Tuple[trace.Tracer, metrics.Meter]:
-    """Setup OpenTelemetry tracing and metrics.
+def setup_telemetry(service_name: str = "standard-agent", target: TelemetryTarget = TelemetryTarget.OTEL) -> trace.Tracer:
+    """Setup OpenTelemetry tracing.
     
     Args:
         service_name: Name of the service for telemetry
@@ -35,7 +34,7 @@ def setup_telemetry(service_name: str = "standard-agent", target: TelemetryTarge
         ValueError: If target is specified but required env vars are missing
     
     Returns:
-        Tuple of (tracer, meter) ready for use
+        Tracer ready for use
     """
     # Setup tracing
     resource = Resource.create({SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", service_name)})
@@ -48,10 +47,7 @@ def setup_telemetry(service_name: str = "standard-agent", target: TelemetryTarge
         processor = BatchSpanProcessor(exporter)
         trace_provider.add_span_processor(processor)
     
-    # Setup metrics (basic, no exporter)
-    metrics.set_meter_provider(MeterProvider())
-    
-    return trace.get_tracer(service_name), metrics.get_meter(service_name)
+    return trace.get_tracer(service_name)
 
 
 def _create_exporter(target: TelemetryTarget) -> Optional[OTLPSpanExporter]:
@@ -70,17 +66,12 @@ def _create_langfuse_exporter(required: bool = False) -> Optional[OTLPSpanExport
     secret_key = os.getenv("LANGFUSE_SECRET_KEY") 
     host = os.getenv("LANGFUSE_HOST")
     
-    missing_vars = []
-    if not public_key:
-        missing_vars.append("LANGFUSE_PUBLIC_KEY")
-    if not secret_key:
-        missing_vars.append("LANGFUSE_SECRET_KEY")
-    if not host:
-        missing_vars.append("LANGFUSE_HOST")
+    # Check for missing required variables
+    missing = [name for name, val in [("LANGFUSE_PUBLIC_KEY", public_key), ("LANGFUSE_SECRET_KEY", secret_key), ("LANGFUSE_HOST", host)] if not val]
     
-    if missing_vars:
+    if missing:
         if required:
-            raise ValueError(f"Langfuse target specified but missing environment variables: {', '.join(missing_vars)}")
+            raise ValueError(f"Langfuse target specified but missing environment variables: {', '.join(missing)}")
         return None
     
     # Build Langfuse OTLP endpoint and auth
@@ -92,16 +83,18 @@ def _create_langfuse_exporter(required: bool = False) -> Optional[OTLPSpanExport
 
 
 def _create_otel_exporter(required: bool = False) -> Optional[OTLPSpanExporter]:
-    """Create standard OTel exporter using OTEL_* env vars."""
+    """Create standard OTel exporter using OTEL_* env vars.
+    
+    The OTLPSpanExporter reads OTEL_EXPORTER_OTLP_* env vars automatically.
+    We only validate they exist if this exporter is explicitly required.
+    """
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-    headers = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
     
-    if not (endpoint or headers):
-        if required:
-            raise ValueError("OTel target specified but missing environment variables: OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_HEADERS")
-        return None
+    if required and not endpoint:
+        raise ValueError("OTel target specified but missing environment variable: OTEL_EXPORTER_OTLP_ENDPOINT")
     
-    return OTLPSpanExporter()
+    # OTLPSpanExporter() reads from OTEL_EXPORTER_OTLP_* env vars automatically
+    return OTLPSpanExporter() if endpoint else None
 
 
 def get_tracer(service_name: str = "standard-agent") -> trace.Tracer:
@@ -109,8 +102,3 @@ def get_tracer(service_name: str = "standard-agent") -> trace.Tracer:
     if trace.get_tracer_provider() == trace.NoOpTracerProvider():
         setup_telemetry(service_name)
     return trace.get_tracer(service_name)
-
-
-def get_meter(service_name: str = "standard-agent") -> metrics.Meter:
-    """Get a meter, setting up telemetry if needed."""
-    return metrics.get_meter(service_name)
