@@ -91,6 +91,38 @@ def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False, root
         return _decorate(_fn)
     return _decorate
 
+SECRET_REDACT_KEYS = {"apikey", "accesstoken", "refreshtoken", "clientsecret", "secret", "password", "authorization",
+               "bearer", "cookie", "setcookie", "privatekey", "sshkey"}
+
+def _safe_preview(val: Any, max_len: int = MAX_STRING_PREVIEW) -> Any:
+    """Create safe preview of a value with truncation markers and redaction."""
+    if val is None or isinstance(val, (bool, int, float)):
+        return val
+    if isinstance(val, str):
+        return val[:max_len] + ("..." if len(val) > max_len else "")
+    if isinstance(val, dict):
+        result = {}
+        for k, v in list(val.items())[:MAX_COLLECTION_ITEMS]:
+            key_str = str(k)
+            normalized = key_str.lower().replace("_", "").replace("-", "")
+            if normalized in SECRET_REDACT_KEYS:
+                result[key_str] = "<redacted>"
+            else:
+                result[key_str] = _safe_preview(v, max_len)
+        if len(val) > MAX_COLLECTION_ITEMS:
+            result["..."] = f"{len(val) - MAX_COLLECTION_ITEMS} more keys"
+        return result
+    if isinstance(val, (list, tuple)):
+        items = [_safe_preview(v, max_len) for v in list(val)[:MAX_COLLECTION_ITEMS]]
+        if len(val) > MAX_COLLECTION_ITEMS:
+            items.append("...")
+        return items
+    if is_dataclass(val):
+        return _safe_preview(asdict(val), max_len)
+    if hasattr(val, "model_dump"):
+        return _safe_preview(val.model_dump(), max_len)
+    return repr(val)[:max_len] + ("..." if len(repr(val)) > max_len else "")
+
 
 def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool) -> None:
     """Capture function inputs with smart previews and redaction."""
@@ -105,36 +137,6 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
                 span.set_attribute("input", msg_str[:MAX_LLM_PROMPT_BYTES])
             return
 
-        # BASIC redaction candidate keys (normalized: lowercase, no _ or -)
-        SECRET_KEYS = {"apikey", "accesstoken", "refreshtoken", "clientsecret", "secret", "password", "authorization",
-                       "bearer", "cookie", "setcookie", "privatekey", "sshkey"}
-        
-        def _safe_preview(val: Any, max_len: int = MAX_STRING_PREVIEW) -> Any:
-            """Create safe preview of a value with truncation markers."""
-            if val is None or isinstance(val, (bool, int, float)):
-                return val
-            if isinstance(val, str):
-                return val[:max_len] + ("..." if len(val) > max_len else "")
-            if isinstance(val, dict):
-                result = {
-                    str(k): ("<redacted>" if str(k).lower().replace("_", "").replace("-", "") in SECRET_KEYS else _safe_preview(v, max_len))
-                    for k, v in list(val.items())[:MAX_COLLECTION_ITEMS]
-                }
-                if len(val) > MAX_COLLECTION_ITEMS:
-                    result["..."] = f"{len(val) - MAX_COLLECTION_ITEMS} more keys"
-                return result
-            if isinstance(val, (list, tuple)):
-                items = [_safe_preview(v, max_len) for v in list(val)[:MAX_COLLECTION_ITEMS]]
-                if len(val) > MAX_COLLECTION_ITEMS:
-                    items.append("...")
-                return items
-            if is_dataclass(val):
-                return _safe_preview(asdict(val), max_len)
-            if hasattr(val, "model_dump"):
-                return _safe_preview(val.model_dump(), max_len)
-            return repr(val)[:max_len] + ("..." if len(repr(val)) > max_len else "")
-
-        # Build input dict excluding self/cls
         inputs = {name: _safe_preview(value) for name, value in bound.arguments.items() if name not in {"self", "cls"}}
         
         input_str = json.dumps(inputs, ensure_ascii=False, separators=(",", ":"), default=str)
