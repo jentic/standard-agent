@@ -10,6 +10,16 @@ from dataclasses import is_dataclass, asdict
 import json
 import time
 
+# ── Observability Attribute Size Limits ─────────────────────────────────────
+# These caps prevent trace backend explosions and keep spans readable.
+# Most trace systems have 8-16KB attribute limits.
+
+MAX_STRING_PREVIEW = 512        # Max chars per string value in input preview
+MAX_COLLECTION_ITEMS = 20       # Max items to show in lists/dicts
+MAX_INPUT_BYTES = 6144          # Max total input JSON size (6KB)
+MAX_OUTPUT_BYTES = 8192         # Max output size (8KB - common trace limit)
+MAX_LLM_PROMPT_BYTES = 12288    # Max LLM prompt/messages size (12KB)
+
 
 def observe(_fn: Optional[Callable[..., Any]] = None, *, llm: bool = False, root: bool = False) -> Callable[..., Any]:
     """Minimal tracing decorator.
@@ -92,14 +102,14 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
             messages = bound.arguments.get("messages")
             if messages:
                 msg_str = json.dumps(messages, ensure_ascii=False, separators=(",", ":"))
-                span.set_attribute("input", msg_str[:12288])  # 12KB for prompts
+                span.set_attribute("input", msg_str[:MAX_LLM_PROMPT_BYTES])
             return
 
         # BASIC redaction candidate keys
         SECRET_KEYS = {"api_key", "apikey", "access_token", "accesstoken", "refresh_token","client_secret", "secret", "password",
                        "authorization", "bearer", "cookie", "set_cookie", "private_key", "ssh_key"}
         
-        def _safe_preview(val: Any, max_len: int = 512) -> Any:
+        def _safe_preview(val: Any, max_len: int = MAX_STRING_PREVIEW) -> Any:
             """Create safe preview of a value"""
             if val is None or isinstance(val, (bool, int, float)):
                 return val
@@ -108,10 +118,10 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
             if isinstance(val, dict):
                 return {
                     str(k): ("<redacted>" if str(k).lower().replace("_", "").replace("-", "") in SECRET_KEYS else _safe_preview(v, max_len))
-                    for k, v in list(val.items())[:20]
+                    for k, v in list(val.items())[:MAX_COLLECTION_ITEMS]
                 }
             if isinstance(val, (list, tuple)):
-                return [_safe_preview(v, max_len) for v in list(val)[:20]]
+                return [_safe_preview(v, max_len) for v in list(val)[:MAX_COLLECTION_ITEMS]]
             if is_dataclass(val):
                 return _safe_preview(asdict(val), max_len)
             if hasattr(val, "model_dump"):
@@ -122,7 +132,7 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
         inputs = {name: _safe_preview(value) for name, value in bound.arguments.items() if name not in {"self", "cls"}}
         
         input_str = json.dumps(inputs, ensure_ascii=False, separators=(",", ":"), default=str)
-        span.set_attribute("input", input_str[:6144] + ("..." if len(input_str) > 6144 else ""))
+        span.set_attribute("input", input_str[:MAX_INPUT_BYTES] + ("..." if len(input_str) > MAX_INPUT_BYTES else ""))
     except Exception:
         pass
 
@@ -133,14 +143,14 @@ def _capture_output(span: Any, result: Any) -> None:
         # ReasoningResult-like: capture structured fields
         if hasattr(result, 'final_answer'):
             output = result.final_answer or getattr(result, 'transcript', '')
-            span.set_attribute("output", str(output)[:8192])
+            span.set_attribute("output", str(output)[:MAX_OUTPUT_BYTES])
             if hasattr(result, 'success'):
                 span.set_attribute("result_success", bool(result.success))
             if hasattr(result, 'iterations'):
                 span.set_attribute("total_iterations", int(result.iterations))
         else:
             # Generic output
-            span.set_attribute("output", str(result)[:8192])
+            span.set_attribute("output", str(result)[:MAX_OUTPUT_BYTES])
     except Exception:
         pass
 
@@ -160,7 +170,7 @@ def _capture_llm_output(span: Any, result: Any) -> None:
                 span.set_attribute("tokens.total", result.total_tokens)
                 _accumulate_tokens(result.total_tokens)
         else:
-            span.set_attribute("output", str(result)[:8192])
+            span.set_attribute("output", str(result)[:MAX_OUTPUT_BYTES])
     except Exception:
         pass
 
