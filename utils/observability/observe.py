@@ -146,7 +146,7 @@ def _capture_input(span: Any, fn: Callable, args: tuple, kwargs: dict, llm: bool
 def _capture_output(span: Any, result: Any) -> None:
     """Capture non-LLM outputs with structured attributes."""
     try:
-        # ReasoningResult-like: capture structured fields
+        # capture structured fields for agents.reasoner.base.ReasoningResult
         if hasattr(result, 'final_answer'):
             output = result.final_answer or getattr(result, 'transcript', '')
             span.set_attribute("output", str(output)[:MAX_OUTPUT_BYTES])
@@ -154,6 +154,10 @@ def _capture_output(span: Any, result: Any) -> None:
                 span.set_attribute("result_success", bool(result.success))
             if hasattr(result, 'iterations'):
                 span.set_attribute("total_iterations", int(result.iterations))
+            if hasattr(result, 'error_message') and result.error_message:
+                span.set_attribute("error_message", str(result.error_message)[:1024])
+            if hasattr(result, 'tool_calls'):
+                span.set_attribute("total_tool_calls", len(result.tool_calls))
         else:
             # Generic output
             span.set_attribute("output", str(result)[:MAX_OUTPUT_BYTES])
