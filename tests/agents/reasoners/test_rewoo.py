@@ -481,7 +481,7 @@ def test_rewoo_generate_params_with_required_params_success():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1"]
     
     llm = DummyLLM(json_queue=[{"param1": "value1", "param2": "value2"}])
@@ -502,7 +502,7 @@ def test_rewoo_generate_params_missing_required_params_raises_error():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1", "param2"]
     
     llm = DummyLLM(json_queue=[{"param2": "value2"}])  # missing param1
@@ -523,9 +523,9 @@ def test_rewoo_generate_params_missing_required_params_raises_error():
 
 
 def test_rewoo_generate_params_no_required_params_backward_compatibility():
-    """Test _generate_params works with tools that don't have get_required_parameters method."""
+    """Test _generate_params works with tools that don't have get_required_parameter_keys method."""
     tool = DummyTool("t1", "Tool One", schema={"param1": {}})
-    # DummyTool doesn't have get_required_parameters method
+    # DummyTool doesn't have get_required_parameter_keys method
     
     llm = DummyLLM(json_queue=[{"param1": "value1"}])
     tools = DummyTools([])
@@ -544,7 +544,7 @@ def test_rewoo_generate_params_empty_required_params():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return []
     
     llm = DummyLLM(json_queue=[{"param1": "value1"}])
@@ -565,7 +565,7 @@ def test_rewoo_generate_params_reflector_suggested_params_missing_required():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1", "param2"]
     
     llm = DummyLLM(json_queue=[])  # No LLM calls expected since using reflector params
@@ -596,7 +596,7 @@ def test_rewoo_generate_params_reflector_suggested_params_success():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1"]
     
     llm = DummyLLM(json_queue=[])  # No LLM calls expected
@@ -670,7 +670,7 @@ def test_rewoo_required_params_full_integration():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"required_param": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["required_param"]
     
     plan_text = "- do something (output: k1)"
@@ -697,5 +697,143 @@ def test_rewoo_required_params_full_integration():
     # Should trigger reflection due to ParameterGenerationError
     assert result.tool_calls == []
     assert "Reflection decision" in result.transcript
+
+
+def test_rewoo_generate_params_multiple_schemas():
+    """Test _generate_params with tool that has multiple schemas."""
+    class ToolWithMultipleSchemas(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema=None)
+        
+        def get_parameter_schema(self):
+            return [
+                {"param1": {"type": "string"}, "param2": {"type": "integer"}},
+                {"param3": {"type": "boolean"}, "param4": {"type": "number"}}
+            ]
+        
+        def get_parameter_keys(self):
+            return ["param1", "param2", "param3", "param4"]
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param3": True, "extra": "ignored"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithMultipleSchemas("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    # Should filter out "extra" key since it's not in allowed_keys
+    assert result == {"param1": "value1", "param3": True}
+
+
+def test_rewoo_generate_params_empty_schema():
+    """Test _generate_params with tool that has empty schema."""
+    class ToolWithEmptySchema(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema=None)
+        
+        def get_parameter_schema(self):
+            return None
+        
+        def get_parameter_keys(self):
+            return []
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param2": "value2"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithEmptySchema("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    # Should return empty dict since no allowed keys
+    assert result == {}
+
+
+def test_rewoo_generate_params_fallback_to_schema_keys():
+    """Test _generate_params falls back to schema.keys() when get_parameter_keys is not available."""
+    class ToolWithoutAllowedKeysMethod(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {"type": "string"}, "param2": {"type": "integer"}})
+        
+        def get_parameter_schema(self):
+            return {"param1": {"type": "string"}, "param2": {"type": "integer"}}
+        
+        # Note: no get_parameter_keys method - should fall back to schema.keys()
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param2": 42, "extra": "ignored"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithoutAllowedKeysMethod("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    # Should filter out "extra" key since it's not in schema.keys()
+    assert result == {"param1": "value1", "param2": 42}
+
+
+def test_rewoo_generate_params_multiple_schemas_union_keys():
+    """Test _generate_params with multiple schemas returns union of all keys."""
+    class ToolWithOverlappingSchemas(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema=None)
+        
+        def get_parameter_schema(self):
+            return [
+                {"param1": {"type": "string"}, "param2": {"type": "integer"}},
+                {"param2": {"type": "string"}, "param3": {"type": "boolean"}}  # param2 overlaps
+            ]
+        
+        def get_parameter_keys(self):
+            return ["param1", "param2", "param3"]  # Union of all keys
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param2": 42, "param3": True}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithOverlappingSchemas("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    assert result == {"param1": "value1", "param2": 42, "param3": True}
+
+
+def test_rewoo_generate_params_reflector_suggestion_with_multiple_schemas():
+    """Test _generate_params with reflector suggestion and multiple schemas filtering."""
+    class ToolWithMultipleSchemas(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema=None)
+        
+        def get_parameter_schema(self):
+            return [
+                {"param1": {"type": "string"}, "param2": {"type": "integer"}},
+                {"param3": {"type": "boolean"}, "param4": {"type": "number"}}
+            ]
+        
+        def get_parameter_keys(self):
+            return ["param1", "param2", "param3", "param4"]
+    
+    llm = DummyLLM(json_queue=[])  # No LLM calls needed since we're using reflector suggestion
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    # Set up reflector suggestion with extra keys
+    memory["rewoo_reflector_suggestion:test step"] = {
+        "action": "retry_params",
+        "params": {"param1": "value1", "param3": True, "extra": "ignored", "invalid": "also_ignored"}
+    }
+    
+    tool = ToolWithMultipleSchemas("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    # Should filter out "extra" and "invalid" keys since they're not in allowed_keys
+    assert result == {"param1": "value1", "param3": True}
 
 

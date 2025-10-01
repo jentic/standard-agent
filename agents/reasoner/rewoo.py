@@ -210,24 +210,31 @@ class ReWOOReasoner(BaseReasoner):
     @observe
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            param_schema = tool.get_parameters() or {}
-            required_keys = tool.get_required_parameters() if hasattr(tool, 'get_required_parameters') else []
+            param_schema = tool.get_parameter_schema()
+
+            allowed_keys = []
+            if hasattr(tool, 'get_parameter_keys'):
+                allowed_keys = tool.get_parameter_keys()
+            elif isinstance(param_schema, dict):
+                allowed_keys = param_schema.keys()
+
+            required_keys = tool.get_required_parameter_keys() if hasattr(tool, 'get_required_parameter_keys') else []
             
             # Get params from either reflector suggestion or LLM generation
             suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
             if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
                 logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
-                final_params = {k: v for k, v in suggestion["params"].items() if k in param_schema}
+                final_params = {k: v for k, v in suggestion["params"].items() if k in allowed_keys}
             else:
                 prompt = _PROMPTS["param_gen"].format(
                     step=step.text,
                     tool_schema=json.dumps(param_schema, ensure_ascii=False),
                     step_inputs=json.dumps(inputs, ensure_ascii=False),
-                    allowed_keys=",".join(param_schema.keys()),
+                    allowed_keys=",".join(allowed_keys),
                     required_keys=",".join(required_keys),
                 )
                 params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
-                final_params = {k: v for k, v in (params_raw or {}).items() if k in param_schema}
+                final_params = {k: v for k, v in (params_raw or {}).items() if k in allowed_keys}
             
             unknown_params = [key for key, val in final_params.items() if val == "<UNKNOWN>"]
             missing_params = [key for key in required_keys if key not in final_params]
