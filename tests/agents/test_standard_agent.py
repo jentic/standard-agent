@@ -1,4 +1,4 @@
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import pytest
 import json
@@ -233,3 +233,30 @@ def test_agent_conversation_history_disabled_window():
 
     assert memory.get("conversation_history") == []
 
+
+def test_agent_conversation_history_negative_window():
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=DummyReasoner(), conversation_history_window=-5)
+
+    agent.solve("g1")
+
+    assert memory.get("conversation_history") == []
+    assert agent.conversation_history_window == 0
+
+
+def test_agent_conversation_history_memory_bounded():
+    llm = DummyLLM(text_queue=["S1", "S2", "S3", "S4", "S5"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=DummyReasoner(), conversation_history_window=3)
+
+    for i in range(5):
+        agent.solve(f"g{i}")
+
+    hist = memory.get("conversation_history")
+    assert len(hist) == 3
+    assert hist[0]["goal"] == "g2"
+    assert hist[1]["goal"] == "g3"
+    assert hist[2]["goal"] == "g4"
