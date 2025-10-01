@@ -18,6 +18,7 @@ from  uuid import uuid4
 import time
 from  enum import Enum
 from utils.logger import get_logger
+from utils.observability import observe
 
 logger = get_logger(__name__)
 
@@ -69,6 +70,7 @@ class StandardAgent:
     def state(self) -> AgentState:
         return self._state
 
+    @observe(root=True)
     def solve(self, goal: str) -> ReasoningResult:
         """Solves a goal synchronously (library-style API)."""
         run_id = uuid4().hex
