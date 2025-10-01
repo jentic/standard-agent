@@ -250,7 +250,7 @@ The library is designed to be modular. Here are some common extension points:
 | **New Planners, Executors, etc.**  | Create your own implementations of `Plan`, `ExecuteStep`, `Reflect`, or `SummarizeResult` to invent new reasoning capabilities, then compose them in a `SequentialReasoner`. |
 | **Pre-process or validate goals**  | Create a class that inherits from `BaseGoalPreprocessor` and pass it to `StandardAgent`. Use this to resolve conversational ambiguities, check for malicious intent, or sanitize inputs. |
 
-### [Observability](tests/utils/observability/README.md) (optional)
+### [Observability](utils/observability/README.md) (optional)
 
 Observability is fully opt-in — if OpenTelemetry isn’t installed or initialized, it quietly does nothing.
   - Powered by OpenTelemetry (OTel), exportable to any OTLP backend (Langfuse, Jaeger, Honeycomb, etc.)
@@ -258,7 +258,7 @@ Observability is fully opt-in — if OpenTelemetry isn’t installed or initiali
   - Simple API with the @observe decorator 
   - LLM-aware: capture token usage on @observe(llm=True) spans, aggregate at @observe(root=True)
 
-[Learn more](tests/utils/observability/README.md).
+[Learn more](utils/observability/README.md).
 
 ## Roadmap
 We welcome all help implementing parts of the roadmap, or contributing new ideas. We will merge anything we think makes sense in this core library, and will link to all other relevant work.
