@@ -12,6 +12,7 @@
 - [Core Runtime Objects](#core-runtime-objects)
 - [Extending the Library](#extending-the-library)
 - [Roadmap](#roadmap)
+- [Observability (optional)](#observability-optional)
 
 > **Join our community!** Connect with contributors and users on [Discord](https://discord.gg/yrxmDZWMqB) to discuss ideas, ask questions, and collaborate on the Standard Agent repository.
 
@@ -166,7 +167,7 @@ while True:
         print("\n🤖 Bye!")
         break
 ```
----
+
 
 ## Architecture
 
@@ -198,6 +199,8 @@ Each component follows well-defined interfaces (`BaseLLM`, `BaseMemory`, `JustIn
 │
 ├── utils/
 │   └── logger.py                   # Logging configuration
+│   └── observability/              # Observability framework 
+│       └── exporters/              # OTLP backend exporters
 │
 ├── examples/                       # Runnable scripts and helper snippets
 │
@@ -247,6 +250,15 @@ The library is designed to be modular. Here are some common extension points:
 | **New Planners, Executors, etc.**  | Create your own implementations of `Plan`, `ExecuteStep`, `Reflect`, or `SummarizeResult` to invent new reasoning capabilities, then compose them in a `SequentialReasoner`. |
 | **Pre-process or validate goals**  | Create a class that inherits from `BaseGoalPreprocessor` and pass it to `StandardAgent`. Use this to resolve conversational ambiguities, check for malicious intent, or sanitize inputs. |
 
+### [Observability](utils/observability/README.md) (optional)
+
+Observability is fully opt-in — if OpenTelemetry isn’t installed or initialized, it quietly does nothing.
+  - Powered by OpenTelemetry (OTel), exportable to any OTLP backend (Langfuse, Jaeger, Honeycomb, etc.)
+  - Plug-and-play exporters in utils/observability/exporters/ 
+  - Simple API with the @observe decorator 
+  - LLM-aware: capture token usage on @observe(llm=True) spans, aggregate at @observe(root=True)
+
+[Learn more](utils/observability/README.md).
 
 ## Roadmap
 We welcome all help implementing parts of the roadmap, or contributing new ideas. We will merge anything we think makes sense in this core library, and will link to all other relevant work.

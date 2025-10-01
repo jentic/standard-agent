@@ -1,6 +1,6 @@
 [project]
 name = "standard-agent"
-version = "0.1.6"
+version = "0.1.7"
 description = "A simple, modular library for building AI agents—with a composable core and plug‑in components."
 requires-python = ">=3.11"
 readme = "README.md"
@@ -23,6 +23,13 @@ dev = [
     "pytest-mock",
     "ruff",
     "mypy",
+]
+
+observability = [
+    "opentelemetry-api>=1.36.0",
+    "opentelemetry-sdk>=1.36.0",
+    "opentelemetry-exporter-otlp>=1.36.0",
+    "opentelemetry-instrumentation>=0.57b0",
 ]
 
 [build-system]

@@ -15,7 +15,7 @@ from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.jentic import JenticTool
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError)
-
+from utils.observability import observe
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -75,6 +75,7 @@ class ReWOOReasoner(BaseReasoner):
         self.max_retries = max_retries
         self.top_k = top_k
 
+    @observe
     def run(self, goal: str) -> ReasoningResult:
         state = ReasonerState(goal=goal)
 
@@ -105,6 +106,7 @@ class ReWOOReasoner(BaseReasoner):
         success = not state.plan
         return ReasoningResult(iterations=iterations, success=success, transcript=transcript, tool_calls=state.tool_calls)
 
+    @observe
     def _plan(self, goal: str) -> Deque[Step]:
         generated_plan = (self.llm.prompt(_PROMPTS["plan"].format(goal=goal)) or "").strip("`").lstrip("markdown").strip()
         logger.info("plan_generated", goal=goal, plan=generated_plan)
@@ -154,6 +156,7 @@ class ReWOOReasoner(BaseReasoner):
             logger.info("plan_step", step_text=s.text, output_key=s.output_key, input_keys=s.input_keys)
         return steps
 
+    @observe
     def _execute(self, step: Step, state: ReasonerState) -> None:
         step.status = StepStatus.RUNNING
 
@@ -182,6 +185,7 @@ class ReWOOReasoner(BaseReasoner):
         state.history.append(f"Executed step: {step.text} -> {step.result}")
         logger.info("step_executed", step_text=step.text, step_type=step_type, result=str(step.result)[:100] if step.result is not None else None)
 
+    @observe
     def _select_tool(self, step: Step) -> ToolBase:
         suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")
         if suggestion and suggestion.get("action") in ("change_tool", "retry_params"):
@@ -203,6 +207,7 @@ class ReWOOReasoner(BaseReasoner):
 
         return self.tools.load(selected_tool)
 
+    @observe
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
         try:
             param_schema = tool.get_parameter_schema()
@@ -231,18 +236,24 @@ class ReWOOReasoner(BaseReasoner):
                 params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
                 final_params = {k: v for k, v in (params_raw or {}).items() if k in allowed_keys}
             
-            missing_required_parameter = [key for key in required_keys if key not in final_params]
-            if missing_required_parameter:
-                logger.warning("missing_required_parameters", step_text=step.text, tool_id=tool.id, missing_parameters=missing_required_parameter, generated_parameters=final_params, required_parameters=required_keys)
-                raise ParameterGenerationError(
-                    f"Parameters for step '{step.text}' are missing required parameters: {', '.join(missing_required_parameter)}. "
-                    f"Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution.", tool
-                )
+            unknown_params = [key for key, val in final_params.items() if val == "<UNKNOWN>"]
+            missing_params = [key for key in required_keys if key not in final_params]
+            
+            if unknown_params or missing_params:
+                error_message_parts = []
+                if unknown_params: error_message_parts.append(f"LLM indicated missing data using <UNKNOWN> for parameters: {', '.join(unknown_params)}")
+                if missing_params: error_message_parts.append(f"Missing required parameters: {', '.join(missing_params)}")
+
+                param_gen_error = f"{' | '.join(error_message_parts)} in step '{step.text}'. Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution."
+                logger.error("parameter_generation_failed", error = param_gen_error, step_text=step.text, tool_id=tool.id, generated_parameters=final_params, required_parameters=required_keys)
+                raise ParameterGenerationError(param_gen_error, tool)
+            
             logger.info("params_generated", tool_id=tool.id, params=final_params)
             return final_params
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
             raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step.text}': {e}", tool) from e
 
+    @observe
     def _reflect(self, error: Exception, step: Step, state: ReasonerState) -> None:
         logger.info("step_error_recovery", error_type=error.__class__.__name__, step_text=step.text, retry_count=step.retry_count)
         step.status = StepStatus.FAILED

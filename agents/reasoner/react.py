@@ -9,8 +9,7 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolExecutionError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import ToolSelectionError, ParameterGenerationError
-
-
+from utils.observability import observe
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -33,6 +32,7 @@ class ReACTReasoner(BaseReasoner):
         self.max_turns = max_turns
         self.top_k = top_k
 
+    @observe
     def run(self, goal: str) -> ReasoningResult:
         logger.info("ReACT reasoner started", goal=goal, max_turns=self.max_turns)
 
@@ -92,6 +92,7 @@ class ReACTReasoner(BaseReasoner):
         success = complete
         return ReasoningResult(iterations=turns, success=success, transcript=reasoning_transcript, tool_calls=tool_calls)
 
+    @observe
     def _think(self, transcript: str) -> Tuple[str, str]:
         VALID_STEP_TYPES = {"THINK", "ACT", "STOP"}
         try:
@@ -105,12 +106,14 @@ class ReACTReasoner(BaseReasoner):
             logger.error("think_parse_failed", error=str(e), exc_info=True)
         return "THINK", "Continuing reasoning to determine next step."
 
+    @observe
     def _act(self, action_text: str, transcript: str, failed_tool_ids: List[str]) -> Tuple[ToolBase, Dict[str, Any], Any]:
         tool = self._select_tool(action_text, failed_tool_ids)
         params = self._generate_params(tool, transcript, action_text)
         observation = self.tools.execute(tool, params)
         return tool, params, observation
 
+    @observe
     def _select_tool(self, action_text: str, failed_tool_ids: List[str]) -> ToolBase:
         tool_candidates = [t for t in self.tools.search(action_text, top_k=self.top_k) if t.id not in set(failed_tool_ids)]
         logger.info("tool_search", query=action_text, top_k=self.top_k, candidate_count=len(tool_candidates))
@@ -131,6 +134,7 @@ class ReACTReasoner(BaseReasoner):
 
         return self.tools.load(selected_tool)
 
+    @observe
     def _generate_params(self, tool: ToolBase, transcript: str, step_text: str) -> Dict[str, Any]:
         param_schema = tool.get_parameter_schema()
 
@@ -156,13 +160,17 @@ class ReACTReasoner(BaseReasoner):
             ) or {}
             final_params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in allowed_keys}
             
-            missing_required_parameter = [key for key in required_keys if key not in final_params]
-            if missing_required_parameter:
-                logger.warning("missing_required_parameters", step_text=step_text, tool_id=tool.id, missing_parameters=missing_required_parameter, generated_parameters=final_params, required_parameters=required_keys)
-                raise ParameterGenerationError(
-                    f"Parameters for step '{step_text}' are missing required parameters: {', '.join(missing_required_parameter)}. "
-                    f"Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution.", tool
-                )
+            unknown_params = [key for key, val in final_params.items() if val == "<UNKNOWN>"]
+            missing_params = [key for key in required_keys if key not in final_params]
+            
+            if unknown_params or missing_params:
+                error_message_parts = []
+                if unknown_params: error_message_parts.append(f"LLM indicated missing data using <UNKNOWN> for parameters: {', '.join(unknown_params)}")
+                if missing_params: error_message_parts.append(f"Missing required parameters: {', '.join(missing_params)}")
+
+                param_gen_error = f"{' | '.join(error_message_parts)} in step '{step_text}'. Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution."
+                logger.error("parameter_generation_failed", error = param_gen_error, step_text=step_text, tool_id=tool.id, generated_parameters=final_params, required_parameters=required_keys)
+                raise ParameterGenerationError(f"{' | '.join(error_message_parts)} in step '{step_text}'. Generated parameters: {final_params}. Tool '{tool.id}' requires these parameters for successful execution.", tool)
             
             logger.info("params_generated", tool_id=tool.id, params=final_params)
             return final_params

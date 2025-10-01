@@ -4,6 +4,7 @@ import json
 import litellm
 
 from utils.logger import get_logger
+from utils.observability import observe
 logger = get_logger(__name__)
 
 class LiteLLM(BaseLLM):
@@ -18,7 +19,8 @@ class LiteLLM(BaseLLM):
         super().__init__(model=model, temperature=temperature)
         self.max_tokens = max_tokens
 
-    def completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    @observe(llm=True)
+    def completion(self, messages: List[Dict[str, str]], **kwargs) -> BaseLLM.LLMResponse:
         # Merge default parameters with provided kwargs
         effective_temperature = kwargs.get("temperature", self.temperature)
         effective_max_tokens = kwargs.get("max_tokens", self.max_tokens)
@@ -38,15 +40,21 @@ class LiteLLM(BaseLLM):
                 completion_kwargs[key] = value
 
         resp = litellm.completion(**completion_kwargs)
+
+        text = ""
         try:
-            content = resp.choices[0].message.content.strip()
-            if not content:
-                logger.error("empty_llm_response", msg="LLM returned an empty response")
-                raise ValueError("LLM returned an empty response")
-            return content
-        except (IndexError, AttributeError) as e:
-            logger.error("malformed_llm_response", msg="LLM response was malformed", error=str(e))
-            raise ValueError("LLM returned malformed response") from e
+            text = resp.choices[0].message.content.strip()
+        except (IndexError, AttributeError):
+            pass
+
+        prompt_tokens, completion_tokens, total_tokens = self._extract_token_usage(resp)
+
+        return BaseLLM.LLMResponse(
+            text=text,
+            prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
+            completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
+            total_tokens=total_tokens if isinstance(total_tokens, int) else None,
+        )
 
     def prompt_to_json(self, content: str, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
         """
@@ -99,3 +107,36 @@ class LiteLLM(BaseLLM):
 
         # This should never be reached, but mypy requires it
         raise json.JSONDecodeError("Unexpected end of function", "", 0)
+
+
+    def _extract_token_usage(self, resp: Any) -> tuple[int | None, int | None, int | None]:
+        """Extract token usage from provider response with fallbacks for different providers."""
+        def _get_token(obj: Any, *keys: str) -> int | None:
+            for key in keys:
+                if hasattr(obj, key):
+                    val = getattr(obj, key, None)
+
+                elif isinstance(obj, dict):
+                    val = obj.get(key)
+                else:
+                    continue
+                if isinstance(val, int):
+                    return val
+            return None
+
+        try:
+            usage = getattr(resp, "usage", None) or (resp.get("usage") if isinstance(resp, dict) else None)
+            if usage is None:
+                return None, None, None
+
+            prompt_tokens = _get_token(usage, "prompt_tokens", "input_tokens")
+            completion_tokens = _get_token(usage, "completion_tokens", "output_tokens")
+            total_tokens = _get_token(usage, "total_tokens")
+
+            # Compute total if missing but components available
+            if total_tokens is None and prompt_tokens is not None and completion_tokens is not None:
+                total_tokens = prompt_tokens + completion_tokens
+
+            return prompt_tokens, completion_tokens, total_tokens
+        except Exception:
+            return None, None, None
