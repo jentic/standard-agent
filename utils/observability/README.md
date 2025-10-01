@@ -80,4 +80,5 @@ That’s it — traces flow automatically to your configured backend.
 ### Contributing  
 
 Contributions are welcome — exporters, docs, ideas, or improvements.  
+
 👉 Open an issue, submit a PR, or share feedback!  
