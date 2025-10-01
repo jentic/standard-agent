@@ -247,8 +247,11 @@ The library is designed to be modular. Here are some common extension points:
 | **New Planners, Executors, etc.**  | Create your own implementations of `Plan`, `ExecuteStep`, `Reflect`, or `SummarizeResult` to invent new reasoning capabilities, then compose them in a `SequentialReasoner`. |
 | **Pre-process or validate goals**  | Create a class that inherits from `BaseGoalPreprocessor` and pass it to `StandardAgent`. Use this to resolve conversational ambiguities, check for malicious intent, or sanitize inputs. |
 
+For a guided walk-through of real `JustInTimeToolingBase` implementations—including pure Python utilities, HTTP APIs, and shell integrations—see [`docs/tool_integration_examples.md`](docs/tool_integration_examples.md).
+
 
 ## Roadmap
+
 We welcome all help implementing parts of the roadmap, or contributing new ideas. We will merge anything we think makes sense in this core library, and will link to all other relevant work.
 
 - Additional pre-built reasoner implementations (ReAct, ToT, Graph-of-Thought)
