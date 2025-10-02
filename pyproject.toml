@@ -32,6 +32,10 @@ observability = [
     "opentelemetry-instrumentation>=0.57b0",
 ]
 
+bedrock = [
+    "boto3>=1.36.0",
+]
+
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
