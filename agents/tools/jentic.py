@@ -89,11 +89,61 @@ class JenticClient(JustInTimeToolingBase):
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
         """
         Search for workflows and operations matching a query.
+
+        Args:
+            query: Search query string (cannot be empty)
+            top_k: Maximum number of results to return (1-100)
+
+        Returns:
+            List of tools matching the query, or empty list if search fails
+
+        Raises:
+            ValueError: If query is empty or top_k is invalid
         """
+        if not query or not query.strip():
+            logger.warning("tool_search_invalid_query", query=query)
+            raise ValueError("Search query cannot be empty")
+
+        if top_k < 1 or top_k > 100:
+            logger.warning("tool_search_invalid_top_k", top_k=top_k)
+            raise ValueError(f"top_k must be between 1 and 100, got {top_k}")
+
         logger.info("tool_search", query=query, top_k=top_k, filter_by_credentials=self._filter_by_credentials)
 
-        response = asyncio.run(self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=self._filter_by_credentials,)))
-        return [JenticTool(result.model_dump(exclude_none=False)) for result in response.results] if response.results else []
+        try:
+            response = asyncio.run(
+                self._jentic.search(
+                    SearchRequest(
+                        query=query,
+                        limit=top_k,
+                        filter_by_credentials=self._filter_by_credentials
+                    )
+                )
+            )
+
+            if response is None:
+                logger.error("tool_search_null_response", query=query)
+                return []
+
+            if response.results:
+                results = [JenticTool(result.model_dump(exclude_none=False)) for result in response.results]
+                logger.info("tool_search_success", query=query, result_count=len(results))
+                return results
+            else:
+                logger.warning("tool_search_no_results", query=query, top_k=top_k)
+                return []
+
+        except asyncio.TimeoutError:
+            logger.error("tool_search_timeout", query=query, top_k=top_k)
+            return []
+
+        except AttributeError as e:
+            logger.error("tool_search_malformed_response", query=query, error=str(e))
+            return []
+
+        except Exception as exc:
+            logger.error("tool_search_failed", query=query, error=str(exc), error_type=type(exc).__name__)
+            return []
 
 
     def load(self, tool: ToolBase) -> ToolBase:

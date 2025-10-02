@@ -1,9 +1,10 @@
 # Test for the jentic.py script
 
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, MagicMock, AsyncMock, PropertyMock
 from http import HTTPStatus
 import json
+import asyncio
 
 from agents.tools.jentic import JenticTool, JenticClient
 from agents.tools.exceptions import ToolNotFoundError, ToolExecutionError, ToolCredentialsMissingError
@@ -264,6 +265,80 @@ class TestJenticClient:
         results = client.search(query="nonexistent")
 
         assert len(results) == 0
+
+    def test_search_empty_query(self, mock_jentic_sdk):
+        """
+        Tests that search raises ValueError for empty query.
+        """
+        client = JenticClient()
+
+        with pytest.raises(ValueError, match="cannot be empty"):
+            client.search(query="")
+
+        with pytest.raises(ValueError, match="cannot be empty"):
+            client.search(query="   ")
+
+    def test_search_invalid_top_k(self, mock_jentic_sdk):
+        """
+        Tests that search raises ValueError for invalid top_k values.
+        """
+        client = JenticClient()
+
+        with pytest.raises(ValueError, match="between 1 and 100"):
+            client.search(query="test", top_k=0)
+
+        with pytest.raises(ValueError, match="between 1 and 100"):
+            client.search(query="test", top_k=101)
+
+        with pytest.raises(ValueError, match="between 1 and 100"):
+            client.search(query="test", top_k=-5)
+
+    def test_search_network_error(self, mock_jentic_sdk):
+        """
+        Tests that search returns empty list on network error instead of crashing.
+        """
+        mock_jentic_sdk.search.side_effect = Exception("Connection refused")
+
+        client = JenticClient()
+        results = client.search(query="test")
+
+        assert results == []
+        assert isinstance(results, list)
+
+    def test_search_timeout_error(self, mock_jentic_sdk):
+        """
+        Tests that search returns empty list on timeout.
+        """
+        mock_jentic_sdk.search.side_effect = asyncio.TimeoutError()
+
+        client = JenticClient()
+        results = client.search(query="test")
+
+        assert results == []
+
+    def test_search_null_response(self, mock_jentic_sdk):
+        """
+        Tests that search handles None response gracefully.
+        """
+        mock_jentic_sdk.search.return_value = None
+
+        client = JenticClient()
+        results = client.search(query="test")
+
+        assert results == []
+
+    def test_search_malformed_response(self, mock_jentic_sdk):
+        """
+        Tests that search handles response missing .results attribute.
+        """
+        mock_response = MagicMock()
+        type(mock_response).results = PropertyMock(side_effect=AttributeError("no results"))
+        mock_jentic_sdk.search.return_value = mock_response
+
+        client = JenticClient()
+        results = client.search(query="test")
+
+        assert results == []
 
     def test_load_success(self, mock_jentic_sdk):
         """
