@@ -1,0 +1,18 @@
+# Microsoft Bot Framework dependencies
+botbuilder-core>=4.15.0,<5.0.0
+botframework-connector>=4.15.0,<5.0.0
+botbuilder-schema>=4.15.0,<5.0.0
+
+# Web server dependencies  
+aiohttp>=3.8.0,<4.0.0
+aiohttp-cors>=0.7.0,<1.0.0
+
+# Configuration and environment
+python-dotenv>=1.0.0,<2.0.0
+
+# Security and authentication (optional but recommended)
+cryptography>=41.0.0
+
+# Development and testing (optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
