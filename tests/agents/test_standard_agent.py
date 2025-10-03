@@ -232,4 +232,42 @@ def test_agent_conversation_history_disabled_window():
     agent.solve("g1")
 
     assert memory.get("conversation_history") == []
+    
+def test_solve_raises_error_for_none_goal():
+    """Test that solve raises ValueError when goal is None"""
+    agent = StandardAgent(
+        llm=DummyLLM(),
+        tools=DummyTools(),
+        memory=DictMemory(),
+        reasoner=DummyReasoner()
+    )
+    
+    with pytest.raises(ValueError, match="Goal cannot be None"):
+        agent.solve(None)
+
+
+def test_solve_raises_error_for_empty_goal():
+    """Test that solve raises ValueError when goal is empty string"""
+    agent = StandardAgent(
+        llm=DummyLLM(),
+        tools=DummyTools(), 
+        memory=DictMemory(),
+        reasoner=DummyReasoner()
+    )
+    
+    with pytest.raises(ValueError, match="Goal cannot be empty or whitespace"):
+        agent.solve("")
+
+
+def test_solve_raises_error_for_whitespace_goal():
+    """Test that solve raises ValueError when goal is only whitespace"""
+    agent = StandardAgent(
+        llm=DummyLLM(),
+        tools=DummyTools(),
+        memory=DictMemory(), 
+        reasoner=DummyReasoner()
+    )
+    
+    with pytest.raises(ValueError, match="Goal cannot be empty or whitespace"):
+        agent.solve("   ")
 
