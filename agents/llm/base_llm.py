@@ -58,6 +58,15 @@ class BaseLLM(ABC):
     _fence_pattern = re.compile(r"```(?:json)?\s*([\s\S]+?)\s*```")
 
     def __init__(self, model: str | None = None, *, temperature: float | None = None) -> None:
+        """Initialize the LLM wrapper with model and temperature configuration.
+
+        Args:
+            model: Model identifier (e.g., 'gpt-4', 'claude-3-opus'). Falls back to LLM_MODEL env var if not provided.
+            temperature: Sampling temperature for response generation. Falls back to LLM_TEMPERATURE env var if not provided.
+
+        Raises:
+            ValueError: If neither `model` parameter nor LLM_MODEL environment variable is set.
+        """
         resolved_model = model or os.getenv("LLM_MODEL")
         if not resolved_model:
             logger.error( "llm_model_missing", msg="No LLM model configured in .env")
@@ -68,6 +77,11 @@ class BaseLLM(ABC):
 
     @staticmethod
     def _load_env_temperature() -> float | None:
+        """Load temperature from LLM_TEMPERATURE environment variable.
+
+        Returns:
+            Temperature as float if valid, None if missing or invalid. Logs warning for invalid values.
+        """
         env_temp = os.getenv("LLM_TEMPERATURE")
         if env_temp is None:
             return None
@@ -85,10 +99,34 @@ class BaseLLM(ABC):
         total_tokens: Optional[int] = None
 
     @abstractmethod
-    def completion(self, messages: List[Dict[str, str]], **kwargs) -> "BaseLLM.LLMResponse": ...
+    def completion(self, messages: List[Dict[str, str]], **kwargs) -> "BaseLLM.LLMResponse":
+        """Execute a completion request against the underlying LLM.
+
+        Args:
+            messages: List of message dictionaries in OpenAI format. Each dict contains 'role' (e.g., 'user', 'assistant', 'system') and 'content' (the message text).
+            **kwargs: Provider-specific options (e.g., response_format, max_tokens, top_p). Implementations should pass these through to the underlying LLM API.
+
+        Returns:
+            LLMResponse containing the assistant's reply text and token usage metrics.
+
+        Note:
+            Subclasses MUST implement this method to integrate with their specific LLM provider.
+        """
+        ...
 
     def prompt(self, content: str, **kwargs) -> str:
-        """Convenience method for single user prompts."""
+        """Convenience wrapper for single-turn user prompts.
+
+        Wraps the content in a user message and calls completion(). Use this for simple,
+        stateless interactions where you don't need to manage conversation history.
+
+        Args:
+            content: The user's prompt text.
+            **kwargs: Additional arguments passed through to completion() (e.g., temperature, response_format).
+
+        Returns:
+            The assistant's response text.
+        """
         resp = self.completion([{"role": "user", "content": content}], **kwargs)
         return resp.text
 
