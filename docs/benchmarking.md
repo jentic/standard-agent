@@ -19,7 +19,7 @@ Run all benchmarks with default settings:
 python scripts/benchmark.py
 ```
 
-This will benchmark both ReACT and ReWOO agents using deterministic test doubles for consistent results.
+This will benchmark both ReACT and ReWOO agents using real components (actual LLMs and tools). To use deterministic test doubles for consistent results without API calls, add the `--deterministic` flag.
 
 ## Command Line Options
 
@@ -87,11 +87,11 @@ Measures memory subsystem performance:
 
 ### Deterministic Mode (Recommended for Development)
 
-Uses test doubles that simulate real components with predictable behavior:
+Enabled with the `--deterministic` flag. Uses real ReACT and ReWOO reasoners with mocked LLM and tools that return canned but realistic responses:
 
-- **DeterministicLLM**: Mock language model with configurable response times
+- **DeterministicLLM**: Mock language model with configurable response times and realistic response patterns
 - **DeterministicTools**: Mock tools with simulated execution delays
-- **DeterministicReasoner**: Mock reasoner with controllable iteration counts
+- **Real Reasoners**: Actual ReACT/ReWOO logic with Think-Act-Observe and Plan-Execute-Reflect cycles
 
 **Benefits**:
 - Consistent, reproducible results
@@ -105,9 +105,9 @@ Uses test doubles that simulate real components with predictable behavior:
 - Regression testing
 - Comparing performance changes
 
-### Real Mode
+### Real Mode (Default)
 
-Uses actual components with real LLMs and tools:
+This is the default mode when no `--deterministic` flag is specified. Uses actual components with real LLMs and tools:
 
 - **Real LLM**: Actual API calls to language models
 - **Real Tools**: Actual external tool executions
