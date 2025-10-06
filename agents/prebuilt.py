@@ -4,6 +4,7 @@ from agents.memory.dict_memory import DictMemory
 from agents.reasoner.rewoo import ReWOOReasoner
 from agents.reasoner.react import ReACTReasoner
 from agents.llm.litellm import LiteLLM
+from agents.llm.bedrock import BedrockLLM
 from agents.goal_preprocessor.conversational import ConversationalGoalPreprocessor
 
 
@@ -19,16 +20,23 @@ class ReWOOAgent(StandardAgent):
     - ConversationalGoalPreprocessor to enable conversational follow-ups.
     """
 
-    def __init__(self, *, model: str | None = None, max_retries: int = 2):
+    def __init__(self, *, model: str | None = None, max_retries: int = 2, framework: str = "litellm"):
         """
         Initialize the ReWOO agent with pre-configured components.
 
         Args:
             model: The language model to use.
             max_retries: Maximum number of retries for the ReWOO reflector
+            framework: The SDK framework to use for the LLM, can be "litellm" or "bedrock"
         """
         # Initialize the core services
-        llm = LiteLLM(model=model)
+        if framework == "litellm":
+            llm = LiteLLM(model=model)
+        elif framework == "bedrock":
+            llm = BedrockLLM(model=model)
+        else:
+            raise ValueError(f"Unknown framework: {framework}")
+
         tools = JenticClient()
         memory = DictMemory()
         reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_retries=max_retries)
@@ -57,7 +65,7 @@ class ReACTAgent(StandardAgent):
     - ConversationalGoalPreprocessor to enable conversational follow-ups.
     """
 
-    def __init__(self, *, model: str | None = None, max_turns: int = 20, top_k: int = 25):
+    def __init__(self, *, model: str | None = None, max_turns: int = 20, top_k: int = 25, framework: str = "litellm"):
         """
         Initialize the ReACT agent with pre-configured components.
 
@@ -67,7 +75,13 @@ class ReACTAgent(StandardAgent):
             top_k: Number of tools to consider during selection
         """
         # Initialize the core services
-        llm = LiteLLM(model=model)
+        if framework == "litellm":
+            llm = LiteLLM(model=model)
+        elif framework == "bedrock":
+            llm = BedrockLLM(model=model)
+        else:
+            raise ValueError(f"Unknown framework: {framework}")
+
         tools = JenticClient()
         memory = DictMemory()
         reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=max_turns, top_k=top_k)

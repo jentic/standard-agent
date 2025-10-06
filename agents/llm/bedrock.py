@@ -10,6 +10,40 @@ from utils.observability import observe
 logger = get_logger(__name__)
 
 
+def _model_supports_json_format(model_id: str) -> bool:
+    """
+    Check if the Bedrock model supports native JSON format via additionalModelRequestFields.
+
+    Args:
+        model_id: The Bedrock model ID (e.g., 'eu.mistral.pixtral-large-2502-v1:0')
+
+    Returns:
+        True if the model supports response_format in additionalModelRequestFields, False otherwise
+    """
+    is_supported = False
+    if "mistral.pixtral" in model_id:
+        is_supported = True
+    return is_supported
+
+def _model_supports_system_prompt(model_id: str) -> bool:
+    """
+    Check if the Bedrock model supports system prompts for JSON mode enforcement.
+
+    Args:
+        model_id: The Bedrock model ID (e.g., 'us.anthropic.claude-3-5-haiku-20241022-v1:0')
+
+    Returns:
+        True if the model supports system prompts, False otherwise
+    """
+    is_supported = False
+    if "anthropic.claude" in model_id:
+        is_supported = True
+    elif "amazon.nova" in model_id:
+        is_supported = True
+    elif "meta.llama3" in model_id:
+        is_supported = True
+    return is_supported
+
 class BedrockLLM(BaseLLM):
     """Wrapper around AWS Bedrock Converse API.
     
@@ -83,17 +117,18 @@ class BedrockLLM(BaseLLM):
         # Handle additional parameters like response_format for JSON mode
         additional_config = {}
         if "response_format" in kwargs and kwargs["response_format"].get("type") == "json_object":
-            # For Bedrock, we need to add this to additionalModelRequestFields or system prompt
-            # Different models handle JSON mode differently
-            # For Claude models, we can use the system parameter
-            additional_config["system"] = [
-                {
-                    "text": "You must respond with valid JSON only. Do not include any text outside the JSON object."
-                }
-            ]
-
-        if additional_config.get("system"):
-            converse_params["system"] = additional_config["system"]
+            if _model_supports_json_format(self.model):
+                additional_config["response_format"] = {"type": "json_object"}
+                converse_params["additionalModelRequestFields"] = additional_config
+            elif _model_supports_system_prompt(self.model):
+                additional_config["system"] = [
+                    {
+                        "text": "You must respond with valid JSON only. Do not include any text outside the JSON object."
+                    }
+                ]
+                converse_params["system"] = additional_config["system"]
+            else:
+                logger.warning("json_format_not_supported", model=self.model)
 
         try:
             # Call Bedrock Converse API
@@ -190,14 +225,7 @@ class BedrockLLM(BaseLLM):
             role = msg.get("role", "user")
             content = msg.get("content", "")
             
-            # Map OpenAI roles to Bedrock roles
-            # Bedrock Converse API supports: user, assistant
-            # System messages should be handled separately via the system parameter
-            if role == "system":
-                # Skip system messages here - they should be handled via system parameter
-                logger.warning("system_message_in_messages", msg="System messages should be passed via system parameter, not in messages list")
-                continue
-            elif role == "assistant":
+            if role == "assistant":
                 bedrock_role = "assistant"
             else:  # user or any other role
                 bedrock_role = "user"

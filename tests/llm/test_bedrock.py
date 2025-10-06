@@ -474,7 +474,7 @@ class TestBedrockLLM:
         }
         mock_client_instance.converse.return_value = mock_response
         
-        svc = BedrockLLM(model="test-model")
+        svc = BedrockLLM(model="anthropic.claude")
         messages = [{"role": "user", "content": "Give me JSON"}]
         result = svc.completion(messages, response_format={"type": "json_object"})
         
