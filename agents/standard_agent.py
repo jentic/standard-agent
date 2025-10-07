@@ -63,7 +63,7 @@ class StandardAgent:
             conversation_history_window: The number of past interactions to keep in memory.
 
             Session Context
-            timezone: Session timezone as IANA string like "America/New_York".
+            timezone: Session timezone as IANA string like "America/New_York" https://www.iana.org/time-zones.
 
         Note:
             Session context (timezone) is stored in memory["context"] and accessible
@@ -81,7 +81,7 @@ class StandardAgent:
         
         # Initialize session context in memory
         self.memory["context"] = {}
-        self.memory["context"]["timezone"] = StandardAgent._resolve_timezone(timezone)
+        self.memory["context"]["timezone"] = self._resolve_timezone(timezone)
 
         self._state: AgentState = AgentState.READY
 
@@ -138,12 +138,17 @@ class StandardAgent:
     @staticmethod
     def _resolve_timezone(tz_input: str | None) -> datetime.tzinfo:
         """Resolve timezone from constructor string, then AGENT_TZ, else OS local timezone."""
-
-        for tz_name in (tz_input, os.getenv("AGENT_TZ")):
+        for source, tz_name in (("constructor", tz_input), ("env", os.getenv("AGENT_TZ"))):
             if not tz_name:
                 continue
             try:
-                return ZoneInfo(tz_name)
+                tz = ZoneInfo(tz_name)
+                logger.info("timezone_resolved", source=source, tz=tz_name)
+                return tz
             except Exception:
+                logger.warning("invalid_timezone_string", source=source, tz_input=tz_name)
                 continue
-        return datetime.now().astimezone().tzinfo
+        tz = datetime.now().astimezone().tzinfo
+        resolved_name = getattr(tz, "key", None) or datetime.now(tz=tz).tzname()
+        logger.info("timezone_resolved", source="os", tz=resolved_name)
+        return tz

@@ -33,7 +33,7 @@ class ReWOOAgent(StandardAgent):
         memory = DictMemory()
         reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_retries=max_retries)
 
-        goal_processor = ConversationalGoalPreprocessor(llm=llm)
+        goal_processor = ConversationalGoalPreprocessor(llm=llm, memory=memory)
 
         # Call parent constructor with assembled components
         super().__init__(
@@ -72,7 +72,7 @@ class ReACTAgent(StandardAgent):
         memory = DictMemory()
         reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=max_turns, top_k=top_k)
 
-        goal_processor = ConversationalGoalPreprocessor(llm=llm)
+        goal_processor = ConversationalGoalPreprocessor(llm=llm, memory=memory)
 
         # Call parent constructor with assembled components
         super().__init__(

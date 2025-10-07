@@ -30,22 +30,16 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
     def __init__(self, *, llm, memory: MutableMapping | None = None):  # type: ignore[override]
         super().__init__(llm=llm, memory=memory)
 
-    def _now(self) -> datetime:
-        if self.memory:
-            tz = self.memory.get("context", {}).get("timezone")
-            if tz: return datetime.now(tz=tz)
-        return datetime.now().astimezone()
-
     @observe()
     def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
-        ref_now = self._now()
+        current_time, time_zone = self._current_time_and_timezone()
         history_str = "\n".join(f"Goal: {item['goal']}\nResult: {item['result']}" for item in history)
         prompt = _PROMPTS["clarify_goal"].format(
             history_str=history_str,
             goal=goal,
-            now_iso=ref_now.isoformat(),
-            timezone_name= getattr(ref_now.tzinfo, "key", None) or (ref_now.tzname() or ""),
-            weekday=ref_now.strftime("%A"),
+            now_iso=current_time.isoformat(),
+            timezone_name=time_zone,
+            weekday=current_time.strftime("%A"),
         )
         response = self.llm.prompt_to_json(prompt)
 
@@ -59,3 +53,11 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
             return goal, response["clarification_question"]
 
         return goal, None
+
+    def _current_time_and_timezone(self) -> tuple[datetime, str]:
+        if self.memory:
+            tz = self.memory.get("context", {}).get("timezone")
+            print('tz:', tz)
+            if tz:
+                return datetime.now(tz=tz), tz
+        return datetime.now().astimezone(), datetime.now().tzname()
