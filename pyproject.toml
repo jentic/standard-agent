@@ -1,6 +1,6 @@
 [project]
 name = "standard-agent"
-version = "0.1.8"
+version = "0.1.9"
 description = "A simple, modular library for building AI agents—with a composable core and plug‑in components."
 requires-python = ">=3.11"
 readme = "README.md"
@@ -30,6 +30,10 @@ observability = [
     "opentelemetry-sdk>=1.36.0",
     "opentelemetry-exporter-otlp>=1.36.0",
     "opentelemetry-instrumentation>=0.57b0",
+]
+
+bedrock = [
+    "boto3>=1.36.0",
 ]
 
 [build-system]
