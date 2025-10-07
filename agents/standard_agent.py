@@ -7,18 +7,22 @@ agent owns the services; the reasoner simply uses what the agent provides.
 """
 from __future__ import annotations
 
+from  uuid import uuid4
+import time
+import os
+from  enum import Enum
+from  zoneinfo import ZoneInfo
+from  datetime import datetime
 from  collections.abc import MutableMapping
+
 from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
 from  agents.tools.base import JustInTimeToolingBase
 from  agents.goal_preprocessor.base import BaseGoalPreprocessor
 from  agents.prompts import load_prompts
 
-from  uuid import uuid4
-import time
-from  enum import Enum
-from utils.logger import get_logger
-from utils.observability import observe
+from  utils.logger import get_logger
+from  utils.observability import observe
 
 logger = get_logger(__name__)
 
@@ -42,7 +46,10 @@ class StandardAgent:
 
         # Optionals
         goal_preprocessor: BaseGoalPreprocessor = None,
-        conversation_history_window: int = 5
+        conversation_history_window: int = 5,
+
+        # Runtime Context
+        timezone: str | None = None,
     ):
         """Initializes the agent.
 
@@ -54,6 +61,14 @@ class StandardAgent:
 
             goal_preprocessor: An OPTIONAL component to preprocess the user's goal.
             conversation_history_window: The number of past interactions to keep in memory.
+
+            Session Context
+            timezone: Session timezone as IANA string like "America/New_York".
+
+        Note:
+            Session context (timezone) is stored in memory["context"] and accessible
+            to all components. This enables multi-tenant scenarios where different users have
+            different timezones.
         """
         self.llm = llm
         self.tools = tools
@@ -63,6 +78,10 @@ class StandardAgent:
         self.goal_preprocessor = goal_preprocessor
         self.conversation_history_window = conversation_history_window
         self.memory.setdefault("conversation_history", [])
+        
+        # Initialize session context in memory
+        self.memory["context"] = {}
+        self.memory["context"]["timezone"] = StandardAgent._resolve_timezone(timezone)
 
         self._state: AgentState = AgentState.READY
 
@@ -115,3 +134,16 @@ class StandardAgent:
             return
         self.memory["conversation_history"].append(entry)
         self.memory["conversation_history"][:] = self.memory["conversation_history"][-self.conversation_history_window:]
+
+    @staticmethod
+    def _resolve_timezone(tz_input: str | None) -> datetime.tzinfo:
+        """Resolve timezone from constructor string, then AGENT_TZ, else OS local timezone."""
+
+        for tz_name in (tz_input, os.getenv("AGENT_TZ")):
+            if not tz_name:
+                continue
+            try:
+                return ZoneInfo(tz_name)
+            except Exception:
+                continue
+        return datetime.now().astimezone().tzinfo

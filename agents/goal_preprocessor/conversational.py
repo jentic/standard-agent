@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Sequence, Dict, Any, Tuple, Callable, Optional
-import os
+from typing import Sequence, Dict, Any, Tuple
+from collections.abc import MutableMapping
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from agents.goal_preprocessor.base import BaseGoalPreprocessor
 from agents.prompts import load_prompts
 from utils.observability import observe
@@ -28,30 +27,24 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
         - clarification_question: Question for user if goal is unclear, None otherwise
     """
 
-    def __init__(self, *, llm, now_fn: Optional[Callable[[], datetime]] = None):  # type: ignore[override]
-        super().__init__(llm=llm)
-        self._now_fn: Optional[Callable[[], datetime]] = now_fn
+    def __init__(self, *, llm, memory: MutableMapping | None = None):  # type: ignore[override]
+        super().__init__(llm=llm, memory=memory)
 
     def _now(self) -> datetime:
-        if self._now_fn:
-            return self._now_fn()
-        try:
-            tz_name = os.getenv("AGENT_TZ") or os.getenv("TZ")
-            tz = ZoneInfo(tz_name) if tz_name else datetime.now().astimezone().tzinfo  # type: ignore[assignment]
-        except Exception:
-            tz = datetime.now().astimezone().tzinfo  # type: ignore[assignment]
-        return datetime.now(tz=tz) if tz else datetime.now().astimezone()
+        if self.memory:
+            tz = self.memory.get("context", {}).get("timezone")
+            if tz: return datetime.now(tz=tz)
+        return datetime.now().astimezone()
 
     @observe()
     def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
         ref_now = self._now()
-        tz_name = getattr(ref_now.tzinfo, "key", None) or (ref_now.tzname() or "")
         history_str = "\n".join(f"Goal: {item['goal']}\nResult: {item['result']}" for item in history)
         prompt = _PROMPTS["clarify_goal"].format(
             history_str=history_str,
             goal=goal,
             now_iso=ref_now.isoformat(),
-            timezone_name=tz_name,
+            timezone_name= getattr(ref_now.tzinfo, "key", None) or (ref_now.tzname() or ""),
             weekday=ref_now.strftime("%A"),
         )
         response = self.llm.prompt_to_json(prompt)
