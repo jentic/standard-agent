@@ -63,7 +63,8 @@ class StandardAgent:
             conversation_history_window: The number of past interactions to keep in memory.
 
             Session Context
-            timezone: Session timezone as IANA string like "America/New_York" https://www.iana.org/time-zones.
+            timezone: Session timezone as IANA string like "America/New_York", "Europe/London"
+            https://www.iana.org/time-zones, https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 
         Note:
             Session context (timezone) is stored in memory["context"] and accessible
