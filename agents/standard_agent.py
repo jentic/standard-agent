@@ -7,18 +7,22 @@ agent owns the services; the reasoner simply uses what the agent provides.
 """
 from __future__ import annotations
 
+from  uuid import uuid4
+import time
+import os
+from  enum import Enum
+from  zoneinfo import ZoneInfo
+from  datetime import datetime
 from  collections.abc import MutableMapping
+
 from  agents.reasoner.base import BaseReasoner, ReasoningResult
 from  agents.llm.base_llm import BaseLLM
 from  agents.tools.base import JustInTimeToolingBase
 from  agents.goal_preprocessor.base import BaseGoalPreprocessor
 from  agents.prompts import load_prompts
 
-from  uuid import uuid4
-import time
-from  enum import Enum
-from utils.logger import get_logger
-from utils.observability import observe
+from  utils.logger import get_logger
+from  utils.observability import observe
 
 logger = get_logger(__name__)
 
@@ -42,7 +46,10 @@ class StandardAgent:
 
         # Optionals
         goal_preprocessor: BaseGoalPreprocessor = None,
-        conversation_history_window: int = 5
+        conversation_history_window: int = 5,
+
+        # Runtime Context
+        timezone: str | None = None,
     ):
         """Initializes the agent.
 
@@ -54,6 +61,10 @@ class StandardAgent:
 
             goal_preprocessor: An OPTIONAL component to preprocess the user's goal.
             conversation_history_window: The number of past interactions to keep in memory.
+
+            Session Context
+            timezone: Session timezone as IANA string like "America/New_York", "Europe/London" [https://www.iana.org/time-zones, https://en.wikipedia.org/wiki/List_of_tz_database_time_zones]
+
         """
         self.llm = llm
         self.tools = tools
@@ -63,6 +74,9 @@ class StandardAgent:
         self.goal_preprocessor = goal_preprocessor
         self.conversation_history_window = conversation_history_window
         self.memory.setdefault("conversation_history", [])
+        
+        self.memory["context"] = {}
+        self.memory["context"]["timezone"] = self._resolve_timezone(timezone)
 
         self._state: AgentState = AgentState.READY
 
@@ -115,3 +129,21 @@ class StandardAgent:
             return
         self.memory["conversation_history"].append(entry)
         self.memory["conversation_history"][:] = self.memory["conversation_history"][-self.conversation_history_window:]
+
+    @staticmethod
+    def _resolve_timezone(tz_input: str | None) -> str | None:
+        """Return a validated IANA timezone string from constructor/env, or None if unavailable."""
+
+        for source, tz_name in (("constructor", tz_input), ("env", os.getenv("AGENT_TZ"))):
+            if not tz_name:
+                continue
+            try:
+                ZoneInfo(tz_name)  # validate IANA
+                logger.info("timezone_resolved", source=source, kind="iana", tz=tz_name)
+                return tz_name
+            except Exception:
+                logger.warning("invalid_timezone_string", source=source, tz_input=tz_name)
+                continue
+
+        logger.info("timezone_unset: env AGENT_TZ not set and no TZ passed in constructor ")
+        return None
