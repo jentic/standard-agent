@@ -233,3 +233,89 @@ def test_agent_conversation_history_disabled_window():
 
     assert memory.get("conversation_history") == []
 
+
+def test_agent_timezone_from_constructor_stores_iana_string():
+    """Test StandardAgent accepts IANA timezone from constructor and stores it as string."""
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    
+    agent = StandardAgent(
+        llm=llm, 
+        tools=tools, 
+        memory=memory, 
+        reasoner=DummyReasoner(),
+        timezone="America/New_York"
+    )
+    
+    # Timezone should be stored as IANA string in memory context
+    assert "context" in agent.memory
+    assert "timezone" in agent.memory["context"]
+    tz = agent.memory["context"]["timezone"]
+    assert isinstance(tz, str)
+    assert tz == "America/New_York"
+
+
+def test_agent_timezone_from_env_stores_iana_string(monkeypatch):
+    """Test StandardAgent falls back to AGENT_TZ environment variable and stores as string."""
+    monkeypatch.setenv("AGENT_TZ", "Europe/London")
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    
+    agent = StandardAgent(
+        llm=llm,
+        tools=tools,
+        memory=memory,
+        reasoner=DummyReasoner(),
+        timezone=None  # No explicit timezone
+    )
+    
+    # Should use AGENT_TZ env var
+    tz = agent.memory["context"]["timezone"]
+    assert isinstance(tz, str)
+    assert tz == "Europe/London"
+
+
+def test_agent_timezone_none_when_no_valid_iana(caplog):
+    """Test StandardAgent stores None when no valid IANA timezone provided."""
+    import logging
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    
+    with caplog.at_level(logging.INFO):
+        agent = StandardAgent(
+            llm=llm,
+            tools=tools,
+            memory=memory,
+            reasoner=DummyReasoner(),
+            timezone=None
+        )
+    
+    # Should store None when no IANA available
+    assert "context" in agent.memory
+    assert "timezone" in agent.memory["context"]
+    assert agent.memory["context"]["timezone"] is None
+
+
+def test_agent_invalid_timezone_stores_none(caplog):
+    """Test StandardAgent stores None for invalid timezone string."""
+    import logging
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    
+    # Invalid timezone should result in None
+    with caplog.at_level(logging.WARNING):
+        agent = StandardAgent(
+            llm=llm,
+            tools=tools,
+            memory=memory,
+            reasoner=DummyReasoner(),
+            timezone="Invalid/Timezone"
+        )
+    
+    # Should store None (not an invalid string or OS fallback)
+    tz = agent.memory["context"]["timezone"]
+    assert tz is None
