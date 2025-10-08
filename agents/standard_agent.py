@@ -75,7 +75,6 @@ class StandardAgent:
         self.conversation_history_window = conversation_history_window
         self.memory.setdefault("conversation_history", [])
         
-        # Initialize session context in memory (store IANA timezone string or None)
         self.memory["context"] = {}
         self.memory["context"]["timezone"] = self._resolve_timezone(timezone)
 
