@@ -646,7 +646,7 @@ def test_rewoo_generate_params_combined_unknown_and_missing_params_raises_error(
         def __init__(self, tool_id: str, name: str):
             # Only required params in schema; param4 will be filtered out
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}, "param3": {}})
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1", "param2", "param3"]
     
     llm = DummyLLM(json_queue=[{"param1": "<UNKNOWN>", "param4": "value4"}])  # param1 is unknown, param2&3 missing
