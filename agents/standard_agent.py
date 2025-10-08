@@ -61,7 +61,7 @@ class StandardAgent:
         self.reasoner = reasoner
 
         self.goal_preprocessor = goal_preprocessor
-        self.conversation_history_window = conversation_history_window
+        self.conversation_history_window = max(0, conversation_history_window) if conversation_history_window is not None else 5
         self.memory.setdefault("conversation_history", [])
 
         self._state: AgentState = AgentState.READY
@@ -113,5 +113,9 @@ class StandardAgent:
     def _record_interaction(self, entry: dict) -> None:
         if self.conversation_history_window <= 0:
             return
-        self.memory["conversation_history"].append(entry)
-        self.memory["conversation_history"][:] = self.memory["conversation_history"][-self.conversation_history_window:]
+
+        history = self.memory["conversation_history"]
+        history.append(entry)
+
+        if len(history) > self.conversation_history_window:
+            history[:] = history[-self.conversation_history_window:]
