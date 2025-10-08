@@ -30,7 +30,7 @@ clarify_goal: |
        then rewrite the goal into a complete, standalone instruction.
      - Replace all pronouns, relative phrases, and context-dependent words with explicit referents.
      - **Time Normalization Precedence (MANDATORY):**
-       If the goal contains **any relative time expression** (“now”, “today”, “tomorrow”, “tonight”, “next <weekday>”, “in <n> minutes/hours/days/weeks”, “this <weekday>”), you **must** rewrite the goal to use **absolute ISO 8601** date/time computed from the provided `now_iso` in `{timezone_name}`. This rule applies even if the goal is otherwise actionable.
+       If the goal contains **any relative time expression** (“now”, “today”, “tomorrow”, “tonight”, “next <weekday>”, “in <n> minutes/hours/days/weeks”, “this <weekday>”), you **must** rewrite the goal to use the provided `now_iso` in `{timezone_name}`. This rule applies even if the goal is otherwise actionable.
 
   4. **Ask if Unresolvable**:
      - If the goal cannot be resolved with available context, produce a single, unambiguous clarification question.
@@ -41,7 +41,7 @@ clarify_goal: |
      - Do not ask for clarification if the task can proceed with reasonable assumptions.
 
   6. **Time Normalization**:
-     - Convert relative time expressions to absolute ISO 8601 dates.
+     - Convert relative time expressions to absolute ISO dates.
      - Use the provided “Current Time” section to calculate:
        - “today” → same date as `now_iso`
        - “tomorrow” → +1 day from `now_iso`
