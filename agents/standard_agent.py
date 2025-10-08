@@ -63,13 +63,8 @@ class StandardAgent:
             conversation_history_window: The number of past interactions to keep in memory.
 
             Session Context
-            timezone: Session timezone as IANA string like "America/New_York", "Europe/London"
-            https://www.iana.org/time-zones, https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+            timezone: Session timezone as IANA string like "America/New_York", "Europe/London" [https://www.iana.org/time-zones, https://en.wikipedia.org/wiki/List_of_tz_database_time_zones]
 
-        Note:
-            Session context (timezone) is stored in memory["context"] and accessible
-            to all components. This enables multi-tenant scenarios where different users have
-            different timezones.
         """
         self.llm = llm
         self.tools = tools
@@ -80,7 +75,7 @@ class StandardAgent:
         self.conversation_history_window = conversation_history_window
         self.memory.setdefault("conversation_history", [])
         
-        # Initialize session context in memory
+        # Initialize session context in memory (store IANA timezone string or None)
         self.memory["context"] = {}
         self.memory["context"]["timezone"] = self._resolve_timezone(timezone)
 
@@ -137,19 +132,19 @@ class StandardAgent:
         self.memory["conversation_history"][:] = self.memory["conversation_history"][-self.conversation_history_window:]
 
     @staticmethod
-    def _resolve_timezone(tz_input: str | None) -> datetime.tzinfo:
-        """Resolve timezone from constructor string, then AGENT_TZ, else OS local timezone."""
+    def _resolve_timezone(tz_input: str | None) -> str | None:
+        """Return a validated IANA timezone string from constructor/env, or None if unavailable."""
+
         for source, tz_name in (("constructor", tz_input), ("env", os.getenv("AGENT_TZ"))):
             if not tz_name:
                 continue
             try:
-                tz = ZoneInfo(tz_name)
-                logger.info("timezone_resolved", source=source, tz=tz_name)
-                return tz
+                ZoneInfo(tz_name)  # validate IANA
+                logger.info("timezone_resolved", source=source, kind="iana", tz=tz_name)
+                return tz_name
             except Exception:
                 logger.warning("invalid_timezone_string", source=source, tz_input=tz_name)
                 continue
-        tz = datetime.now().astimezone().tzinfo
-        resolved_name = getattr(tz, "key", None) or datetime.now(tz=tz).tzname()
-        logger.info("timezone_resolved", source="os", tz=resolved_name)
-        return tz
+
+        logger.info("timezone_unset: env AGENT_TZ not set and no TZ passed in constructor ")
+        return None

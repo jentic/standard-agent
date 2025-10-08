@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Sequence, Dict, Any, Tuple
 from collections.abc import MutableMapping
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from agents.goal_preprocessor.base import BaseGoalPreprocessor
 from agents.prompts import load_prompts
 from utils.observability import observe
@@ -56,8 +58,19 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
 
     def _current_time_and_timezone(self) -> tuple[datetime, str]:
         if self.memory:
-            tz = self.memory.get("context", {}).get("timezone")
-            print('tz:', tz)
-            if tz:
-                return datetime.now(tz=tz), tz
-        return datetime.now().astimezone(), datetime.now().tzname()
+            tz_iana = self.memory.get("context", {}).get("timezone")
+            if tz_iana:
+                try:
+                    tzinfo = ZoneInfo(tz_iana)
+                    now = datetime.now(tz=tzinfo)
+                    z = now.strftime('%z')
+                    label = f"UTC{z[:3]}:{z[3:]}" if z else "UTC+00:00"
+                    return now, label
+                except Exception:
+                    logger.warning("invalid_timezone_string_in_memory", tz_input=tz_iana)
+
+        # Fallback: use system timezone
+        now = datetime.now().astimezone()
+        z = now.strftime('%z')
+        label = f"UTC{z[:3]}:{z[3:]}" if z else "UTC+00:00"
+        return now, label
