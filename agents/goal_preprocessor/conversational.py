@@ -63,14 +63,15 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
                 try:
                     tzinfo = ZoneInfo(tz_iana)
                     now = datetime.now(tz=tzinfo)
-                    z = now.strftime('%z')
-                    label = f"UTC{z[:3]}:{z[3:]}" if z else "UTC+00:00"
-                    return now, label
+                    return now, self._utc_offset_label(now)
                 except Exception:
                     logger.warning("invalid_timezone_string_in_memory", tz_input=tz_iana)
 
         # Fallback: use system timezone
         now = datetime.now().astimezone()
-        z = now.strftime('%z')
-        label = f"UTC{z[:3]}:{z[3:]}" if z else "UTC+00:00"
-        return now, label
+        return now, self._utc_offset_label(now)
+
+    @staticmethod
+    def _utc_offset_label(dt: datetime) -> str:
+        z = dt.strftime('%z')  # e.g. '+0530'
+        return f'UTC{z[:3]}:{z[3:]}' if z else 'UTC+00:00'
