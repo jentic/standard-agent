@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from jentic import Jentic
 from jentic.lib.models import SearchRequest, LoadRequest, ExecutionRequest
 from agents.tools.base import JustInTimeToolingBase, ToolBase
-from agents.tools.exceptions import ToolError, ToolNotFoundError, ToolExecutionError, ToolCredentialsMissingError
+from agents.tools.exceptions import ToolError, ToolNotFoundError, ToolExecutionError, ToolCredentialsMissingError, ToolSearchException
 
 from utils.logger import get_logger
 logger = get_logger(__name__)
@@ -92,21 +92,18 @@ class JenticClient(JustInTimeToolingBase):
 
         Args:
             query: Search query string (cannot be empty)
-            top_k: Maximum number of results to return (1-100)
+            top_k: Maximum number of results to return
 
         Returns:
-            List of tools matching the query, or empty list if search fails
+            List of tools matching the query
 
         Raises:
-            ValueError: If query is empty or top_k is invalid
+            ValueError: If query is empty
+            ToolSearchException: If search operation fails
         """
         if not query or not query.strip():
             logger.warning("tool_search_invalid_query", query=query)
             raise ValueError("Search query cannot be empty")
-
-        if top_k < 1 or top_k > 100:
-            logger.warning("tool_search_invalid_top_k", top_k=top_k)
-            raise ValueError(f"top_k must be between 1 and 100, got {top_k}")
 
         logger.info("tool_search", query=query, top_k=top_k, filter_by_credentials=self._filter_by_credentials)
 
@@ -121,29 +118,22 @@ class JenticClient(JustInTimeToolingBase):
                 )
             )
 
-            if response is None:
-                logger.error("tool_search_null_response", query=query)
+            # Return empty list if no results (valid outcome, not an error)
+            if not response or not response.results:
+                logger.info("tool_search_no_results", query=query, top_k=top_k)
                 return []
 
-            if response.results:
-                results = [JenticTool(result.model_dump(exclude_none=False)) for result in response.results]
-                logger.info("tool_search_success", query=query, result_count=len(results))
-                return results
-            else:
-                logger.warning("tool_search_no_results", query=query, top_k=top_k)
-                return []
+            results = [JenticTool(result.model_dump(exclude_none=False)) for result in response.results]
+            logger.info("tool_search_success", query=query, result_count=len(results))
+            return results
 
-        except asyncio.TimeoutError:
-            logger.error("tool_search_timeout", query=query, top_k=top_k)
-            return []
-
-        except AttributeError as e:
-            logger.error("tool_search_malformed_response", query=query, error=str(e))
-            return []
-
+        except ToolError:
+            # Re-raise tool errors as-is
+            raise
         except Exception as exc:
+            # Normalize any unexpected error as ToolSearchException so the reasoner can handle it.
             logger.error("tool_search_failed", query=query, error=str(exc), error_type=type(exc).__name__)
-            return []
+            raise ToolSearchException(str(exc), query) from exc
 
 
     def load(self, tool: ToolBase) -> ToolBase:

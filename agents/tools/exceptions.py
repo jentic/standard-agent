@@ -26,3 +26,6 @@ class ToolExecutionError(ToolError):
 
 class ToolCredentialsMissingError(ToolExecutionError):
     """A tool fails to execute because of missing credentials"""
+
+class ToolSearchException(ToolError):
+    """A tool search operation fails for any reason."""
