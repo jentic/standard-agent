@@ -35,7 +35,7 @@ def test_conversational_returns_clarification_when_present():
 def test_conversational_falls_back_to_original_when_empty_json():
     llm = DummyLLM(json_queue=[{}])
     tz = ZoneInfo("UTC")
-    pre = ConversationalGoalPreprocessor(llm=llm, now_fn=lambda: datetime(2025, 1, 15, 12, 0, tzinfo=tz))
+    pre = ConversationalGoalPreprocessor(llm=llm)
 
     revised, question = pre.process("original", _history())
     assert revised == "original"
