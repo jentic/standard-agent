@@ -32,6 +32,10 @@ class ReACTReasoner(BaseReasoner):
         self.max_turns = max_turns
         self.top_k = top_k
 
+        logger.info("react_reasoner_initialized",
+                    max_turns=self.max_turns,
+                    top_k=self.top_k)
+
     @observe
     def run(self, goal: str) -> ReasoningResult:
         logger.info("ReACT reasoner started", goal=goal, max_turns=self.max_turns)

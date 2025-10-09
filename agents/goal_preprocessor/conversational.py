@@ -34,6 +34,9 @@ class ConversationalGoalPreprocessor(BaseGoalPreprocessor):
 
     @observe()
     def process(self, goal: str, history: Sequence[Dict[str, Any]]) -> Tuple[str, str | None]:
+        logger.debug("goal_preprocessor_entry",
+                     goal=goal,
+                     history_length=len(history))
         current_time, time_zone = self._current_time_and_timezone()
         history_str = "\n".join(f"Goal: {item['goal']}\nResult: {item['result']}" for item in history)
         prompt = _PROMPTS["clarify_goal"].format(

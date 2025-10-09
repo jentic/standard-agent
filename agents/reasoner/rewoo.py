@@ -75,6 +75,11 @@ class ReWOOReasoner(BaseReasoner):
         self.max_retries = max_retries
         self.top_k = top_k
 
+        logger.info("rewoo_reasoner_initialized",
+                    max_iterations=self.max_iterations,
+                    max_retries=self.max_retries,
+                    top_k=self.top_k)
+
     @observe
     def run(self, goal: str) -> ReasoningResult:
         state = ReasonerState(goal=goal)

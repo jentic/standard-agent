@@ -123,7 +123,13 @@ class JenticClient(JustInTimeToolingBase):
         logger.info("tool_search", query=query, top_k=top_k, filter_by_credentials=self._filter_by_credentials)
 
         response = asyncio.run(self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=self._filter_by_credentials,)))
-        return [JenticTool(result.model_dump(exclude_none=False)) for result in response.results] if response.results else []
+        results = [JenticTool(result.model_dump(exclude_none=False)) for result in response.results] if response.results else []
+
+        logger.info("tool_search_complete",
+                    query=query,
+                    result_count=len(results),
+                    found_tools=len(results) > 0)
+        return results
 
     @observe
     def load(self, tool: ToolBase) -> ToolBase:
@@ -166,6 +172,10 @@ class JenticClient(JustInTimeToolingBase):
                     raise ToolCredentialsMissingError(result.error, tool)
 
                 raise ToolExecutionError(result.error, tool)
+
+            logger.info("tool_execution_success",
+                        tool_id=tool.id,
+                        output_length=len(str(result.output)) if result.output else 0)
             return result.output
 
         except ToolError:

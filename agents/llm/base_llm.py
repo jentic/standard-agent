@@ -127,7 +127,16 @@ class BaseLLM(ABC):
         Returns:
             The assistant's response text.
         """
+        logger.debug("llm_prompt",
+                     model=self.model,
+                     prompt_preview=content[:100] + "..." if len(content) > 100 else content,
+                     kwargs=kwargs)
         resp = self.completion([{"role": "user", "content": content}], **kwargs)
+        logger.debug("llm_response",
+                     model=self.model,
+                     response_length=len(resp.text),
+                     prompt_tokens=resp.prompt_tokens,
+                     completion_tokens=resp.completion_tokens)
         return resp.text
 
     def prompt_to_json(self, content: str, **kwargs) -> Dict[str, Any]:
@@ -148,9 +157,12 @@ class BaseLLM(ABC):
         Raises:
             json.JSONDecodeError: If JSON parsing fails
         """
+        logger.debug("llm_json_request", model=self.model)
         # Use JSON mode if supported by the LLM
         kwargs_with_json = kwargs.copy()
         kwargs_with_json.setdefault("response_format", {"type": "json_object"})
         raw_response = self.prompt(content, **kwargs_with_json)
         cleaned_response = self._fence_pattern.sub(lambda m: m.group(1).strip(), raw_response)
-        return json.loads(cleaned_response)
+        result = json.loads(cleaned_response)
+        logger.debug("llm_json_response", model=self.model, keys=list(result.keys()) if result else [])
+        return result
