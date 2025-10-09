@@ -49,6 +49,12 @@ class LiteLLM(BaseLLM):
 
         prompt_tokens, completion_tokens, total_tokens = self._extract_token_usage(resp)
 
+        logger.debug("llm_completion_success",
+                     model=self.model,
+                     prompt_tokens=prompt_tokens,
+                     completion_tokens=completion_tokens,
+                     total_tokens=total_tokens)
+
         return BaseLLM.LLMResponse(
             text=text,
             prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
@@ -138,5 +144,6 @@ class LiteLLM(BaseLLM):
                 total_tokens = prompt_tokens + completion_tokens
 
             return prompt_tokens, completion_tokens, total_tokens
-        except Exception:
+        except Exception as e:
+            logger.debug("token_usage_extraction_failed", model=self.model, error=str(e))
             return None, None, None
