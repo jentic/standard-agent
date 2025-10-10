@@ -45,7 +45,7 @@ def extract_param_info(func):
 
 
 class FunctionTool(ToolBase):
-    def __init__(self, func: Callable, keywords: List[str] = None):
+    def __init__(self, func: Callable, keywords: Optional[List[str]] = None):
         self.func = func
         self._keywords = keywords or []
         self.signature = inspect.signature(func)
