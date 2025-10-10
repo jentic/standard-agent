@@ -2,7 +2,7 @@ from agents.llm.base_llm import BaseLLM, JSON_CORRECTION_PROMPT
 from typing import List, Dict, Any
 import json
 import litellm
-
+import time
 from utils.logger import get_logger
 from utils.observability import observe
 logger = get_logger(__name__)
@@ -20,41 +20,51 @@ class LiteLLM(BaseLLM):
         self.max_tokens = max_tokens
 
     @observe(llm=True)
-    def completion(self, messages: List[Dict[str, str]], **kwargs) -> BaseLLM.LLMResponse:
-        # Merge default parameters with provided kwargs
-        effective_temperature = kwargs.get("temperature", self.temperature)
-        effective_max_tokens = kwargs.get("max_tokens", self.max_tokens)
+    def completion(self, messages: List[Dict[str, str]],max_retries:int=3,exponential_backoff:float=0.5, **kwargs) -> BaseLLM.LLMResponse:
+        for attempt in range(1+max_retries):#1 try + max_retries retries
+            try:  
+                # Merge default parameters with provided kwargs
+                effective_temperature = kwargs.get("temperature", self.temperature)
+                effective_max_tokens = kwargs.get("max_tokens", self.max_tokens)
 
-        completion_kwargs: Dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-        }
-        if effective_temperature is not None:
-            completion_kwargs["temperature"] = effective_temperature
-        if effective_max_tokens is not None:
-            completion_kwargs["max_tokens"] = effective_max_tokens
+                completion_kwargs: Dict[str, Any] = {
+                    "model": self.model,
+                    "messages": messages,
+                }
+                if effective_temperature is not None:
+                    completion_kwargs["temperature"] = effective_temperature
+                if effective_max_tokens is not None:
+                    completion_kwargs["max_tokens"] = effective_max_tokens
 
-        # Add any additional kwargs (like response_format)
-        for key, value in kwargs.items():
-            if key not in ["temperature", "max_tokens"]:
-                completion_kwargs[key] = value
+                # Add any additional kwargs (like response_format)
+                for key, value in kwargs.items():
+                    if key not in ["temperature", "max_tokens"]:
+                        completion_kwargs[key] = value
 
-        resp = litellm.completion(**completion_kwargs)
+                resp = litellm.completion(**completion_kwargs)
 
-        text = ""
-        try:
-            text = resp.choices[0].message.content.strip()
-        except (IndexError, AttributeError):
-            pass
+                text = ""
+                try:
+                    text = resp.choices[0].message.content.strip()
+                except (IndexError, AttributeError):
+                    pass
 
-        prompt_tokens, completion_tokens, total_tokens = self._extract_token_usage(resp)
+                prompt_tokens, completion_tokens, total_tokens = self._extract_token_usage(resp)
 
-        return BaseLLM.LLMResponse(
-            text=text,
-            prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
-            completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
-            total_tokens=total_tokens if isinstance(total_tokens, int) else None,
-        )
+                return BaseLLM.LLMResponse(
+                    text=text,
+                    prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
+                    completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
+                    total_tokens=total_tokens if isinstance(total_tokens, int) else None,
+                )
+            except Exception as e:
+                if attempt<max_retries:
+                    sleep_time=exponential_backoff*(2**attempt)
+                    logger.warning("llm_completion_retry",attempt=attempt+1,error=str(e),sleep_time=sleep_time)
+                    time.sleep(sleep_time)
+                else:
+                    logger.error("retry failed", attempt=attempt, error=str(e), msg="Exceeded max retries for completion parsing")
+                    raise
 
     def prompt_to_json(self, content: str, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
         """
