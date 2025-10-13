@@ -180,9 +180,9 @@ class ReWOOReasoner(BaseReasoner):
 
         if step.output_key:
             self.memory[step.output_key] = step.result
-            state.history.append(f"remembered {step.output_key} : {step.result}")
 
-        state.history.append(f"Executed step: {step.text} -> {step.result}")
+        # Truncate step result to ~8KB to cap history growth and avoid context-window bloat
+        state.history.append(f"Executed step: {step.text} -> {str(step.result)[:8124]}")
         logger.info("step_executed", step_text=step.text, step_type=step_type, result=str(step.result)[:100] if step.result is not None else None)
 
     @observe

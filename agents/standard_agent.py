@@ -101,7 +101,8 @@ class StandardAgent:
 
         try:
             result = self.reasoner.run(goal)
-            result.final_answer = self.llm.prompt(_PROMPTS["summarize"].format(goal=goal, history=getattr(result, "transcript", "")))
+            # Truncate transcript to the last ~12KB to limit context size and avoid context-window errors
+            result.final_answer = self.llm.prompt(_PROMPTS["summarize"].format(goal=goal, history=getattr(result, "transcript", "")[-12000:]))
 
             self._record_interaction({"goal": goal, "result": result.final_answer})
             self._state = AgentState.READY
