@@ -35,9 +35,9 @@ def test_rewoo_plan_parses_valid_bullets_and_records_successful_tool_call():
 
     # Successful tool call recorded once
     assert result.tool_calls and result.tool_calls[0] == {"tool_id": "t1", "summary": "Tool One"}
-    # Transcript contains remembered k1 and executed steps
-    assert "remembered k1" in result.transcript
+    # Transcript contains executed steps; memory has k1
     assert "Executed step:" in result.transcript
+    assert "k1" in memory
 
 
 def test_rewoo_plan_raises_on_input_before_output():
@@ -285,6 +285,44 @@ def test_rewoo_selection_invalid_id_records_no_tool_call():
     reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_retries=0)
     result = reasoner.run("goal")
     assert result.tool_calls == []
+
+
+def test_rewoo_history_truncates_step_result_to_8kb():
+    # Plan with one TOOL step producing a very large payload
+    plan_text = "- fetch big (output: k1)"
+    large_payload = "X" * 50000  # 50KB
+
+    class BigTool(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={})
+
+    class BigTools(DummyTools):
+        def execute(self, tool, params):  # type: ignore[override]
+            return large_payload
+
+    llm = DummyLLM(
+        text_queue=[
+            plan_text,  # plan
+            "TOOL",     # classify
+            "t1",       # select tool
+        ],
+        json_queue=[{}],  # params
+    )
+    tools = BigTools([BigTool("t1", "Big Tool")])
+    memory: Dict[str, Any] = DictMemory()
+
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    result = reasoner.run("goal")
+
+    # Transcript should contain the executed line with truncated payload (~8124 chars)
+    assert "Executed step:" in result.transcript
+    executed_lines = [ln for ln in result.transcript.split("\n") if ln.startswith("Executed step:")]
+    assert executed_lines, "Expected at least one executed step line"
+    line = executed_lines[-1]
+    # Ensure truncation happened (< original 50k)
+    assert len(line) < 20000
+    # And memory stores full payload (no truncation in memory)
+    assert memory.get("k1") == large_payload
 
 
 def test_rewoo_param_gen_error_triggers_reflection_and_no_tool_call():

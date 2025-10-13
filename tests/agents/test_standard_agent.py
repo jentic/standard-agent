@@ -29,6 +29,17 @@ class CapturingReasoner(BaseReasoner):
         return ReasoningResult(transcript="trace", success=True)
 
 
+class LongTranscriptReasoner(BaseReasoner):
+    def __init__(self):
+        # type: ignore[call-arg]
+        pass
+
+    def run(self, goal: str) -> ReasoningResult:  # type: ignore[override]
+        # Generate a transcript > 50KB to ensure truncation to ~12KB occurs
+        long_trace = "Y" * 50000
+        return ReasoningResult(transcript=long_trace, success=True)
+
+
 class FailingReasoner(BaseReasoner):
     def __init__(self):
         # type: ignore[call-arg]
@@ -153,6 +164,32 @@ def test_agent_preserves_reasoner_fields(monkeypatch):
     assert result.tool_calls == [{"tool_id": "x", "summary": "X"}]
     assert result.success is False
     assert result.final_answer == "S"
+
+
+def test_agent_summarize_uses_only_last_12kb_of_transcript(monkeypatch):
+    _fixed_uuid4(monkeypatch, "RUN12K")
+
+    captured_prompt = {"text": None}
+
+    class CapturingLLM(DummyLLM):
+        def prompt(self, text: str) -> str:  # type: ignore[override]
+            captured_prompt["text"] = text
+            return "OK"
+
+    llm = CapturingLLM()
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = LongTranscriptReasoner()
+
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=reasoner)
+    agent.solve("g")
+
+    assert captured_prompt["text"] is not None
+    # Extract the history block from the summarize prompt
+    text = captured_prompt["text"] or ""
+    # The history is inserted via format(... history= ...), so ensure only ~12k included
+    assert len(text) < 30000  # entire prompt under 30k
+    assert "Y" * 20000 not in text  # definitely not the full 50k
 
 
 def test_agent_conversation_history_respects_window(monkeypatch):
