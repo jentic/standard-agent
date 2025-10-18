@@ -80,6 +80,13 @@ class StandardAgent:
 
         self._state: AgentState = AgentState.READY
 
+        logger.info("agent_initialized",
+                    reasoner=self.reasoner.__class__.__name__,
+                    llm_model=getattr(self.llm, 'model', None),
+                    has_goal_preprocessor=self.goal_preprocessor is not None,
+                    conversation_history_window=self.conversation_history_window,
+                    timezone=self.memory["context"]["timezone"])
+
     @property
     def state(self) -> AgentState:
         return self._state
@@ -90,9 +97,15 @@ class StandardAgent:
         run_id = uuid4().hex
         start_time = time.perf_counter()
 
+        logger.info("agent_solve_start",
+                    run_id=run_id,
+                    goal_preview=goal[:100] + "..." if len(goal) > 100 else goal)
+
         if self.goal_preprocessor:
+            logger.debug("goal_preprocessing", original_goal=goal)
             revised_goal, intervention_message = self.goal_preprocessor.process(goal, self.memory.get("conversation_history"))
             if intervention_message:
+                logger.info("goal_preprocessing_intervention", intervention=intervention_message)
                 self._record_interaction({"goal": goal, "result": f"user intervention message: {intervention_message}"})
                 return ReasoningResult(success=False, final_answer=intervention_message)
             goal = revised_goal
