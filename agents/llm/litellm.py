@@ -20,7 +20,7 @@ class LiteLLM(BaseLLM):
         self.max_tokens = max_tokens
 
     @observe(llm=True)
-    def completion(self, messages: List[Dict[str, str]],max_retries:int=3,exponential_backoff:float=0.5, **kwargs) -> BaseLLM.LLMResponse:
+    def completion(self, messages: List[Dict[str, str]], max_retries:int=3, exponential_backoff:float=0.5, **kwargs) -> BaseLLM.LLMResponse:
         for attempt in range(1+max_retries):#1 try + max_retries retries
             try:  
                 # Merge default parameters with provided kwargs
