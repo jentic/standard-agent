@@ -150,6 +150,40 @@ class TestLiteLLM:
             max_tokens=10000,
         )
 
+    def test_retries_and_succeeds_on_temporary_error(self, monkeypatch):
+        """Should retry on error and succeed if API works after a few tries."""
+        svc = LiteLLM(model="test-model")
+        call_count = {"n": 0}
+
+        def sometimes_fails(**kwargs):
+            call_count["n"] += 1
+            if call_count["n"] < 3:
+                raise RuntimeError("Temporary error")
+            mock_resp = MagicMock()
+            mock_resp.choices = [MagicMock()]
+            mock_resp.choices[0].message.content = "It worked"
+            mock_resp.usage = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+            return mock_resp
+
+        monkeypatch.setattr("agents.llm.litellm.litellm.completion", sometimes_fails)
+        messages = [{"role": "user", "content": "test"}]
+        result = svc.completion(messages, max_retries=3, exponential_backoff=0.01)
+        assert result.text == "It worked"
+        assert call_count["n"] == 3
+
+    def test_gives_up_after_all_retries_fail(self, monkeypatch):
+        """Should raise error if API fails every time."""
+        svc = LiteLLM(model="test-model")
+
+        def always_fails(**kwargs):
+            raise RuntimeError("Always fails")
+
+        monkeypatch.setattr("agents.llm.litellm.litellm.completion", always_fails)
+        messages = [{"role": "user", "content": "test"}]
+        with pytest.raises(RuntimeError):
+            svc.completion(messages, max_retries=2, exponential_backoff=0.01)
+
+
     @patch("agents.llm.litellm.LiteLLM.prompt", return_value='{"key": "value"}')
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
     def test_prompt_to_json_success(self, mock_base_prompt_to_json, mock_prompt):
