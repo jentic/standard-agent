@@ -29,6 +29,17 @@ class CapturingReasoner(BaseReasoner):
         return ReasoningResult(transcript="trace", success=True)
 
 
+class LongTranscriptReasoner(BaseReasoner):
+    def __init__(self):
+        # type: ignore[call-arg]
+        pass
+
+    def run(self, goal: str) -> ReasoningResult:  # type: ignore[override]
+        # Generate a transcript > 50KB to ensure truncation to ~12KB occurs
+        long_trace = "Y" * 50000
+        return ReasoningResult(transcript=long_trace, success=True)
+
+
 class FailingReasoner(BaseReasoner):
     def __init__(self):
         # type: ignore[call-arg]
@@ -155,6 +166,32 @@ def test_agent_preserves_reasoner_fields(monkeypatch):
     assert result.final_answer == "S"
 
 
+def test_agent_summarize_uses_only_last_12kb_of_transcript(monkeypatch):
+    _fixed_uuid4(monkeypatch, "RUN12K")
+
+    captured_prompt = {"text": None}
+
+    class CapturingLLM(DummyLLM):
+        def prompt(self, text: str) -> str:  # type: ignore[override]
+            captured_prompt["text"] = text
+            return "OK"
+
+    llm = CapturingLLM()
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = LongTranscriptReasoner()
+
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=reasoner)
+    agent.solve("g")
+
+    assert captured_prompt["text"] is not None
+    # Extract the history block from the summarize prompt
+    text = captured_prompt["text"] or ""
+    # The history is inserted via format(... history= ...), so ensure only ~12k included
+    assert len(text) < 30000  # entire prompt under 30k
+    assert "Y" * 20000 not in text  # definitely not the full 50k
+
+
 def test_agent_conversation_history_respects_window(monkeypatch):
     class SmallReasoner(BaseReasoner):
         def __init__(self):
@@ -260,3 +297,109 @@ def test_agent_conversation_history_memory_bounded():
     assert hist[0]["goal"] == "g2"
     assert hist[1]["goal"] == "g3"
     assert hist[2]["goal"] == "g4"
+
+
+def test_agent_conversation_history_none_window_defaults_to_5():
+    """Test that when conversation_history_window is not provided, it defaults to 5."""
+    llm = DummyLLM(text_queue=["S"] * 10)
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=DummyReasoner())
+
+    assert agent.conversation_history_window == 5
+
+    for i in range(10):
+        agent.solve(f"g{i}")
+    hist = memory.get("conversation_history")
+    assert hist is not None
+    assert len(hist) == 5
+    for i, entry in enumerate(hist):
+        expected_goal = f"g{i + 5}"
+        assert entry["goal"] == expected_goal
+
+
+def test_agent_timezone_from_constructor_stores_iana_string():
+    """Test StandardAgent accepts IANA timezone from constructor and stores it as string."""
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+
+    agent = StandardAgent(
+        llm=llm,
+        tools=tools,
+        memory=memory,
+        reasoner=DummyReasoner(),
+        timezone="America/New_York"
+    )
+
+    # Timezone should be stored as IANA string in memory context
+    assert "context" in agent.memory
+    assert "timezone" in agent.memory["context"]
+    tz = agent.memory["context"]["timezone"]
+    assert isinstance(tz, str)
+    assert tz == "America/New_York"
+
+
+def test_agent_timezone_from_env_stores_iana_string(monkeypatch):
+    """Test StandardAgent falls back to AGENT_TZ environment variable and stores as string."""
+    monkeypatch.setenv("AGENT_TZ", "Europe/London")
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+
+    agent = StandardAgent(
+        llm=llm,
+        tools=tools,
+        memory=memory,
+        reasoner=DummyReasoner(),
+        timezone=None  # No explicit timezone
+    )
+
+    # Should use AGENT_TZ env var
+    tz = agent.memory["context"]["timezone"]
+    assert isinstance(tz, str)
+    assert tz == "Europe/London"
+
+
+def test_agent_timezone_none_when_no_valid_iana(caplog):
+    """Test StandardAgent stores None when no valid IANA timezone provided."""
+    import logging
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+
+    with caplog.at_level(logging.INFO):
+        agent = StandardAgent(
+            llm=llm,
+            tools=tools,
+            memory=memory,
+            reasoner=DummyReasoner(),
+            timezone=None
+        )
+
+    # Should store None when no IANA available
+    assert "context" in agent.memory
+    assert "timezone" in agent.memory["context"]
+    assert agent.memory["context"]["timezone"] is None
+
+
+def test_agent_invalid_timezone_stores_none(caplog):
+    """Test StandardAgent stores None for invalid timezone string."""
+    import logging
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+
+    # Invalid timezone should result in None
+    with caplog.at_level(logging.WARNING):
+        agent = StandardAgent(
+            llm=llm,
+            tools=tools,
+            memory=memory,
+            reasoner=DummyReasoner(),
+            timezone="Invalid/Timezone"
+        )
+
+    # Should store None (not an invalid string or OS fallback)
+    tz = agent.memory["context"]["timezone"]
+    assert tz is None
