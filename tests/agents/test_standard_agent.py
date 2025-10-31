@@ -1,4 +1,4 @@
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import pytest
 import json
@@ -271,20 +271,67 @@ def test_agent_conversation_history_disabled_window():
     assert memory.get("conversation_history") == []
 
 
+def test_agent_conversation_history_negative_window():
+    llm = DummyLLM(text_queue=["S"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=DummyReasoner(), conversation_history_window=-5)
+
+    agent.solve("g1")
+
+    assert memory.get("conversation_history") == []
+    assert agent.conversation_history_window == 0
+
+
+def test_agent_conversation_history_memory_bounded():
+    llm = DummyLLM(text_queue=["S1", "S2", "S3", "S4", "S5"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=DummyReasoner(), conversation_history_window=3)
+
+    for i in range(5):
+        agent.solve(f"g{i}")
+
+    hist = memory.get("conversation_history")
+    assert len(hist) == 3
+    assert hist[0]["goal"] == "g2"
+    assert hist[1]["goal"] == "g3"
+    assert hist[2]["goal"] == "g4"
+
+
+def test_agent_conversation_history_none_window_defaults_to_5():
+    """Test that when conversation_history_window is not provided, it defaults to 5."""
+    llm = DummyLLM(text_queue=["S"] * 10)
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    agent = StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=DummyReasoner())
+
+    assert agent.conversation_history_window == 5
+
+    for i in range(10):
+        agent.solve(f"g{i}")
+    hist = memory.get("conversation_history")
+    assert hist is not None
+    assert len(hist) == 5
+    for i, entry in enumerate(hist):
+        expected_goal = f"g{i + 5}"
+        assert entry["goal"] == expected_goal
+
+
 def test_agent_timezone_from_constructor_stores_iana_string():
     """Test StandardAgent accepts IANA timezone from constructor and stores it as string."""
     llm = DummyLLM(text_queue=["S"])
     tools = DummyTools()
     memory: Dict[str, Any] = DictMemory()
-    
+
     agent = StandardAgent(
-        llm=llm, 
-        tools=tools, 
-        memory=memory, 
+        llm=llm,
+        tools=tools,
+        memory=memory,
         reasoner=DummyReasoner(),
         timezone="America/New_York"
     )
-    
+
     # Timezone should be stored as IANA string in memory context
     assert "context" in agent.memory
     assert "timezone" in agent.memory["context"]
@@ -299,7 +346,7 @@ def test_agent_timezone_from_env_stores_iana_string(monkeypatch):
     llm = DummyLLM(text_queue=["S"])
     tools = DummyTools()
     memory: Dict[str, Any] = DictMemory()
-    
+
     agent = StandardAgent(
         llm=llm,
         tools=tools,
@@ -307,7 +354,7 @@ def test_agent_timezone_from_env_stores_iana_string(monkeypatch):
         reasoner=DummyReasoner(),
         timezone=None  # No explicit timezone
     )
-    
+
     # Should use AGENT_TZ env var
     tz = agent.memory["context"]["timezone"]
     assert isinstance(tz, str)
@@ -320,7 +367,7 @@ def test_agent_timezone_none_when_no_valid_iana(caplog):
     llm = DummyLLM(text_queue=["S"])
     tools = DummyTools()
     memory: Dict[str, Any] = DictMemory()
-    
+
     with caplog.at_level(logging.INFO):
         agent = StandardAgent(
             llm=llm,
@@ -329,7 +376,7 @@ def test_agent_timezone_none_when_no_valid_iana(caplog):
             reasoner=DummyReasoner(),
             timezone=None
         )
-    
+
     # Should store None when no IANA available
     assert "context" in agent.memory
     assert "timezone" in agent.memory["context"]
@@ -342,7 +389,7 @@ def test_agent_invalid_timezone_stores_none(caplog):
     llm = DummyLLM(text_queue=["S"])
     tools = DummyTools()
     memory: Dict[str, Any] = DictMemory()
-    
+
     # Invalid timezone should result in None
     with caplog.at_level(logging.WARNING):
         agent = StandardAgent(
@@ -352,7 +399,7 @@ def test_agent_invalid_timezone_stores_none(caplog):
             reasoner=DummyReasoner(),
             timezone="Invalid/Timezone"
         )
-    
+
     # Should store None (not an invalid string or OS fallback)
     tz = agent.memory["context"]["timezone"]
     assert tz is None
