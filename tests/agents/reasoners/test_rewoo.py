@@ -35,9 +35,9 @@ def test_rewoo_plan_parses_valid_bullets_and_records_successful_tool_call():
 
     # Successful tool call recorded once
     assert result.tool_calls and result.tool_calls[0] == {"tool_id": "t1", "summary": "Tool One"}
-    # Transcript contains remembered k1 and executed steps
-    assert "remembered k1" in result.transcript
+    # Transcript contains executed steps; memory has k1
     assert "Executed step:" in result.transcript
+    assert "k1" in memory
 
 
 def test_rewoo_plan_raises_on_input_before_output():
@@ -287,6 +287,44 @@ def test_rewoo_selection_invalid_id_records_no_tool_call():
     assert result.tool_calls == []
 
 
+def test_rewoo_history_truncates_step_result_to_8kb():
+    # Plan with one TOOL step producing a very large payload
+    plan_text = "- fetch big (output: k1)"
+    large_payload = "X" * 50000  # 50KB
+
+    class BigTool(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={})
+
+    class BigTools(DummyTools):
+        def execute(self, tool, params):  # type: ignore[override]
+            return large_payload
+
+    llm = DummyLLM(
+        text_queue=[
+            plan_text,  # plan
+            "TOOL",     # classify
+            "t1",       # select tool
+        ],
+        json_queue=[{}],  # params
+    )
+    tools = BigTools([BigTool("t1", "Big Tool")])
+    memory: Dict[str, Any] = DictMemory()
+
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    result = reasoner.run("goal")
+
+    # Transcript should contain the executed line with truncated payload (~8124 chars)
+    assert "Executed step:" in result.transcript
+    executed_lines = [ln for ln in result.transcript.split("\n") if ln.startswith("Executed step:")]
+    assert executed_lines, "Expected at least one executed step line"
+    line = executed_lines[-1]
+    # Ensure truncation happened (< original 50k)
+    assert len(line) < 20000
+    # And memory stores full payload (no truncation in memory)
+    assert memory.get("k1") == large_payload
+
+
 def test_rewoo_param_gen_error_triggers_reflection_and_no_tool_call():
     # Override LLM to raise a ValueError during param generation
     class FailParamLLM(DummyLLM):
@@ -481,7 +519,7 @@ def test_rewoo_generate_params_with_required_params_success():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1"]
     
     llm = DummyLLM(json_queue=[{"param1": "value1", "param2": "value2"}])
@@ -502,7 +540,7 @@ def test_rewoo_generate_params_missing_required_params_raises_error():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1", "param2"]
     
     llm = DummyLLM(json_queue=[{"param2": "value2"}])  # missing param1
@@ -523,9 +561,9 @@ def test_rewoo_generate_params_missing_required_params_raises_error():
 
 
 def test_rewoo_generate_params_no_required_params_backward_compatibility():
-    """Test _generate_params works with tools that don't have get_required_parameters method."""
+    """Test _generate_params works with tools that don't have get_required_parameter_keys method."""
     tool = DummyTool("t1", "Tool One", schema={"param1": {}})
-    # DummyTool doesn't have get_required_parameters method
+    # DummyTool doesn't have get_required_parameter_keys method
     
     llm = DummyLLM(json_queue=[{"param1": "value1"}])
     tools = DummyTools([])
@@ -544,7 +582,7 @@ def test_rewoo_generate_params_empty_required_params():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return []
     
     llm = DummyLLM(json_queue=[{"param1": "value1"}])
@@ -565,7 +603,7 @@ def test_rewoo_generate_params_reflector_suggested_params_missing_required():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1", "param2"]
     
     llm = DummyLLM(json_queue=[])  # No LLM calls expected since using reflector params
@@ -596,7 +634,7 @@ def test_rewoo_generate_params_reflector_suggested_params_success():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1"]
     
     llm = DummyLLM(json_queue=[])  # No LLM calls expected
@@ -646,7 +684,7 @@ def test_rewoo_generate_params_combined_unknown_and_missing_params_raises_error(
         def __init__(self, tool_id: str, name: str):
             # Only required params in schema; param4 will be filtered out
             super().__init__(tool_id, name, schema={"param1": {}, "param2": {}, "param3": {}})
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["param1", "param2", "param3"]
     
     llm = DummyLLM(json_queue=[{"param1": "<UNKNOWN>", "param4": "value4"}])  # param1 is unknown, param2&3 missing
@@ -670,7 +708,7 @@ def test_rewoo_required_params_full_integration():
         def __init__(self, tool_id: str, name: str):
             super().__init__(tool_id, name, schema={"required_param": {}})
         
-        def get_required_parameters(self) -> List[str]:
+        def get_required_parameter_keys(self) -> List[str]:
             return ["required_param"]
     
     plan_text = "- do something (output: k1)"
@@ -697,5 +735,143 @@ def test_rewoo_required_params_full_integration():
     # Should trigger reflection due to ParameterGenerationError
     assert result.tool_calls == []
     assert "Reflection decision" in result.transcript
+
+
+def test_rewoo_generate_params_multiple_schemas():
+    """Test _generate_params with tool that has multiple schemas."""
+    class ToolWithMultipleSchemas(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema=None)
+        
+        def get_parameter_schema(self):
+            return [
+                {"param1": {"type": "string"}, "param2": {"type": "integer"}},
+                {"param3": {"type": "boolean"}, "param4": {"type": "number"}}
+            ]
+        
+        def get_parameter_keys(self):
+            return ["param1", "param2", "param3", "param4"]
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param3": True, "extra": "ignored"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithMultipleSchemas("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    # Should filter out "extra" key since it's not in allowed_keys
+    assert result == {"param1": "value1", "param3": True}
+
+
+def test_rewoo_generate_params_empty_schema():
+    """Test _generate_params with tool that has empty schema."""
+    class ToolWithEmptySchema(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema=None)
+        
+        def get_parameter_schema(self):
+            return None
+        
+        def get_parameter_keys(self):
+            return []
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param2": "value2"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithEmptySchema("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    # Should return empty dict since no allowed keys
+    assert result == {}
+
+
+def test_rewoo_generate_params_fallback_to_schema_keys():
+    """Test _generate_params falls back to schema.keys() when get_parameter_keys is not available."""
+    class ToolWithoutAllowedKeysMethod(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema={"param1": {"type": "string"}, "param2": {"type": "integer"}})
+        
+        def get_parameter_schema(self):
+            return {"param1": {"type": "string"}, "param2": {"type": "integer"}}
+        
+        # Note: no get_parameter_keys method - should fall back to schema.keys()
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param2": 42, "extra": "ignored"}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithoutAllowedKeysMethod("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    # Should filter out "extra" key since it's not in schema.keys()
+    assert result == {"param1": "value1", "param2": 42}
+
+
+def test_rewoo_generate_params_multiple_schemas_union_keys():
+    """Test _generate_params with multiple schemas returns union of all keys."""
+    class ToolWithOverlappingSchemas(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema=None)
+        
+        def get_parameter_schema(self):
+            return [
+                {"param1": {"type": "string"}, "param2": {"type": "integer"}},
+                {"param2": {"type": "string"}, "param3": {"type": "boolean"}}  # param2 overlaps
+            ]
+        
+        def get_parameter_keys(self):
+            return ["param1", "param2", "param3"]  # Union of all keys
+    
+    llm = DummyLLM(json_queue=[{"param1": "value1", "param2": 42, "param3": True}])
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    tool = ToolWithOverlappingSchemas("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    assert result == {"param1": "value1", "param2": 42, "param3": True}
+
+
+def test_rewoo_generate_params_reflector_suggestion_with_multiple_schemas():
+    """Test _generate_params with reflector suggestion and multiple schemas filtering."""
+    class ToolWithMultipleSchemas(DummyTool):
+        def __init__(self, tool_id: str, name: str):
+            super().__init__(tool_id, name, schema=None)
+        
+        def get_parameter_schema(self):
+            return [
+                {"param1": {"type": "string"}, "param2": {"type": "integer"}},
+                {"param3": {"type": "boolean"}, "param4": {"type": "number"}}
+            ]
+        
+        def get_parameter_keys(self):
+            return ["param1", "param2", "param3", "param4"]
+    
+    llm = DummyLLM(json_queue=[])  # No LLM calls needed since we're using reflector suggestion
+    tools = DummyTools([])
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory)
+    
+    # Set up reflector suggestion with extra keys
+    memory["rewoo_reflector_suggestion:test step"] = {
+        "action": "retry_params",
+        "params": {"param1": "value1", "param3": True, "extra": "ignored", "invalid": "also_ignored"}
+    }
+    
+    tool = ToolWithMultipleSchemas("t1", "Tool One")
+    inputs = {"some_input": "data"}
+    
+    result = reasoner._generate_params(Step("test step", "k1", []), tool, inputs)
+    # Should filter out "extra" and "invalid" keys since they're not in allowed_keys
+    assert result == {"param1": "value1", "param3": True}
 
 

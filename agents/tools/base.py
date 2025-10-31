@@ -25,10 +25,9 @@ class ToolBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> Dict[str, Any]:
         """Return detailed parameter schema for LLM parameter generation."""
         raise NotImplementedError
-
 
 class JustInTimeToolingBase(ABC):
     """Abstract contract for a tool-providing backend."""

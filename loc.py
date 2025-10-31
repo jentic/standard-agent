@@ -72,11 +72,12 @@ def count_lines(file_path: str) -> Tuple[int, int]:
 def find_python_files(root_dir: str) -> list[str]:
     """Find all Python files, excluding common directories."""
     python_files = []
-    exclude_dirs = {'.venv', '__pycache__', '.git', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.ropeproject', 'examples', 'tests'}
+    exclude_dirs = {'__pycache__', '.git', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.ropeproject', 'examples', 'tests'}
     script_name = os.path.basename(__file__)
     
     for root, dirs, files in os.walk(root_dir):
-        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        # Exclude dirs in the exclude set AND any dir starting with .venv
+        dirs[:] = [d for d in dirs if d not in exclude_dirs and not d.startswith('.venv')]
         
         for file in files:
             if file.endswith('.py') and file != script_name:
@@ -89,7 +90,7 @@ def main():
     project_root = os.path.dirname(os.path.abspath(__file__))
     python_files = find_python_files(project_root)
     
-    print("Ignoring directories: .venv, __pycache__, .git, .pytest_cache, .mypy_cache, .ruff_cache, .ropeproject, examples, tests")
+    print("Ignoring directories: .venv*, __pycache__, .git, .pytest_cache, .mypy_cache, .ruff_cache, .ropeproject, examples, tests")
     print("Ignoring files: this script\n")
     
     total_files = 0
