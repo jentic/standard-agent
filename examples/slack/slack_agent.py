@@ -14,6 +14,11 @@ from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+# Ensure project root is on sys.path so local imports resolve to the working tree
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from agents.prebuilt import ReACTAgent, ReWOOAgent
 from agents.standard_agent import StandardAgent
 from utils.logger import get_logger
