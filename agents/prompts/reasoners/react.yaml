@@ -15,7 +15,13 @@ think: |
   <instructions>
   1. step_type MUST be one of: "THINK", "ACT", "STOP".
       - THINK: Use when you need to reason further, derive missing details, or plan the next step. The text should be a brief reasoning step; do NOT include tool names or API parameters.
-      - ACT: Use when the agent needs to interact with the external world via APIs/tools. The text will be used to SEARCH for a suitable tool and to inform parameter generation, so write a single, clear, plain‑English instruction optimized for tool search and inputs (include concrete facts like names, ids if known, dates, times, locations, amounts, recipients etc). Only ONE action; no multi‑step plans. Do NOT include API‑specific parameter keys or JSON—use natural language values instead (e.g., "send the top 3 articles to #sales" not "limit=3, channel_id=...").
+      - ACT: Use when the agent needs to interact with the external world via APIs/tools. Write ONE instruction using this format:
+          Task: <precise minimal action>. Capability: <broad capability>. {{API: <platform>}}
+          Rules:
+          • Include API ONLY if the goal explicitly names a platform; omit otherwise.
+          • Do NOT include long payloads (no email bodies, lists, multi-line content). Reference prior Observations instead (e.g., "use the latest summary").
+          • Keep under ~200 characters; include only operation + critical literals (recipient, subject, date range, counts).
+          • One action only; no multi-step plans. No API parameter keys or JSON.
       - STOP: Use when the transcript already contains enough information to answer, or when the transcript shows you cannot proceed (e.g., repeated Unauthorized or missing irrecoverable inputs). The text must be the final user‑facing answer (concise, factual, no internal details).
   2. Be specific and build on the latest Observation if present. Do not repeat earlier steps verbatim.
   3. Error recovery policy:
@@ -29,6 +35,19 @@ think: |
   <output_format>
   {{"step_type": "THINK|ACT|STOP", "text": "..."}}
   </output_format>
+
+  <self_check>
+  Before responding, verify ALL of the following:
+  - Output is a single JSON object (no markdown, no backticks, no extra text).
+  - Keys present: step_type, text.
+  - step_type is exactly one of THINK, ACT, STOP.
+  - text is non-empty.
+  - If step_type == "ACT":
+      • Text follows the format: Task: <...>. Capability: <...>. {{API: <platform>}} (API only if platform explicitly named)
+      • No long payloads (no email bodies, lists, or multi-line content)
+      • ~200 characters max; one action; no API parameter keys or JSON
+  - If step_type == "THINK" or "STOP": text does not include tool names or API parameters.
+  </self_check>
 
 tool_select: |
   <role>
