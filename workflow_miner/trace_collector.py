@@ -125,9 +125,31 @@ def project_trace_minimal(trace_obj: Dict[str, Any]) -> Dict[str, Any]:
     raw_obs = trace_obj.get("observations")
     obs_list: List[Dict[str, Any]] = raw_obs if isinstance(raw_obs, list) else []
 
+    # Allowlist of observation names to keep
+    ALLOWED_EXACT = {
+        "agents.tools.jentic.JenticClient.execute",
+        "agents.tools.jentic.JenticClient.load",
+        "agents.standard_agent.StandardAgent.solve",
+        "agents.reasoner.rewoo.ReWOOReasoner._plan",
+    }
+    ALLOWED_GENERATE_PARAMS = {
+        "agents.reasoner.rewoo.ReWOOReasoner._generate_params",
+        "agents.reasoner.react.ReACTReasoner._generate_params",
+    }
+
+    def _keep_obs_name(name: Any) -> bool:
+        n = str(name or "")
+        if n in ALLOWED_EXACT:
+            return True
+        if n in ALLOWED_GENERATE_PARAMS:
+            return True
+        return False
+
     projected_obs: List[Dict[str, Any]] = []
     for o in obs_list:
         if not isinstance(o, dict):
+            continue
+        if not _keep_obs_name(o.get("name")):
             continue
         projected_obs.append({
             "id": _get_or_none(o, "id"),
