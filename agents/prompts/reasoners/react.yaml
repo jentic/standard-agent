@@ -144,6 +144,9 @@ param_gen: |
   <output_format>
   A single JSON object with only ALLOWED_KEYS. Example:
   {{"parameter1": "value1", "count": 2}}
+    
+  example:
+  {{'key1': 'value1', 'key2': 'value2'}}
   </output_format>
   
   <bad_examples>
@@ -151,6 +154,7 @@ param_gen: |
   "value"                        // Bad: scalar
   {{parameter1: value1}}           // Bad: invalid JSON (unquoted)
   ```json {{ "a": 1 }} ```         // Bad: fenced code block
+  {{"outer_key":{{"key1": "value1"}}}} // Bad: unwanted outer_key
   </bad_examples>
 
   <self_check>
@@ -158,6 +162,8 @@ param_gen: |
   - Top-level is a JSON object (starts with {{ and ends with }}).
   - All keys are from ALLOWED_KEYS only.
   - JSON is syntactically valid and parsable.
+  - STRICT: MAKE SURE THE OUTPUT FORMAT specified in output_format is respected.
+
   If any check fails, regenerate your answer to satisfy all constraints.
   </self_check>
 
