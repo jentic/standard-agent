@@ -1,0 +1,65 @@
+compose: |
+  <role>
+  You are an expert workflow composer. Using the provided observations,
+  produce a general, portable Arazzo 1.0.1 workflow YAML that captures
+  the successful agent execution. Do not hardcode secrets or auth;
+  represent inputs/parameters at the workflow interface clearly.
+  </role>
+
+  <hard_rules>
+  1) Auth is out of scope. Jentic manages execution and auth. Do NOT include any auth fields.
+  2) Source Descriptions: For each unique API, use the api_name prefixed with 'jentic/oak/' as the URL.
+     Location of info: agents.tools.jentic.JenticClient.load
+     Example: url: jentic/oak/<api_name>
+  3) operationPath: Use the 'path' captured in agents.tools.jentic.JenticClient.load.
+     Location of info: agents.tools.jentic.JenticClient.load
+  4) High-level goal: Use agents.standard_agent.StandardAgent.solve input.goal to guide step chaining
+     and the overall narrative (inputs/outputs flow).
+     Location of info: agents.standard_agent.StandardAgent.solve input.goal
+  5) Steps: agents.tools.jentic.JenticClient.execute observations represent the concrete API calls
+     (via Jentic). Each such observation SHOULD become a workflow step if the execution was successful.
+  6) Parameters: agents.reasoner.react.ReACTReasoner._generate_params output contains generated params;
+     agents.tools.jentic.JenticClient.load includes available parameter names for the tool.
+     Link via tool id (e.g., JenticTool('op_xxx', ...)) and use the INTERSECTION of generated params
+     and available parameter names as the step parameters.
+     Location of info:
+      a) agents.reasoner.react.*._generate_params
+      b) agents.tools.jentic.JenticClient.load
+  7) Workflow inputs: Take the UNION of all user-supplied parameters across steps. If a parameter is
+     produced by a prior step, do not surface it as a workflow input; otherwise include it.
+  8) Workflow output: Choose a sensible output aligned to the high-level goal (e.g., send status, count,
+     or key id).
+  </hard_rules>
+
+  <guidelines>
+  - Output MUST be valid Arazzo 1.0.1 YAML.
+  - Include 'info' with a concise title, version, summary, and description.
+  - Include 'workflows' with one workflow capturing the sequence.
+  - Prefer 2–6 steps: search/fetch → transform/format (optional) → send/act.
+  - If operationId cannot be inferred, use operationPath only.
+  - Keep the YAML portable and free of environment-specific details.
+  </guidelines>
+
+  <data_extraction>
+  - Identify all load observations; extract api_name and path, and the tool id.
+  - Identify all generate_params observations; extract tool id and the parameter JSON keys.
+  - Identify all execute observations; extract tool id and consider these the step boundaries.
+  - Use the goal (if present) to infer meaningful input names and the final output.
+  </data_extraction>
+
+  <hints>
+  {goal_hint}
+  Prefer steps aligned to these actions: search/fetch, format/summarize, send/post.
+  For each API/tool id, combine load (api_name, path), generate_params (params), and execute (call).
+  Build sourceDescriptions from unique api_name values: url 'jentic/oak/<api_name>'.
+  </hints>
+
+  <observations>
+  {observations_json}
+  </observations>
+
+  <output>
+  Return ONLY the Arazzo YAML, no fences, no extra prose.
+  </output>
+
+
