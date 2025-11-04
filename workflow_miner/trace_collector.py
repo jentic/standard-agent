@@ -103,6 +103,55 @@ def extract_spans_generic(trace_obj: Dict[str, Any]) -> List[Dict[str, Any]]:
     return []
 
 
+def _get_or_none(d: Dict[str, Any], key: str) -> Any:
+    return d.get(key) if isinstance(d, dict) else None
+
+
+def project_trace_minimal(trace_obj: Dict[str, Any]) -> Dict[str, Any]:
+    """Project a Langfuse trace object into a strict minimal shape without heuristics.
+
+    Top-level: id, projectId, name, timestamp (fallback to createdAt only if timestamp missing),
+    input, output, observations (projected list).
+    Observations items: id, traceId, startTime, endTime, name, input, output, createdAt, updatedAt.
+    Missing fields are set to null; no derivations from other fields.
+    """
+    top_id = _get_or_none(trace_obj, "id")
+    top_project = _get_or_none(trace_obj, "projectId")
+    top_name = _get_or_none(trace_obj, "name")
+    top_timestamp = _get_or_none(trace_obj, "timestamp") or _get_or_none(trace_obj, "createdAt")
+    top_input = _get_or_none(trace_obj, "input")
+    top_output = _get_or_none(trace_obj, "output")
+
+    raw_obs = trace_obj.get("observations")
+    obs_list: List[Dict[str, Any]] = raw_obs if isinstance(raw_obs, list) else []
+
+    projected_obs: List[Dict[str, Any]] = []
+    for o in obs_list:
+        if not isinstance(o, dict):
+            continue
+        projected_obs.append({
+            "id": _get_or_none(o, "id"),
+            "traceId": _get_or_none(o, "traceId"),
+            "startTime": _get_or_none(o, "startTime"),
+            "endTime": _get_or_none(o, "endTime"),
+            "name": _get_or_none(o, "name"),
+            "input": _get_or_none(o, "input"),
+            "output": _get_or_none(o, "output"),
+            "createdAt": _get_or_none(o, "createdAt"),
+            "updatedAt": _get_or_none(o, "updatedAt"),
+        })
+
+    return {
+        "id": top_id,
+        "projectId": top_project,
+        "name": top_name,
+        "timestamp": top_timestamp,
+        "input": top_input,
+        "output": top_output,
+        "observations": projected_obs,
+    }
+
+
 def main(argv: List[str]) -> None:
     if len(argv) != 2 or argv[1] in {"-h", "--help"}:
         print(__doc__.strip())
@@ -125,7 +174,13 @@ def main(argv: List[str]) -> None:
     raw_path = trace_dir / "trace.json"
     save_json(raw_path, trace_obj)
 
+    # Minimal filtered projection (no heuristics)
+    filtered_obj = project_trace_minimal(trace_obj)
+    filtered_path = trace_dir / "filtered.json"
+    save_json(filtered_path, filtered_obj)
+
     print(f"Saved: {raw_path}")
+    print(f"Saved: {filtered_path}")
 
 
 if __name__ == "__main__":
