@@ -141,6 +141,16 @@ def project_trace_minimal(trace_obj: Dict[str, Any]) -> Dict[str, Any]:
             "updatedAt": _get_or_none(o, "updatedAt"),
         })
 
+    # Order observations oldest-first by startTime; fallback to createdAt then endTime
+    def _obs_sort_key(obs: Dict[str, Any]) -> str:
+        t = (
+            (obs.get("startTime") or "")
+            or (obs.get("createdAt") or "")
+        )
+        return str(t)
+
+    projected_obs.sort(key=_obs_sort_key)
+
     return {
         "id": top_id,
         "projectId": top_project,
