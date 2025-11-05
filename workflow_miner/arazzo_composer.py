@@ -320,6 +320,7 @@ def _build_prompt(filtered: Dict[str, Any]) -> str:
     prompt_path = PROJECT_ROOT / "workflow_miner" / "arazzo.yaml"
     data = yaml.safe_load(prompt_path.read_text(encoding="utf-8"))
     template = data.get("compose", "")
+    few_shot_examples = data.get("example", "")
     return template.format(
         goal_hint=top_goal_hint,
         observations_json=observations_json,
@@ -328,7 +329,7 @@ def _build_prompt(filtered: Dict[str, Any]) -> str:
         params_json=json.dumps(params, ensure_ascii=False, indent=2),
         executions_json=json.dumps(executions, ensure_ascii=False, indent=2),
         plan_steps_json=json.dumps(plan_steps, ensure_ascii=False, indent=2),
-    )
+    ) + few_shot_examples
 
 
 def _resolve_output_path(trace_id: str, explicit: str | None) -> Path:
@@ -368,10 +369,32 @@ def main(argv: list[str]) -> None:
     filtered = _read_filtered(trace_id)
     prompt = _build_prompt(filtered)
 
-    # Call LLM to generate the Arazzo YAML
-    yaml_text = llm.prompt(prompt)
+    # Call LLM to generate the Arazzo (JSON-only per prompt)
+    llm_text = llm.prompt(prompt)
+
+    # Sanitize: strip code fences if present and trim whitespace
+    try:
+        import re as _re
+        fence = _re.search(r"```(?:json|yaml)?\s*([\s\S]*?)\s*```", llm_text)
+        if fence:
+            llm_text = fence.group(1)
+        llm_text = llm_text.replace("```", "").strip()
+    except Exception:
+        llm_text = llm_text.strip()
+
+    # Try to parse as JSON and convert to desired output format
+    final_text = llm_text
+    try:
+        obj = json.loads(llm_text)
+        if out_path_arg and (out_path_arg.endswith(".yaml") or out_path_arg.endswith(".yml")):
+            final_text = yaml.safe_dump(obj, sort_keys=False, allow_unicode=True)
+        else:
+            final_text = json.dumps(obj, ensure_ascii=False, indent=2)
+    except Exception:
+        # Leave as-is if JSON parsing fails
+        pass
     out_path = _resolve_output_path(trace_id, out_path_arg)
-    out_path.write_text(yaml_text, encoding="utf-8")
+    out_path.write_text(final_text, encoding="utf-8")
 
     print(f"Saved Arazzo: {out_path}")
 
