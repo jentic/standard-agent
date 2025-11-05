@@ -44,7 +44,8 @@ class JenticTool(ToolBase):
 
     def __str__(self) -> str:
         """Short string description for logging purposes."""
-        return f"JenticTool({self.id}, {self.name})"
+        return (f"JenticTool(id={self.id}, name={self.name}, api_name={self.api_name}, method={self.method}, "
+                f"path={self.path}, required={self.required}, parameters={self._parameters})")
 
     def __repr__(self) -> str:
         """Unambiguous representation for debugging and observability."""
@@ -140,9 +141,15 @@ class JenticClient(JustInTimeToolingBase):
 
         # Find a specific result matching the tool we are looking for
         result = response.tool_info[tool.id]
+        print('&' * 100)
+        print('Tool Id:', tool.id)
+        print('Tool Definition:', result)
+        print('&' * 100)
         if result is None:
             raise ToolNotFoundError("Requested tool could not be loaded", tool)
-        return JenticTool(result.model_dump(exclude_none=False))
+        jent_tool = JenticTool(result.model_dump(exclude_none=False))
+        print('Jent Tool', jent_tool)
+        return jent_tool
 
     @observe
     def execute(self, tool: ToolBase, parameters: Dict[str, Any]) -> Any:
