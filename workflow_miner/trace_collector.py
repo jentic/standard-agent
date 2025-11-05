@@ -149,7 +149,10 @@ def project_trace_minimal(trace_obj: Dict[str, Any]) -> Dict[str, Any]:
     for o in obs_list:
         if not isinstance(o, dict):
             continue
-        if not _keep_obs_name(o.get("name")):
+        # Always include ERROR-level or any span with a statusMessage
+        level = o.get("level")
+        status_msg = o.get("statusMessage")
+        if not (_keep_obs_name(o.get("name")) or (isinstance(level, str) and level.upper() == "ERROR") or (isinstance(status_msg, str) and status_msg.strip())):
             continue
         projected_obs.append({
             "id": _get_or_none(o, "id"),
@@ -159,6 +162,9 @@ def project_trace_minimal(trace_obj: Dict[str, Any]) -> Dict[str, Any]:
             "name": _get_or_none(o, "name"),
             "input": _get_or_none(o, "input"),
             "output": _get_or_none(o, "output"),
+            "level": _get_or_none(o, "level"),
+            "statusMessage": _get_or_none(o, "statusMessage"),
+            "parentObservationId": _get_or_none(o, "parentObservationId"),
             "createdAt": _get_or_none(o, "createdAt"),
             "updatedAt": _get_or_none(o, "updatedAt"),
         })

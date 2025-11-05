@@ -1,62 +1,58 @@
 compose: |
   <role>
-  You are an expert workflow composer. Using the provided observations,
-  produce a general, portable Arazzo 1.0.1 workflow YAML that captures
-  the successful agent execution. Do not hardcode secrets or auth;
-  represent inputs/parameters at the workflow interface clearly.
+  You are an expert workflow composer. Using only the structured context below,
+  produce a portable, vendor-neutral Arazzo 1.0.1 workflow YAML that captures the
+  successful agent workflow. Do not include any auth fields.
   </role>
 
+  <structured_context>
+  Goal: {goal_text}
+  Tools: {tools_json}
+  GeneratedParams: {params_json}
+  Executions: {executions_json}
+  PlanSteps (optional): {plan_steps_json}
+  </structured_context>
+
   <hard_rules>
-  1) Auth is out of scope. Jentic manages execution and auth. Do NOT include any auth fields.
-  2) Source Descriptions: For each unique API, use the api_name prefixed with 'jentic/oak/' as the URL.
-     Location of info: agents.tools.jentic.JenticClient.load
-     Example: url: jentic/oak/<api_name>
-  3) operationPath: Use the 'path' captured in agents.tools.jentic.JenticClient.load.
-     Location of info: agents.tools.jentic.JenticClient.load
-  4) High-level goal: Use agents.standard_agent.StandardAgent.solve input.goal to guide step chaining
-     and the overall narrative (inputs/outputs flow).
-     Location of info: agents.standard_agent.StandardAgent.solve input.goal
-  5) Steps: agents.tools.jentic.JenticClient.execute observations represent the concrete API calls
-     (via Jentic). Each such observation SHOULD become a workflow step if the execution was successful.
-  6) Parameters: agents.reasoner.react.ReACTReasoner._generate_params output contains generated params;
-     agents.tools.jentic.JenticClient.load includes available parameter names for the tool.
-     Link via tool id (e.g., JenticTool('op_xxx', ...)) and use the INTERSECTION of generated params
-     and available parameter names as the step parameters.
-     Location of info:
-      a) agents.reasoner.react.*._generate_params
-      b) agents.tools.jentic.JenticClient.load
-  7) Workflow inputs: Take the UNION of all user-supplied parameters across steps. If a parameter is
-     produced by a prior step, do not surface it as a workflow input; otherwise include it.
-  8) Workflow output: Choose a sensible output aligned to the high-level goal (e.g., send status, count,
-     or key id).
+  - Auth is out of scope; do not include any auth fields.
+  - sourceDescriptions: for each unique Tools[i].api_name create an entry:
+      name: safe slug of api_name (non-alphanumerics → '-')
+      url: jentic/oak/{{api_name}}
+      type: openapi
+  - Steps MUST follow Executions order exactly; one step per execution.
+  - operationPath for a step: Tools[tool_id].path (verbatim).
+  - Parameters for a step: INTERSECTION of GeneratedParams[tool_id].keys and
+    Tools[tool_id].parameters.allowed/required (when available).
+  - Path templated params: if operationPath contains '{{param}}', map it with in: path.
+  - Remaining params: prefer in: query for typical filters (e.g., q, begin_date, end_date, sort, limit, page);
+    otherwise place under requestBody.payload.
+  - Chaining: when a param value can be sourced from a prior step's outputs, you MUST replace
+    $inputs.<param> with $steps.<prevStepId>.outputs.<key>.
+  - Outputs per step: expose at least one meaningful value with $response.body#/… (prefer ids; else top-level
+    business fields; final fallback: result: $response.body#/).
+  - Workflow inputs: the union of parameters still referencing $inputs.* after chaining; do not include values
+    produced by prior steps.
+  - Workflow outputs: one concise, goal-aligned value (e.g., final id/status/count).
   </hard_rules>
 
-  <guidelines>
+  <construction_plan>
+  1) Build sourceDescriptions from Tools (api_name → url jentic/oak/{{api_name}}).
+  2) For each Execution in order:
+     - Resolve tool metadata (path, parameters.allowed/required) by tool_id.
+     - Compute candidate params via intersection of GeneratedParams and parameters.allowed/required.
+     - Initialize param values to $inputs.<param>.
+     - If PlanSteps exists, use its input_keys to suggest chaining; otherwise, chain from prior outputs when semantically aligned
+       (ids/docs/text), replacing $inputs.<param> with $steps.<prevId>.outputs.<key>.
+     - Add successCriteria: $statusCode == 200.
+     - Add outputs with JSON pointers (ids preferred).
+  3) Compute workflow inputs (remaining $inputs.*) and a sensible workflow output based on Goal.
+  </construction_plan>
+
+  <requirements>
   - Output MUST be valid Arazzo 1.0.1 YAML.
-  - Include 'info' with a concise title, version, summary, and description.
-  - Include 'workflows' with one workflow capturing the sequence.
-  - Prefer 2–6 steps: search/fetch → transform/format (optional) → send/act.
-  - If operationId cannot be inferred, use operationPath only.
-  - Keep the YAML portable and free of environment-specific details.
-  </guidelines>
-
-  <data_extraction>
-  - Identify all load observations; extract api_name and path, and the tool id.
-  - Identify all generate_params observations; extract tool id and the parameter JSON keys.
-  - Identify all execute observations; extract tool id and consider these the step boundaries.
-  - Use the goal (if present) to infer meaningful input names and the final output.
-  </data_extraction>
-
-  <hints>
-  {goal_hint}
-  Prefer steps aligned to these actions: search/fetch, format/summarize, send/post.
-  For each API/tool id, combine load (api_name, path), generate_params (params), and execute (call).
-  Build sourceDescriptions from unique api_name values: url 'jentic/oak/<api_name>'.
-  </hints>
-
-  <observations>
-  {observations_json}
-  </observations>
+  - Keep stepIds concise (kebab-case) and output keys snake_case.
+  - No extra text or fences; YAML only.
+  </requirements>
 
   <output>
   Return ONLY the Arazzo YAML, no fences, no extra prose.
