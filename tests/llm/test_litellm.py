@@ -2,7 +2,6 @@
 
 import pytest
 import json
-import os
 from unittest.mock import patch, MagicMock
 from agents.llm.litellm import LiteLLM, JSON_CORRECTION_PROMPT
 
@@ -20,7 +19,7 @@ class TestLiteLLM:
         mock_getenv.return_value = "claude-sonnet-4"
         svc = LiteLLM(temperature=0.7)
         assert svc.model == "claude-sonnet-4"
-        assert svc.temperature == 0.7
+        assert svc.temperature == pytest.approx(0.7)
 
     # Tests default initialisation of LLM service with default model and max tokens parameter set from environment variable
     @patch('os.getenv')
@@ -95,7 +94,7 @@ class TestLiteLLM:
         )
 
         assert svc.model == "gemini/gemini-2.0-flash"
-        assert svc.temperature == 0.7
+        assert svc.temperature == pytest.approx(0.7)
         assert svc.max_tokens == 10000
 
         # Act: Call the completion method
@@ -130,7 +129,7 @@ class TestLiteLLM:
         )
 
         assert svc.model == "gemini/gemini-2.0-flash"
-        assert svc.temperature == 0.7
+        assert svc.temperature == pytest.approx(0.7)
         assert svc.max_tokens == 10000
 
         # Act: Call the completion method
@@ -189,8 +188,8 @@ class TestLiteLLM:
     def test_prompt_to_json_success(self, mock_base_prompt_to_json, mock_prompt):
         mock_prompt.return_value = '{"key": "value"}'
         mock_base_prompt_to_json.return_value = {"key": "value"}
-
-        svc = LiteLLM()
+        # Provide explicit model to satisfy BaseLLM requirement without relying on env var
+        svc = LiteLLM(model="test-model")
         result = svc.prompt_to_json("Give me a JSON object")
 
         assert result == {"key": "value"}
@@ -204,8 +203,7 @@ class TestLiteLLM:
             json.JSONDecodeError("bad json", "", 0),
             {"fixed": "json"},
         ]
-
-        svc = LiteLLM()
+        svc = LiteLLM(model="test-model")
         result = svc.prompt_to_json("Give me a JSON object", max_retries=1)
 
         assert result == {"fixed": "json"}
@@ -219,8 +217,7 @@ class TestLiteLLM:
             ValueError("malformed response"),
             {"ok": True},
         ]
-
-        svc = LiteLLM()
+        svc = LiteLLM(model="test-model")
         result = svc.prompt_to_json("Give me a JSON object", max_retries=1)
 
         assert result == {"ok": True}
@@ -231,8 +228,7 @@ class TestLiteLLM:
     def test_prompt_to_json_max_retries_exceeded_jsondecode(self, mock_base_prompt_to_json, mock_prompt):
         mock_prompt.return_value = '{"bad": "json"}'
         mock_base_prompt_to_json.side_effect = json.JSONDecodeError("bad json", "", 0)
-
-        svc = LiteLLM()
+        svc = LiteLLM(model="test-model")
 
         # Act & Assert: should raise after retries
         with pytest.raises(json.JSONDecodeError):
@@ -243,8 +239,7 @@ class TestLiteLLM:
     def test_prompt_to_json_max_retries_exceeded_valueerror(self, mock_base_prompt_to_json, mock_prompt):
         mock_prompt.return_value = ''
         mock_base_prompt_to_json.side_effect = ValueError("empty response")
-
-        svc = LiteLLM()
+        svc = LiteLLM(model="test-model")
         with pytest.raises(ValueError):
             svc.prompt_to_json("Give me a JSON object", max_retries=1)
 
@@ -274,7 +269,7 @@ class TestLiteLLM:
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
     def test_prompt_to_json_uses_raw_content_when_available(self, mock_base_prompt_to_json):
         from agents.llm.litellm import LiteLLM, JSON_CORRECTION_PROMPT
-        svc = LiteLLM()
+        svc = LiteLLM(model="test-model")
         class FakeError(json.JSONDecodeError):
             def __init__(self):
                 super().__init__("bad json", "", 0)
@@ -293,7 +288,7 @@ class TestLiteLLM:
 
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
     def test_prompt_to_json_fallback_when_raw_content_missing(self, mock_base_prompt_to_json):
-        svc = LiteLLM()
+        svc = LiteLLM(model="test-model")
         # Error without raw_content
         err = json.JSONDecodeError("bad json", "", 0)
         mock_base_prompt_to_json.side_effect = [err, {"fixed": True}]
@@ -308,7 +303,7 @@ class TestLiteLLM:
 
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
     def test_prompt_to_json_correction_prompt_content_differs_by_raw_availability(self, mock_base_prompt_to_json):
-        svc = LiteLLM()
+        svc = LiteLLM(model="test-model")
         class FakeError(json.JSONDecodeError):
             def __init__(self):
                 super().__init__("bad json", "", 0)
