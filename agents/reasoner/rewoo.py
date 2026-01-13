@@ -15,7 +15,7 @@ from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.jentic import JenticTool
 from agents.tools.exceptions import ToolError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import (ReasoningError, ToolSelectionError, ParameterGenerationError)
-
+from utils.observability import observe
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -75,6 +75,7 @@ class ReWOOReasoner(BaseReasoner):
         self.max_retries = max_retries
         self.top_k = top_k
 
+    @observe
     def run(self, goal: str) -> ReasoningResult:
         state = ReasonerState(goal=goal)
 
@@ -105,6 +106,7 @@ class ReWOOReasoner(BaseReasoner):
         success = not state.plan
         return ReasoningResult(iterations=iterations, success=success, transcript=transcript, tool_calls=state.tool_calls)
 
+    @observe
     def _plan(self, goal: str) -> Deque[Step]:
         generated_plan = (self.llm.prompt(_PROMPTS["plan"].format(goal=goal)) or "").strip("`").lstrip("markdown").strip()
         logger.info("plan_generated", goal=goal, plan=generated_plan)
@@ -154,6 +156,7 @@ class ReWOOReasoner(BaseReasoner):
             logger.info("plan_step", step_text=s.text, output_key=s.output_key, input_keys=s.input_keys)
         return steps
 
+    @observe
     def _execute(self, step: Step, state: ReasonerState) -> None:
         step.status = StepStatus.RUNNING
 
@@ -177,11 +180,12 @@ class ReWOOReasoner(BaseReasoner):
 
         if step.output_key:
             self.memory[step.output_key] = step.result
-            state.history.append(f"remembered {step.output_key} : {step.result}")
 
-        state.history.append(f"Executed step: {step.text} -> {step.result}")
+        # Truncate step result to ~8KB to cap history growth and avoid context-window bloat
+        state.history.append(f"Executed step: {step.text} -> {str(step.result)[:8124]}")
         logger.info("step_executed", step_text=step.text, step_type=step_type, result=str(step.result)[:100] if step.result is not None else None)
 
+    @observe
     def _select_tool(self, step: Step) -> ToolBase:
         suggestion = self.memory.get(f"rewoo_reflector_suggestion:{step.text}")
         if suggestion and suggestion.get("action") in ("change_tool", "retry_params"):
@@ -203,26 +207,34 @@ class ReWOOReasoner(BaseReasoner):
 
         return self.tools.load(selected_tool)
 
+    @observe
     def _generate_params(self, step: Step, tool: ToolBase, inputs: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            param_schema = tool.get_parameters() or {}
-            required_keys = tool.get_required_parameters() if hasattr(tool, 'get_required_parameters') else []
+            param_schema = tool.get_parameter_schema()
+
+            allowed_keys = []
+            if hasattr(tool, 'get_parameter_keys'):
+                allowed_keys = tool.get_parameter_keys()
+            elif isinstance(param_schema, dict):
+                allowed_keys = param_schema.keys()
+
+            required_keys = tool.get_required_parameter_keys() if hasattr(tool, 'get_required_parameter_keys') else []
             
             # Get params from either reflector suggestion or LLM generation
             suggestion = self.memory.pop(f"rewoo_reflector_suggestion:{step.text}", None)
             if suggestion and suggestion["action"] == "retry_params" and "params" in suggestion:
                 logger.info("using_reflector_suggested_params", step_text=step.text, params=suggestion["params"])
-                final_params = {k: v for k, v in suggestion["params"].items() if k in param_schema}
+                final_params = {k: v for k, v in suggestion["params"].items() if k in allowed_keys}
             else:
                 prompt = _PROMPTS["param_gen"].format(
                     step=step.text,
                     tool_schema=json.dumps(param_schema, ensure_ascii=False),
                     step_inputs=json.dumps(inputs, ensure_ascii=False),
-                    allowed_keys=",".join(param_schema.keys()),
+                    allowed_keys=",".join(allowed_keys),
                     required_keys=",".join(required_keys),
                 )
                 params_raw = self.llm.prompt_to_json(prompt, max_retries=self.max_retries)
-                final_params = {k: v for k, v in (params_raw or {}).items() if k in param_schema}
+                final_params = {k: v for k, v in (params_raw or {}).items() if k in allowed_keys}
             
             unknown_params = [key for key, val in final_params.items() if val == "<UNKNOWN>"]
             missing_params = [key for key in required_keys if key not in final_params]
@@ -241,6 +253,7 @@ class ReWOOReasoner(BaseReasoner):
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
             raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step.text}': {e}", tool) from e
 
+    @observe
     def _reflect(self, error: Exception, step: Step, state: ReasonerState) -> None:
         logger.info("step_error_recovery", error_type=error.__class__.__name__, step_text=step.text, retry_count=step.retry_count)
         step.status = StepStatus.FAILED

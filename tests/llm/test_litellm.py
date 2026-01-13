@@ -65,8 +65,10 @@ class TestLiteLLM:
         messages = [{"role": "user", "content": "Hello"}]
         result = svc.completion(messages)
 
-        # Assert: Check that the result is the stripped content from the mock
-        assert result == "Mocked response content"
+        # Assert: Check that the result is an LLMResponse with the stripped content
+        from agents.llm.base_llm import BaseLLM
+        assert isinstance(result, BaseLLM.LLMResponse)
+        assert result.text == "Mocked response content"
 
         # Assert: Check that litellm.completion was called with the correct arguments
         mock_litellm_completion.assert_called_once_with(
@@ -100,8 +102,10 @@ class TestLiteLLM:
         messages = [{"role": "user", "content": "Hello"}]
         result = svc.completion(messages)
 
-        # Assert: Check that the result is the stripped content from the mock
-        assert result == "Mocked response content"
+        # Assert: Check that the result is an LLMResponse with the stripped content
+        from agents.llm.base_llm import BaseLLM
+        assert isinstance(result, BaseLLM.LLMResponse)
+        assert result.text == "Mocked response content"
 
         # Assert: Check that litellm.completion was called with the correct arguments
         mock_litellm_completion.assert_called_once_with(
@@ -133,8 +137,10 @@ class TestLiteLLM:
         messages = [{"role": "user", "content": "Hello"}]
         result = svc.completion(messages)
 
-        # Assert: Check that the result is the stripped content from the mock
-        assert result == "Mocked response content"
+        # Assert: Check that the result is an LLMResponse with the stripped content
+        from agents.llm.base_llm import BaseLLM
+        assert isinstance(result, BaseLLM.LLMResponse)
+        assert result.text == "Mocked response content"
 
         # Assert: Check that litellm.completion was called with the correct arguments
         mock_litellm_completion.assert_called_once_with(
@@ -143,6 +149,40 @@ class TestLiteLLM:
             temperature=0.7,
             max_tokens=10000,
         )
+
+    def test_retries_and_succeeds_on_temporary_error(self, monkeypatch):
+        """Should retry on error and succeed if API works after a few tries."""
+        svc = LiteLLM(model="test-model")
+        call_count = {"n": 0}
+
+        def sometimes_fails(**kwargs):
+            call_count["n"] += 1
+            if call_count["n"] < 3:
+                raise RuntimeError("Temporary error")
+            mock_resp = MagicMock()
+            mock_resp.choices = [MagicMock()]
+            mock_resp.choices[0].message.content = "It worked"
+            mock_resp.usage = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+            return mock_resp
+
+        monkeypatch.setattr("agents.llm.litellm.litellm.completion", sometimes_fails)
+        messages = [{"role": "user", "content": "test"}]
+        result = svc.completion(messages, max_retries=3, exponential_backoff=0.01)
+        assert result.text == "It worked"
+        assert call_count["n"] == 3
+
+    def test_gives_up_after_all_retries_fail(self, monkeypatch):
+        """Should raise error if API fails every time."""
+        svc = LiteLLM(model="test-model")
+
+        def always_fails(**kwargs):
+            raise RuntimeError("Always fails")
+
+        monkeypatch.setattr("agents.llm.litellm.litellm.completion", always_fails)
+        messages = [{"role": "user", "content": "test"}]
+        with pytest.raises(RuntimeError):
+            svc.completion(messages, max_retries=2, exponential_backoff=0.01)
+
 
     @patch("agents.llm.litellm.LiteLLM.prompt", return_value='{"key": "value"}')
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
@@ -208,22 +248,28 @@ class TestLiteLLM:
         with pytest.raises(ValueError):
             svc.prompt_to_json("Give me a JSON object", max_retries=1)
 
-    def test_completion_raises_valueerror_for_empty_content(self):
+    def test_completion_returns_empty_string_for_empty_content(self):
+        """Test that empty/whitespace content returns empty string (not error)."""
         svc = LiteLLM(model="test-model")
         mock_resp = MagicMock()
         mock_resp.choices[0].message.content = "   "
         with patch("agents.llm.litellm.litellm.completion", return_value=mock_resp):
-            with pytest.raises(ValueError, match="empty response"):
-                svc.completion([{"role": "user", "content": "test"}])
+            result = svc.completion([{"role": "user", "content": "test"}])
+            from agents.llm.base_llm import BaseLLM
+            assert isinstance(result, BaseLLM.LLMResponse)
+            assert result.text == ""  # Empty after strip
 
-    def test_completion_raises_valueerror_for_malformed_response(self):
+    def test_completion_returns_empty_string_for_malformed_response(self):
+        """Test that malformed response returns empty string (not error)."""
         svc = LiteLLM(model="test-model")
         # Simulate missing choices
         mock_resp = MagicMock()
         mock_resp.choices = []
         with patch("agents.llm.litellm.litellm.completion", return_value=mock_resp):
-            with pytest.raises(ValueError, match="malformed response"):
-                svc.completion([{"role": "user", "content": "test"}])
+            result = svc.completion([{"role": "user", "content": "test"}])
+            from agents.llm.base_llm import BaseLLM
+            assert isinstance(result, BaseLLM.LLMResponse)
+            assert result.text == ""  # Empty when extraction fails
 
     @patch("agents.llm.base_llm.BaseLLM.prompt_to_json")
     def test_prompt_to_json_uses_raw_content_when_available(self, mock_base_prompt_to_json):

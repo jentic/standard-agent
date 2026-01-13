@@ -9,7 +9,7 @@ from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolExecutionError, ToolCredentialsMissingError
 from agents.reasoner.exceptions import ToolSelectionError, ParameterGenerationError
-
+from utils.observability import observe
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -32,6 +32,7 @@ class ReACTReasoner(BaseReasoner):
         self.max_turns = max_turns
         self.top_k = top_k
 
+    @observe
     def run(self, goal: str) -> ReasoningResult:
         logger.info("ReACT reasoner started", goal=goal, max_turns=self.max_turns)
 
@@ -91,6 +92,7 @@ class ReACTReasoner(BaseReasoner):
         success = complete
         return ReasoningResult(iterations=turns, success=success, transcript=reasoning_transcript, tool_calls=tool_calls)
 
+    @observe
     def _think(self, transcript: str) -> Tuple[str, str]:
         VALID_STEP_TYPES = {"THINK", "ACT", "STOP"}
         try:
@@ -104,12 +106,14 @@ class ReACTReasoner(BaseReasoner):
             logger.error("think_parse_failed", error=str(e), exc_info=True)
         return "THINK", "Continuing reasoning to determine next step."
 
+    @observe
     def _act(self, action_text: str, transcript: str, failed_tool_ids: List[str]) -> Tuple[ToolBase, Dict[str, Any], Any]:
         tool = self._select_tool(action_text, failed_tool_ids)
         params = self._generate_params(tool, transcript, action_text)
         observation = self.tools.execute(tool, params)
         return tool, params, observation
 
+    @observe
     def _select_tool(self, action_text: str, failed_tool_ids: List[str]) -> ToolBase:
         tool_candidates = [t for t in self.tools.search(action_text, top_k=self.top_k) if t.id not in set(failed_tool_ids)]
         logger.info("tool_search", query=action_text, top_k=self.top_k, candidate_count=len(tool_candidates))
@@ -130,23 +134,31 @@ class ReACTReasoner(BaseReasoner):
 
         return self.tools.load(selected_tool)
 
+    @observe
     def _generate_params(self, tool: ToolBase, transcript: str, step_text: str) -> Dict[str, Any]:
-        schema = tool.get_parameters() or {}
-        required_keys = tool.get_required_parameters() if hasattr(tool, 'get_required_parameters') else []
-        allowed_keys = ",".join(schema.keys()) if isinstance(schema, dict) else ""
+        param_schema = tool.get_parameter_schema()
+
+        allowed_keys = []
+        if hasattr(tool, 'get_parameter_keys'):
+            allowed_keys = tool.get_parameter_keys()
+        elif isinstance(param_schema, dict):
+            allowed_keys = param_schema.keys()
+
+        required_keys = tool.get_required_parameter_keys() if hasattr(tool, 'get_required_parameter_keys') else []
+
         data: Dict[str, Any] = {"reasoning trace": transcript}
         try:
             params_raw = self.llm.prompt_to_json(
                 _PROMPTS["param_gen"].format(
                     step=step_text,
                     data=json.dumps(data, ensure_ascii=False),
-                    schema=json.dumps(schema, ensure_ascii=False),
-                    allowed_keys=allowed_keys,
+                    schema=json.dumps(param_schema, ensure_ascii=False),
+                    allowed_keys=",".join(allowed_keys),
                     required_keys=",".join(required_keys),
                 ),
                 max_retries=2,
             ) or {}
-            final_params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in schema}
+            final_params: Dict[str, Any] = {k: v for k, v in params_raw.items() if k in allowed_keys}
             
             unknown_params = [key for key, val in final_params.items() if val == "<UNKNOWN>"]
             missing_params = [key for key in required_keys if key not in final_params]
@@ -162,6 +174,7 @@ class ReACTReasoner(BaseReasoner):
             
             logger.info("params_generated", tool_id=tool.id, params=final_params)
             return final_params
+
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
             raise ParameterGenerationError(f"Failed to generate valid JSON parameters for step '{step_text}': {e}", tool) from e
 

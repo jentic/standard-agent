@@ -11,7 +11,7 @@ from jentic import Jentic
 from jentic.lib.models import SearchRequest, LoadRequest, ExecutionRequest
 from agents.tools.base import JustInTimeToolingBase, ToolBase
 from agents.tools.exceptions import ToolError, ToolNotFoundError, ToolExecutionError, ToolCredentialsMissingError
-
+from utils.observability import observe
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
@@ -46,6 +46,10 @@ class JenticTool(ToolBase):
         """Short string description for logging purposes."""
         return f"JenticTool({self.id}, {self.name})"
 
+    def __repr__(self) -> str:
+        """Unambiguous representation for debugging and observability."""
+        return f"JenticTool({self.id!r}, {self.name!r})"
+
     def get_summary(self) -> str:
         """Return summary information for LLM tool selection."""
         # Create description, preferring explicit description over method/path
@@ -57,16 +61,41 @@ class JenticTool(ToolBase):
     def get_details(self) -> str:
         return json.dumps(self._schema, indent=4)
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> Dict[str, Any] | list[dict]:
         """Return detailed parameter schema for LLM parameter generation."""
         return self._parameters
 
-    def get_required_parameters(self) -> List[str]:
+    def get_required_parameter_keys(self) -> List[str]:
         """Return list of required parameter names that exist in the schema properties."""
         if not self.required or not self._parameters:
             return []
+        
         # Filter to only include required fields that actually exist in properties
+        if isinstance(self._parameters, list):
+            # If parameters is a list, we need to check each schema for required keys
+            required_keys = set()
+            for schema in self._parameters:
+                for param in schema:
+                    if param in self.required:
+                        required_keys.add(param)
+            return list(required_keys)
+
         return [key for key in self.required if key in self._parameters]
+    
+    def get_parameter_keys(self) -> List[str]:
+        """Return list of allowed parameter names that exist in the schema properties."""
+        if not self._parameters:
+            return []
+        
+        if isinstance(self._parameters, list):
+            # If parameters is a list, we need to check each schema for allowed keys
+            allowed_keys = set()
+            for schema in self._parameters:
+                for param in schema:
+                    allowed_keys.add(param)
+            return list(allowed_keys)
+
+        return list(self._parameters.keys())
 
 
 class JenticClient(JustInTimeToolingBase):
@@ -86,6 +115,7 @@ class JenticClient(JustInTimeToolingBase):
             filter_by_credentials = filter_by_credentials_env_val == "true"
         self._filter_by_credentials = bool(filter_by_credentials)
 
+    @observe
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
         """
         Search for workflows and operations matching a query.
@@ -95,7 +125,7 @@ class JenticClient(JustInTimeToolingBase):
         response = asyncio.run(self._jentic.search(SearchRequest(query=query, limit=top_k, filter_by_credentials=self._filter_by_credentials,)))
         return [JenticTool(result.model_dump(exclude_none=False)) for result in response.results] if response.results else []
 
-
+    @observe
     def load(self, tool: ToolBase) -> ToolBase:
         """
         Load the detailed definition for a specific tool.
@@ -114,7 +144,7 @@ class JenticClient(JustInTimeToolingBase):
             raise ToolNotFoundError("Requested tool could not be loaded", tool)
         return JenticTool(result.model_dump(exclude_none=False))
 
-
+    @observe
     def execute(self, tool: ToolBase, parameters: Dict[str, Any]) -> Any:
         """
         Execute a tool with given parameters.
