@@ -20,13 +20,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import project modules after adding to path
-from agents.standard_agent import StandardAgent  # noqa: E402
-from agents.prebuilt import ReACTAgent, ReWOOAgent  # noqa: E402
-from agents.reasoner.base import BaseReasoner, ReasoningResult  # noqa: E402
-from agents.llm.base_llm import BaseLLM  # noqa: E402
-from agents.tools.base import JustInTimeToolingBase, ToolBase  # noqa: E402
-from agents.memory.dict_memory import DictMemory  # noqa: E402
-from utils.logger import get_logger  # noqa: E402
+from agents.standard_agent import StandardAgent
+from agents.prebuilt import ReACTAgent, ReWOOAgent
+from agents.reasoner.base import BaseReasoner, ReasoningResult
+from agents.llm.base_llm import BaseLLM
+from agents.tools.base import JustInTimeToolingBase, ToolBase
+from agents.memory.dict_memory import DictMemory
+from utils.logger import get_logger
 
 # Constants
 DEFAULT_MODEL = "gpt-3.5-turbo"
@@ -70,6 +70,7 @@ class DeterministicLLM(BaseLLM):
     """Mock LLM for deterministic benchmarking."""
 
     def __init__(self, response_time_ms: float = 100):
+        super().__init__(model="deterministic-mock", temperature=0.0)
         self.response_time_ms = response_time_ms
         self.call_count = 0
 
@@ -243,7 +244,7 @@ class BenchmarkRunner:
         """Run a benchmark function multiple times and collect results."""
         results = []
 
-        self.logger.info(f"Running benchmark: {scenario_name}/{operation} ({iterations} iterations)")
+        self.logger.info("Running benchmark: %s/%s (%d iterations)", scenario_name, operation, iterations)
 
         for _ in range(iterations):
             tracemalloc.start()
@@ -451,7 +452,7 @@ class BenchmarkRunner:
             "raw_results": [asdict(result) for result in self.results]
         }
 
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8') as f:
             json.dump(output_data, f, indent=2)
 
         print(f"\nResults saved to: {filename}")

@@ -91,7 +91,7 @@ Enabled with the `--deterministic` flag. Uses real ReACT and ReWOO reasoners wit
 
 - **DeterministicLLM**: Mock language model with configurable response times and realistic response patterns
 - **DeterministicTools**: Mock tools with simulated execution delays
-- **Real Reasoners**: Actual ReACT/ReWOO logic with Think-Act-Observe and Plan-Execute-Reflect cycles
+- **DeterministicReasoner**: Mock reasoner that mimics Key-Value pairs of "Think", "Act", "Observe" without actual logic inference
 
 **Benefits**:
 - Consistent, reproducible results
@@ -128,7 +128,7 @@ This is the default mode when no `--deterministic` flag is specified. Uses actua
 
 ### Sample Output
 
-```
+```text
 BENCHMARK RESULTS
 ================================================================================
 

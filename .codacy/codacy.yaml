@@ -9,7 +9,7 @@ tools:
     - eslint@8.57.0
     - lizard@1.17.31
     - pmd@7.11.0
-    - pylint@3.3.6
+    - pylint@4.0.4
     - revive@1.7.0
-    - semgrep@1.78.0
-    - trivy@0.66.0
+    - semgrep@1.145.0
+    - trivy@0.68.2
