@@ -77,6 +77,7 @@ class DeterministicLLM(BaseLLM):
         self.call_count = 0
 
     def completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        _ = messages, kwargs  # Intentionally unused - mock doesn't need these
         time.sleep(self.response_time_ms / 1000)  # Simulate network latency
         self.call_count += 1
         return f"Mock response #{self.call_count}"
@@ -87,6 +88,7 @@ class DeterministicLLM(BaseLLM):
         return f"Mock response #{self.call_count} for: {text[:50]}..."
 
     def prompt_to_json(self, text: str, max_retries: int = 0) -> Dict[str, Any]:
+        _ = max_retries  # Intentionally unused - mock uses fixed behavior
         time.sleep(self.response_time_ms / 1000)
         self.call_count += 1
         
@@ -148,6 +150,7 @@ class DeterministicTools(JustInTimeToolingBase):
 
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
         """Search for tools matching a query - returns all tools for testing."""
+        _ = query  # Intentionally unused - mock returns all tools
         return self.tools[:min(top_k, len(self.tools))]
 
     def load(self, tool: ToolBase) -> ToolBase:
@@ -347,6 +350,14 @@ class BenchmarkRunner:
 
     def _calculate_duration_stats(self, durations: List[float]) -> Dict[str, float]:
         """Calculate duration statistics from a list of durations."""
+        if not durations:
+            return {
+                "avg": 0.0,
+                "median": 0.0,
+                "min": 0.0,
+                "max": 0.0,
+                "stddev": 0.0,
+            }
         return {
             "avg": mean(durations),
             "median": median(durations),
@@ -365,19 +376,25 @@ class BenchmarkRunner:
             "avg_tool_calls": mean([r.tool_calls for r in successful_results]),
         }
 
-    def _create_summary_from_results(self, group_results: List[BenchmarkResult]) -> Optional[BenchmarkSummary]:
+    def _create_summary_from_results(self, group_results: List[BenchmarkResult]) -> BenchmarkSummary:
         """Create a BenchmarkSummary from a group of results."""
         successful = [r for r in group_results if r.success]
-        if not successful:
-            return None
-
         failed = [r for r in group_results if not r.success]
-        durations = [r.duration_ms for r in successful]
-        memory_peaks = [r.memory_peak_mb for r in successful]
-        memory_currents = [r.memory_current_mb for r in successful]
-
-        duration_stats = self._calculate_duration_stats(durations)
-        metadata = self._calculate_metadata(successful)
+        
+        if successful:
+            durations = [r.duration_ms for r in successful]
+            memory_peaks = [r.memory_peak_mb for r in successful]
+            memory_currents = [r.memory_current_mb for r in successful]
+            duration_stats = self._calculate_duration_stats(durations)
+            metadata = self._calculate_metadata(successful)
+            avg_memory_peak = mean(memory_peaks)
+            avg_memory_current = mean(memory_currents)
+        else:
+            # All runs failed - use defaults
+            duration_stats = self._calculate_duration_stats([])
+            metadata = {"avg_iterations": 0, "avg_tool_calls": 0}
+            avg_memory_peak = 0.0
+            avg_memory_current = 0.0
 
         return BenchmarkSummary(
             scenario_name=group_results[0].scenario_name,
@@ -390,9 +407,9 @@ class BenchmarkRunner:
             min_duration_ms=duration_stats["min"],
             max_duration_ms=duration_stats["max"],
             duration_stddev_ms=duration_stats["stddev"],
-            avg_memory_peak_mb=mean(memory_peaks),
-            avg_memory_current_mb=mean(memory_currents),
-            success_rate=len(successful) / len(group_results),
+            avg_memory_peak_mb=avg_memory_peak,
+            avg_memory_current_mb=avg_memory_current,
+            success_rate=len(successful) / len(group_results) if group_results else 0.0,
             metadata=metadata
         )
 
@@ -403,8 +420,7 @@ class BenchmarkRunner:
 
         for key, group_results in grouped.items():
             summary = self._create_summary_from_results(group_results)
-            if summary:
-                summaries[key] = summary
+            summaries[key] = summary
 
         return summaries
 
@@ -439,7 +455,10 @@ class BenchmarkRunner:
             "raw_results": [asdict(result) for result in self.results]
         }
 
-        with open(filename, 'w', encoding='utf-8') as f:
+        output_path = Path(filename)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with output_path.open('w', encoding='utf-8') as f:
             json.dump(output_data, f, indent=2)
 
         print(f"\nResults saved to: {filename}")
