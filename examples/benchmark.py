@@ -22,6 +22,8 @@ if str(PROJECT_ROOT) not in sys.path:
 # Import project modules after adding to path
 from agents.standard_agent import StandardAgent
 from agents.prebuilt import ReACTAgent, ReWOOAgent
+from agents.reasoner.react import ReACTReasoner
+from agents.reasoner.rewoo import ReWOOReasoner
 from agents.reasoner.base import BaseReasoner, ReasoningResult
 from agents.llm.base_llm import BaseLLM
 from agents.tools.base import JustInTimeToolingBase, ToolBase
@@ -148,50 +150,6 @@ class DeterministicTools(JustInTimeToolingBase):
         return self.search(goal, top_k=top_k)
 
 
-class DeterministicReasoner(BaseReasoner):
-    """Mock reasoner for deterministic benchmarking."""
-
-    def __init__(self, llm: BaseLLM, tools: JustInTimeToolingBase, memory,
-                 iterations: int = 3, tool_calls: int = 2):
-        super().__init__(llm=llm, tools=tools, memory=memory)
-        self.target_iterations = iterations
-        self.target_tool_calls = tool_calls
-
-    def run(self, goal: str) -> ReasoningResult:
-        # Simulate reasoning process
-        transcript_parts = [f"Goal: {goal}"]
-        tool_calls = []
-
-        for i in range(self.target_iterations):
-            # Simulate thinking
-            thought = self.llm.prompt(f"Think about step {i+1}")
-            transcript_parts.append(f"Think {i+1}: {thought}")
-
-            # Simulate tool usage
-            if i < self.target_tool_calls:
-                available_tools = self.tools.get_tools(goal, top_k=5)
-                if available_tools:
-                    tool = available_tools[i % len(available_tools)]
-                    result = tool.execute(input=f"step_{i+1}")
-                    transcript_parts.append(f"Action {i+1}: Used {tool.id}, got: {result}")
-                    tool_calls.append({
-                        "tool_id": tool.id,
-                        "input": f"step_{i+1}",
-                        "result": result
-                    })
-
-        # Final answer
-        final_answer = self.llm.prompt("Provide final answer")
-        transcript_parts.append(f"Final: {final_answer}")
-
-        return ReasoningResult(
-            final_answer=final_answer,
-            iterations=self.target_iterations,
-            tool_calls=tool_calls,
-            success=True,
-            transcript="\n".join(transcript_parts)
-        )
-
 
 class BenchmarkRunner:
     """Main benchmarking orchestrator."""
@@ -210,17 +168,22 @@ class BenchmarkRunner:
         return current / 1024 / 1024, peak / 1024 / 1024
 
     def _create_deterministic_agent(self, agent_type: str) -> StandardAgent:
-        """Create an agent with deterministic components for consistent benchmarking."""
+        """Create an agent with deterministic components for consistent benchmarking.
+        
+        Uses real ReACT/ReWOO reasoners with mocked LLM and tools to ensure
+        actual agent logic is exercised while maintaining deterministic behavior.
+        """
         llm = DeterministicLLM(response_time_ms=100)
         tools = DeterministicTools()
         memory = DictMemory()
 
         if agent_type == "react":
-            reasoner = DeterministicReasoner(llm, tools, memory, iterations=3, tool_calls=2)
+            reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=3, top_k=5)
         elif agent_type == "rewoo":
-            reasoner = DeterministicReasoner(llm, tools, memory, iterations=4, tool_calls=3)
+            reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_iterations=4, max_retries=1, top_k=5)
         else:
-            reasoner = DeterministicReasoner(llm, tools, memory, iterations=2, tool_calls=1)
+            # Fallback to ReACT with minimal configuration
+            reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=2, top_k=5)
 
         return StandardAgent(
             llm=llm,
