@@ -89,6 +89,21 @@ class DeterministicLLM(BaseLLM):
     def prompt_to_json(self, text: str, max_retries: int = 0) -> Dict[str, Any]:
         time.sleep(self.response_time_ms / 1000)
         self.call_count += 1
+        
+        # Return structures that match what ReACT/ReWOO reasoners expect
+        # For ReACT think prompts, return step_type and text
+        if "think" in text.lower() or "step_type" in text.lower():
+            return {"step_type": "STOP", "text": f"Mock completion text {self.call_count}"}
+        
+        # For ReWOO reflection prompts, return action
+        if "reflect" in text.lower() or "action" in text.lower():
+            return {"action": "give_up", "reason": "Mock reflection decision"}
+        
+        # For parameter generation, return mock parameters
+        if "parameter" in text.lower():
+            return {"input": f"mock_input_{self.call_count}"}
+        
+        # Default fallback
         return {"mock": True, "response_id": self.call_count}
 
 
@@ -307,7 +322,7 @@ class BenchmarkRunner:
                 
             history = agent.memory["conversation_history"]
             for i in range(5):
-                 history.append({"goal": f"test_goal_{i}", "result": f"test_result_{i}" * 50})
+                history.append({"goal": f"test_goal_{i}", "result": f"test_result_{i}" * 50})
             
             # Simulate window trimming (mocking the behavior of _record_interaction)
             if len(history) > 5:
