@@ -338,8 +338,17 @@ class BenchmarkRunner:
                 agent.memory[f"key_{i}"] = f"value_{i}" * 100  # Store some data
 
             # Simulate conversation history
+            # Manually append to conversation_history to avoid using private _record_interaction
+            if "conversation_history" not in agent.memory:
+                agent.memory["conversation_history"] = []
+                
+            history = agent.memory["conversation_history"]
             for i in range(5):
-                agent._record_interaction({"goal": f"test_goal_{i}", "result": f"test_result_{i}" * 50})
+                 history.append({"goal": f"test_goal_{i}", "result": f"test_result_{i}" * 50})
+            
+            # Simulate window trimming (mocking the behavior of _record_interaction)
+            if len(history) > 5:
+                agent.memory["conversation_history"] = history[-5:]
 
             return len(agent.memory)
 

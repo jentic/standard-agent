@@ -4,7 +4,7 @@ This document describes how to use the performance benchmarking script to measur
 
 ## Overview
 
-The `scripts/benchmark.py` script provides comprehensive performance testing for the standard-agent library, measuring:
+The `examples/benchmark.py` script provides comprehensive performance testing for the standard-agent library, measuring:
 
 - **Agent initialization time** - How long it takes to create and configure agents
 - **Goal solving performance** - End-to-end time to process and solve goals
@@ -16,7 +16,7 @@ The `scripts/benchmark.py` script provides comprehensive performance testing for
 Run all benchmarks with default settings:
 
 ```bash
-python scripts/benchmark.py
+python examples/benchmark.py
 ```
 
 This will benchmark both ReACT and ReWOO agents using real components (actual LLMs and tools). To use deterministic test doubles for consistent results without API calls, add the `--deterministic` flag.
@@ -27,25 +27,25 @@ This will benchmark both ReACT and ReWOO agents using real components (actual LL
 
 ```bash
 # Run specific agent scenarios
-python scripts/benchmark.py --scenarios react rewoo
+python examples/benchmark.py --scenarios react rewoo
 
 # Use deterministic test doubles (recommended for CI/development)
-python scripts/benchmark.py --deterministic
+python examples/benchmark.py --deterministic
 
 # Customize iteration count
-python scripts/benchmark.py --iterations 10
+python examples/benchmark.py --iterations 10
 
 # Save results to file
-python scripts/benchmark.py --output benchmark_results.json
+python examples/benchmark.py --output benchmark_results.json
 
 # Test with custom goals
-python scripts/benchmark.py --goals "Calculate 2+2" "Search for Python docs"
+python examples/benchmark.py --goals "Calculate 2+2" "Search for Python docs"
 ```
 
 ### Complete Example
 
 ```bash
-python scripts/benchmark.py \
+python examples/benchmark.py \
   --scenarios react rewoo \
   --deterministic \
   --iterations 5 \
