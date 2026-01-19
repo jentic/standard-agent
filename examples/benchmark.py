@@ -14,13 +14,19 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
 from statistics import mean, median, stdev
 
-# Ensure project root is on sys.path
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import os
 
-# Import project modules after adding to path
-from agents.standard_agent import StandardAgent
+# Try to import project modules, adding project root to path if necessary
+try:
+    from agents.standard_agent import StandardAgent
+except ImportError:
+    # Ensure project root is on sys.path if package is not installed
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    
+    from agents.standard_agent import StandardAgent
+
 from agents.prebuilt import ReACTAgent, ReWOOAgent
 from agents.reasoner.react import ReACTReasoner
 from agents.reasoner.rewoo import ReWOOReasoner
@@ -31,7 +37,7 @@ from agents.memory.dict_memory import DictMemory
 from utils.logger import get_logger
 
 # Constants
-DEFAULT_MODEL = "gpt-3.5-turbo"
+DEFAULT_MODEL = os.getenv("BENCHMARK_MODEL", "gpt-3.5-turbo")
 
 
 @dataclass
@@ -218,8 +224,9 @@ class DeterministicTools(JustInTimeToolingBase):
 class BenchmarkRunner:
     """Main benchmarking orchestrator."""
 
-    def __init__(self, deterministic: bool = False):
+    def __init__(self, deterministic: bool = False, model_name: str = DEFAULT_MODEL):
         self.deterministic = deterministic
+        self.model_name = model_name
         self.logger = get_logger(__name__)
         self.results: List[BenchmarkResult] = []
 
@@ -275,12 +282,12 @@ class BenchmarkRunner:
     def _create_real_agent(self, agent_type: str) -> StandardAgent:
         """Create a real agent with actual components."""
         if agent_type == "react":
-            return ReACTAgent(model=DEFAULT_MODEL, max_turns=5)  # Use faster model for benchmarking
+            return ReACTAgent(model=self.model_name, max_turns=5)  # Use faster model for benchmarking
         elif agent_type == "rewoo":
-            return ReWOOAgent(model=DEFAULT_MODEL, max_retries=1)
+            return ReWOOAgent(model=self.model_name, max_retries=1)
         else:
             # Fallback to ReACT
-            return ReACTAgent(model=DEFAULT_MODEL, max_turns=3)
+            return ReACTAgent(model=self.model_name, max_turns=3)
 
     def run_benchmark(self, scenario_name: str, operation: str,
                      benchmark_fn: Callable[[], Any], iterations: int = 5) -> List[BenchmarkResult]:
@@ -567,16 +574,24 @@ def main():
         help="Goals to test for goal-solving benchmarks"
     )
 
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=DEFAULT_MODEL,
+        help=f"LLM model to use (default: {DEFAULT_MODEL})"
+    )
+
     args = parser.parse_args()
 
     print("Standard Agent Performance Benchmark")
     print("=" * 40)
     print(f"Scenarios: {', '.join(args.scenarios)}")
+    print(f"Model: {args.model}")
     print(f"Deterministic: {args.deterministic}")
     print(f"Iterations: {args.iterations}")
     print()
 
-    runner = BenchmarkRunner(deterministic=args.deterministic)
+    runner = BenchmarkRunner(deterministic=args.deterministic, model_name=args.model)
 
     # Run benchmarks for each scenario
     for scenario in args.scenarios:
