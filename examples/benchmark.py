@@ -289,7 +289,7 @@ class BenchmarkRunner:
 
         self.logger.info("Running benchmark: %s/%s (%d iterations)", scenario_name, operation, iterations)
 
-        for _ in range(iterations):
+        for i in range(iterations):
             tracemalloc.start()
             start_time = time.perf_counter()
 
@@ -310,6 +310,14 @@ class BenchmarkRunner:
                     tool_calls_count = len(result.tool_calls) if result.tool_calls else 0
 
             except Exception as e:
+                self.logger.error(
+                    "benchmark_iteration_failed", 
+                    error=str(e), 
+                    scenario=scenario_name, 
+                    operation=operation, 
+                    iteration=i, 
+                    exc_info=True
+                )
                 success = False
                 error_message = str(e)
                 metadata = {"error_type": type(e).__name__}
