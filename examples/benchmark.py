@@ -71,39 +71,85 @@ class BenchmarkSummary:
 class DeterministicLLM(BaseLLM):
     """Mock LLM for deterministic benchmarking."""
 
-    def __init__(self, response_time_ms: float = 100):
+    def __init__(self, response_time_ms: float = 10):
         super().__init__(model="deterministic-mock", temperature=0.0)
         self.response_time_ms = response_time_ms
         self.call_count = 0
 
     def completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
-        _ = messages, kwargs  # Intentionally unused - mock doesn't need these
-        time.sleep(self.response_time_ms / 1000)  # Simulate network latency
+        _ = messages, kwargs
+        time.sleep(self.response_time_ms / 1000)
         self.call_count += 1
         return f"Mock response #{self.call_count}"
 
     def prompt(self, text: str) -> str:
         time.sleep(self.response_time_ms / 1000)
         self.call_count += 1
+        text_lower = text.lower()
+        
+        # ReWOO Plan generation
+        if "plan" in text_lower and "goal" in text_lower:
+            return """
+            1. Search for information (output: search_result)
+            2. Process the results (input: search_result)
+            """
+            
+        # Tool Selection (ReACT & ReWOO)
+        # ReACT prompt usually contains "Select a tool" or similar
+        if "select" in text_lower or "tool" in text_lower:
+            # Return one of our deterministic tools
+            return "mock_search"
+            
+        # ReWOO Step Classification
+        if "classify" in text_lower:
+            # Alternating behavior or just fixed
+            return "Tool Execution"
+
+        # ReWOO Reasoning/Reflection
+        if "reason" in text_lower or "reflect" in text_lower:
+            return "Mock reasoning result"
+
         return f"Mock response #{self.call_count} for: {text[:50]}..."
 
     def prompt_to_json(self, text: str, max_retries: int = 0) -> Dict[str, Any]:
-        _ = max_retries  # Intentionally unused - mock uses fixed behavior
+        _ = max_retries
         time.sleep(self.response_time_ms / 1000)
         self.call_count += 1
+        text_lower = text.lower()
         
-        # Return structures that match what ReACT/ReWOO reasoners expect
-        # For ReACT think prompts, return step_type and text
-        if "think" in text.lower() or "step_type" in text.lower():
-            return {"step_type": "STOP", "text": f"Mock completion text {self.call_count}"}
+        # ReACT Think Step
+        if "step_type" in text_lower:
+            # Simulate a 2-step process: ACT -> STOP
+            # iteration 0: ACT (call 1)
+            # iteration 1: STOP (call 2)
+            # But call_count increments globally. 
+            # We want to ensure at least one tool call happens.
+            
+            # Simple heuristic: if we haven't called a tool in this 'session' yet, ACT.
+            # Since we don't track session in LLM, we'll just alternate or use random (but seeded/deterministic).
+            # Actually, let's just use call_count.
+            # If even: ACT, If odd: STOP. 
+            # Note: ReACT loop might be:
+            # 1. Think (ACT) -> Tool -> Obs
+            # 2. Think (STOP)
+            
+            # To ensure it finishes, we can verify what the previous calls were, but that's hard here.
+            # Let's try: ACT if call_count % 4 != 0 else STOP.
+            # This gives: 1,2,3 ACT, 4 STOP. 
+            
+            if self.call_count % 4 != 0:
+                 return {"step_type": "ACT", "text": f"I need to use a tool (mock step {self.call_count})"}
+            else:
+                 return {"step_type": "STOP", "text": f"I have the answer (mock step {self.call_count})"}
         
-        # For ReWOO reflection prompts, return action
-        if "reflect" in text.lower() or "action" in text.lower():
+        # ReWOO Reflection
+        if "reflect" in text_lower and "alternatives" in text_lower:
             return {"action": "give_up", "reason": "Mock reflection decision"}
         
-        # For parameter generation, return mock parameters
-        if "parameter" in text.lower():
-            return {"input": f"mock_input_{self.call_count}"}
+        # Parameter Generation (ReACT & ReWOO)
+        # Look for schema-like keywords
+        if "schema" in text_lower or "parameter" in text_lower:
+            return {"input": f"mock_input_{self.call_count}", "query": "mock_query"}
         
         # Default fallback
         return {"mock": True, "response_id": self.call_count}
@@ -127,7 +173,8 @@ class DeterministicTool(ToolBase):
         return {
             "type": "object",
             "properties": {
-                "input": {"type": "string", "description": "Test input"}
+                "input": {"type": "string", "description": "Test input"},
+                "query": {"type": "string", "description": "Search query"}
             },
             "required": ["input"]
         }
@@ -135,7 +182,7 @@ class DeterministicTool(ToolBase):
     def execute(self, **kwargs) -> str:
         time.sleep(self.execution_time_ms / 1000)
         self.call_count += 1
-        return f"Mock result #{self.call_count} with input: {kwargs.get('input', 'none')}"
+        return f"Mock result #{self.call_count} from {self.id} with input: {kwargs}"
 
 
 class DeterministicTools(JustInTimeToolingBase):
@@ -143,14 +190,14 @@ class DeterministicTools(JustInTimeToolingBase):
 
     def __init__(self):
         self.tools = [
-            DeterministicTool("mock_calculator", 25),
-            DeterministicTool("mock_search", 75),
-            DeterministicTool("mock_file_reader", 50),
+            DeterministicTool("mock_calculator", 10),
+            DeterministicTool("mock_search", 10),
+            DeterministicTool("mock_file_reader", 10),
         ]
 
     def search(self, query: str, *, top_k: int = 10) -> List[ToolBase]:
         """Search for tools matching a query - returns all tools for testing."""
-        _ = query  # Intentionally unused - mock returns all tools
+        _ = query
         return self.tools[:min(top_k, len(self.tools))]
 
     def load(self, tool: ToolBase) -> ToolBase:
@@ -166,7 +213,6 @@ class DeterministicTools(JustInTimeToolingBase):
     def get_tools(self, goal: str, top_k: int = 10) -> List[ToolBase]:
         """Compatibility method for existing code."""
         return self.search(goal, top_k=top_k)
-
 
 
 class BenchmarkRunner:
@@ -191,17 +237,33 @@ class BenchmarkRunner:
         Uses real ReACT/ReWOO reasoners with mocked LLM and tools to ensure
         actual agent logic is exercised while maintaining deterministic behavior.
         """
-        llm = DeterministicLLM(response_time_ms=100)
+        # Lower response time for faster benchmarks
+        llm = DeterministicLLM(response_time_ms=10) 
         tools = DeterministicTools()
         memory = DictMemory()
 
         if agent_type == "react":
-            reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=3, top_k=5)
+            # Use real ReACTReasoner but with mock LLM/Tools
+            reasoner = ReACTReasoner(
+                llm=llm, 
+                tools=tools, 
+                memory=memory, 
+                max_turns=5, 
+                top_k=5
+            )
         elif agent_type == "rewoo":
-            reasoner = ReWOOReasoner(llm=llm, tools=tools, memory=memory, max_iterations=4, max_retries=1, top_k=5)
+            # Use real ReWOOReasoner but with mock LLM/Tools
+            reasoner = ReWOOReasoner(
+                llm=llm, 
+                tools=tools, 
+                memory=memory, 
+                max_iterations=5, 
+                max_retries=1, 
+                top_k=5
+            )
         else:
-            # Fallback to ReACT with minimal configuration
-            reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=2, top_k=5)
+            # Fallback
+            reasoner = ReACTReasoner(llm=llm, tools=tools, memory=memory, max_turns=3, top_k=5)
 
         return StandardAgent(
             llm=llm,
@@ -324,7 +386,7 @@ class BenchmarkRunner:
                 agent.memory["conversation_history"] = []
                 
             history = agent.memory["conversation_history"]
-            for i in range(5):
+            for i in range(10):
                 history.append({"goal": f"test_goal_{i}", "result": f"test_result_{i}" * 50})
             
             # Simulate window trimming (mocking the behavior of _record_interaction)
