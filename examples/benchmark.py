@@ -138,9 +138,9 @@ class DeterministicLLM(BaseLLM):
             # This gives: 1,2,3 ACT, 4 STOP. 
             
             if self.call_count % 4 != 0:
-                 return {"step_type": "ACT", "text": f"I need to use a tool (mock step {self.call_count})"}
+                return {"step_type": "ACT", "text": f"I need to use a tool (mock step {self.call_count})"}
             else:
-                 return {"step_type": "STOP", "text": f"I have the answer (mock step {self.call_count})"}
+                return {"step_type": "STOP", "text": f"I have the answer (mock step {self.call_count})"}
         
         # ReWOO Reflection
         if "reflect" in text_lower and "alternatives" in text_lower:
