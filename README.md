@@ -42,7 +42,7 @@ We hope the community will benefit from *Standard Agent* in the following ways:
 ```bash
 # Clone and set up the project
 git clone <repository-url>
-cd standard_agent
+cd standard-agent
 
 # Install dependencies
 make install
