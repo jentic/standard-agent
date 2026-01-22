@@ -1,0 +1,6 @@
+runtimes:
+    - python@3.11.11
+tools:
+    - pylint@4.0.4
+    - semgrep@1.145.0
+    - trivy@0.68.2
