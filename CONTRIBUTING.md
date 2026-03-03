@@ -35,6 +35,35 @@ Reasoner prompts are externalized in YAML under `agents/prompts/` (e.g., `agents
 
 We also encourage contributions of entirely new `BaseReasoner` implementations to explore approaches like Tree-of-Thoughts, Graph-of-Thoughts, ReAct variants, or LATS.
 
+### Example: adding a custom reasoner
+
+Below is a minimal (but complete) `BaseReasoner` implementation you can use as a starting point:
+
+```python
+from agents.reasoner.base import BaseReasoner, ReasoningResult
+
+
+class EchoReasoner(BaseReasoner):
+    def run(self, goal: str) -> ReasoningResult:
+        # Minimal run loop: ask model once, return structured result.
+        response = self.llm.prompt(f"Goal: {goal}\nProvide a concise final answer.")
+        return ReasoningResult(
+            final_answer=response,
+            iterations=1,
+            tool_calls=[],
+            success=True,
+            transcript=f"Goal: {goal}\nAnswer: {response}",
+        )
+```
+
+Recommended implementation steps:
+
+1. Start from an existing reasoner (`ReWOOReasoner` or `ReACTReasoner`) and keep your first version small.
+2. Implement `run(goal: str) -> ReasoningResult` first, then add tool/memory behavior incrementally.
+3. Add prompts under `agents/prompts/reasoners/<your_reasoner>.yaml` and load via `agents/prompts/load_prompts`.
+4. Add focused tests for your reasoner behavior (success path + failure path).
+5. Document when to use your reasoner compared to existing profiles.
+
 If you have an idea to improve the Standard Agent, we'd love to see it!
 
 ## Code of Conduct
