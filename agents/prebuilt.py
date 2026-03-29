@@ -1,3 +1,5 @@
+import os
+
 from agents.standard_agent import StandardAgent
 from agents.tools.jentic import JenticClient
 from agents.memory.dict_memory import DictMemory
@@ -6,6 +8,28 @@ from agents.reasoner.react import ReACTReasoner
 from agents.llm.litellm import LiteLLM
 from agents.llm.bedrock import BedrockLLM
 from agents.goal_preprocessor.conversational import ConversationalGoalPreprocessor
+
+
+def _has_config(name: str) -> bool:
+    value = os.getenv(name)
+    return bool(value and value.strip())
+
+
+def _validate_prebuilt_config(*, model: str | None, require_bedrock_token: bool = False) -> None:
+    missing: list[str] = []
+
+    if not (model and model.strip()) and not _has_config("LLM_MODEL"):
+        missing.append("LLM_MODEL (or pass model=...)")
+    if not _has_config("JENTIC_AGENT_API_KEY"):
+        missing.append("JENTIC_AGENT_API_KEY")
+    if require_bedrock_token and not _has_config("AWS_BEARER_TOKEN_BEDROCK"):
+        missing.append("AWS_BEARER_TOKEN_BEDROCK")
+
+    if missing:
+        raise ValueError(
+            "Missing required configuration for prebuilt agent: "
+            + ", ".join(missing)
+        )
 
 
 class ReWOOAgent(StandardAgent):
@@ -28,6 +52,8 @@ class ReWOOAgent(StandardAgent):
             model: The language model to use.
             max_retries: Maximum number of retries for the ReWOO reflector
         """
+        _validate_prebuilt_config(model=model)
+
         # Initialize the core services
         llm = LiteLLM(model=model)
 
@@ -68,6 +94,8 @@ class ReACTAgent(StandardAgent):
             max_turns: Maximum number of think/act turns
             top_k: Number of tools to consider during selection
         """
+        _validate_prebuilt_config(model=model)
+
         # Initialize the core services
         llm = LiteLLM(model=model)
 
@@ -106,6 +134,8 @@ class ReWOOAgentBedrock(StandardAgent):
             model: The Bedrock model ID to use (e.g., 'us.anthropic.claude-3-5-haiku-20241022-v1:0')
             max_retries: Maximum number of retries for the ReWOO reflector
         """
+        _validate_prebuilt_config(model=model, require_bedrock_token=True)
+
         # Initialize the core services
         llm = BedrockLLM(model=model)
         tools = JenticClient()
@@ -145,6 +175,8 @@ class ReACTAgentBedrock(StandardAgent):
             max_turns: Maximum number of think/act turns
             top_k: Number of tools to consider during selection
         """
+        _validate_prebuilt_config(model=model, require_bedrock_token=True)
+
         # Initialize the core services
         llm = BedrockLLM(model=model)
         tools = JenticClient()
