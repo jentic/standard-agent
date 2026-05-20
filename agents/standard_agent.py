@@ -71,7 +71,9 @@ class StandardAgent:
         self.reasoner = reasoner
 
         self.goal_preprocessor = goal_preprocessor
-        self.conversation_history_window = max(0, conversation_history_window) if conversation_history_window is not None else 5
+        self.conversation_history_window = self._normalize_history_window(
+            conversation_history_window
+        )
         self.memory.setdefault("conversation_history", [])
 
         self.memory["context"] = {}
@@ -130,6 +132,49 @@ class StandardAgent:
 
         self.memory["conversation_history"].append(entry)
         self.memory["conversation_history"][:] = self.memory["conversation_history"][-self.conversation_history_window:]
+
+    @staticmethod
+    def _normalize_history_window(window: int | None) -> int:
+        """Validate ``conversation_history_window`` and return a safe non-negative int.
+
+        Why this exists
+            The previous logic ``max(0, conversation_history_window) if window is not None
+            else 5`` silently accepted nonsense types (``float``, ``bool``, ``str``…) and
+            *deferred* the failure to ``_record_interaction``, where a bad value would
+            either crash with a confusing slice-time ``TypeError`` (``2.7``) or silently
+            misbehave (``True`` → treated as 1 because ``bool`` is an ``int`` subclass).
+            That's exactly the "memory leak on bad window size" failure mode tracked in
+            issue #86 — invalid types meant trimming never ran, and history could grow
+            without bound on the next solve().
+
+        Rules
+            * ``None``          → default of 5 (preserves backwards compatibility)
+            * ``int >= 0``      → returned as-is
+            * ``int < 0``       → clamped to 0 (also preserves prior behaviour;
+              ``window=0`` is the documented "disable history" sentinel)
+            * ``bool``          → rejected with ``TypeError`` (avoids the
+              ``True`` → 1 / ``False`` → 0 silent coercion)
+            * any other type    → ``TypeError`` with a clear message
+
+        Args:
+            window: The raw value passed by the caller.
+
+        Returns:
+            A validated non-negative ``int``.
+
+        Raises:
+            TypeError: ``window`` is not ``int`` or ``None`` (or is a ``bool``).
+        """
+        if window is None:
+            return 5
+        # NOTE: ``bool`` is a subclass of ``int`` in Python, so a plain
+        # ``isinstance(window, int)`` check would silently accept ``True`` / ``False``.
+        if isinstance(window, bool) or not isinstance(window, int):
+            raise TypeError(
+                "conversation_history_window must be an int or None, "
+                f"got {type(window).__name__}={window!r}"
+            )
+        return max(0, window)
 
     @staticmethod
     def _resolve_timezone(tz_input: str | None) -> str | None:

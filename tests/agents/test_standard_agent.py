@@ -318,6 +318,103 @@ def test_agent_conversation_history_none_window_defaults_to_5():
         assert entry["goal"] == expected_goal
 
 
+# ---------------------------------------------------------------------------
+# Issue #86: bounds-checking / type-validation for conversation_history_window.
+#
+# The pre-existing tests above already cover the "happy path" trimming and
+# negative/zero/None windows. These additional tests close the remaining
+# memory-leak surface: invalid types (float, bool, str, list, dict) used to
+# either silently misbehave (``True`` → 1) or crash later inside
+# ``_record_interaction`` with a confusing slice-time TypeError, instead of
+# failing fast at construction. The bounded-memory test also goes further
+# (1000 interactions) than the existing 5-iteration smoke test to give a
+# stronger guarantee against unbounded growth.
+# ---------------------------------------------------------------------------
+
+
+def _make_agent_for_history(window):
+    """Helper: construct a minimal StandardAgent for history tests."""
+    llm = DummyLLM(text_queue=["S"] * 2000)
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    return StandardAgent(
+        llm=llm,
+        tools=tools,
+        memory=memory,
+        reasoner=DummyReasoner(),
+        conversation_history_window=window,
+    )
+
+
+@pytest.mark.parametrize("bad_window", [True, False])
+def test_history_window_rejects_bool(bad_window):
+    """``bool`` is an ``int`` subclass in Python; we explicitly reject it so
+    that ``conversation_history_window=True`` does not silently become 1."""
+    with pytest.raises(TypeError, match="conversation_history_window must be"):
+        _make_agent_for_history(bad_window)
+
+
+@pytest.mark.parametrize("bad_window", [2.7, 0.5, -1.5, float("inf")])
+def test_history_window_rejects_float(bad_window):
+    """Floats slip past ``max(0, ...)`` and blow up later in slice arithmetic;
+    we reject them at construction with a clear message."""
+    with pytest.raises(TypeError, match="conversation_history_window must be"):
+        _make_agent_for_history(bad_window)
+
+
+@pytest.mark.parametrize("bad_window", ["5", "", "abc", [], {}, object()])
+def test_history_window_rejects_other_non_int_types(bad_window):
+    """Anything that's not int / None is rejected at construction."""
+    with pytest.raises(TypeError, match="conversation_history_window must be"):
+        _make_agent_for_history(bad_window)
+
+
+def test_history_window_memory_bounded_under_heavy_load():
+    """The actual #86 acceptance criterion: history must not grow unboundedly.
+
+    Run 1000 solve() iterations through ``_record_interaction`` with a small
+    window and assert the stored list never exceeds the window. This is the
+    direct ``memory leak`` regression guard.
+    """
+    agent = _make_agent_for_history(window=3)
+    for i in range(1000):
+        agent._record_interaction({"goal": f"g{i}", "result": f"r{i}"})
+    hist = agent.memory["conversation_history"]
+    assert len(hist) == 3
+    # FIFO trimming: the newest 3 entries must be the last 3 we inserted.
+    assert [e["goal"] for e in hist] == ["g997", "g998", "g999"]
+
+
+def test_history_window_zero_truly_disabled_under_heavy_load():
+    """When the window is 0, no entry must ever be appended — even under load."""
+    agent = _make_agent_for_history(window=0)
+    for i in range(500):
+        agent._record_interaction({"goal": f"g{i}", "result": f"r{i}"})
+    assert agent.memory["conversation_history"] == []
+
+
+def test_history_window_negative_truly_disabled_under_heavy_load():
+    """Negative window is clamped to 0 — and trimming behaves identically."""
+    agent = _make_agent_for_history(window=-10)
+    assert agent.conversation_history_window == 0
+    for i in range(500):
+        agent._record_interaction({"goal": f"g{i}", "result": f"r{i}"})
+    assert agent.memory["conversation_history"] == []
+
+
+def test_history_window_normalize_is_static():
+    """The validator should be reachable without an instance — it's a static
+    classifier over the input value."""
+    assert StandardAgent._normalize_history_window(None) == 5
+    assert StandardAgent._normalize_history_window(7) == 7
+    assert StandardAgent._normalize_history_window(0) == 0
+    assert StandardAgent._normalize_history_window(-99) == 0
+    with pytest.raises(TypeError):
+        StandardAgent._normalize_history_window(True)
+    with pytest.raises(TypeError):
+        StandardAgent._normalize_history_window(2.5)
+
+
 def test_agent_timezone_from_constructor_stores_iana_string():
     """Test StandardAgent accepts IANA timezone from constructor and stores it as string."""
     llm = DummyLLM(text_queue=["S"])
