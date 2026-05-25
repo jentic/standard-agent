@@ -85,7 +85,28 @@ class StandardAgent:
 
     @observe(root=True)
     def solve(self, goal: str) -> ReasoningResult:
-        """Solves a goal synchronously (library-style API)."""
+        """Solves a goal synchronously (library-style API).
+
+        Args:
+            goal: A non-empty string describing what to solve.
+
+        Raises:
+            TypeError: ``goal`` is not a ``str`` (or is ``None``).
+            ValueError: ``goal`` is empty or contains only whitespace.
+        """
+        # Validate the goal up-front so callers get a clear, immediate error
+        # instead of a confusing traceback from deep inside the reasoner or
+        # the goal preprocessor (which can blow up on None / non-string
+        # inputs in non-obvious ways).
+        if goal is None:
+            raise TypeError("goal must be a non-empty str, got None")
+        if not isinstance(goal, str):
+            raise TypeError(
+                f"goal must be a str, got {type(goal).__name__}"
+            )
+        if not goal.strip():
+            raise ValueError("goal must be a non-empty string (got empty or whitespace-only)")
+
         run_id = uuid4().hex
         start_time = time.perf_counter()
 

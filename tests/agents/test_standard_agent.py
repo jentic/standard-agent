@@ -101,6 +101,49 @@ def test_agent_solve_sets_final_answer_from_summarizer_and_records_history(monke
     assert hist[-1]["result"] == "SUMMARIZED"
 
 
+def _make_validation_agent():
+    """Helper: build a StandardAgent good enough to call solve() on."""
+    llm = DummyLLM(text_queue=["SUMMARIZED"])
+    tools = DummyTools()
+    memory: Dict[str, Any] = DictMemory()
+    reasoner = DummyReasoner()
+    return StandardAgent(llm=llm, tools=tools, memory=memory, reasoner=reasoner)
+
+
+def test_solve_raises_type_error_on_none_goal():
+    """solve(None) -> TypeError, agent never reaches the reasoner."""
+    agent = _make_validation_agent()
+    with pytest.raises(TypeError, match="goal must be"):
+        agent.solve(None)  # type: ignore[arg-type]
+    # State must NOT flip to BUSY/NEEDS_ATTENTION on input validation.
+    assert agent.state == AgentState.READY
+
+
+@pytest.mark.parametrize("bad_goal", [123, 1.5, ["a"], {"x": 1}, b"bytes"])
+def test_solve_raises_type_error_on_non_string_goal(bad_goal):
+    """solve(<non-str>) -> TypeError with type name in the message."""
+    agent = _make_validation_agent()
+    with pytest.raises(TypeError, match=r"goal must be a str, got "):
+        agent.solve(bad_goal)  # type: ignore[arg-type]
+    assert agent.state == AgentState.READY
+
+
+@pytest.mark.parametrize("empty", ["", "   ", "\n", "\t \n"])
+def test_solve_raises_value_error_on_empty_or_whitespace_goal(empty):
+    """solve('' or whitespace-only) -> ValueError."""
+    agent = _make_validation_agent()
+    with pytest.raises(ValueError, match="non-empty"):
+        agent.solve(empty)
+    assert agent.state == AgentState.READY
+
+
+def test_solve_accepts_goal_with_leading_or_trailing_whitespace():
+    """Leading/trailing whitespace is allowed as long as content exists."""
+    agent = _make_validation_agent()
+    result = agent.solve("  do the thing  ")
+    assert result.final_answer == "SUMMARIZED"
+
+
 def test_agent_uses_goal_preprocessor_and_returns_intervention_message(monkeypatch):
     _fixed_uuid4(monkeypatch, "RUNINT")
     llm = DummyLLM(text_queue=["UNUSED"])
