@@ -21,3 +21,6 @@ venv/
 tasks/
 plan.md
 todo.md
+
+# Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
